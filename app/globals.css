@@ -68,3 +68,8 @@ a, button { transition: all 0.2s ease; }
      0    3px 6px rgba(0,0,0,0.3);
   letter-spacing: 0.02em;
 }
+
+input:-webkit-autofill {
+  -webkit-text-fill-color: white !important;
+  -webkit-box-shadow: 0 0 0px 1000px rgba(255,255,255,0.18) inset !important;
+}
