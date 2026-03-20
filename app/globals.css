@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Mitr:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --pink-primary: #E8638A;
+  --pink-deep: #C94B70;
+  --pink-light: #F7B8CC;
+  --pink-pale: #FDE8EF;
+  --pink-bg: #FFF5F8;
+  --red-accent: #D32F5E;
+  --cream: #FFF9FB;
+  --text-dark: #2D1A22;
+  --text-mid: #6B3A4D;
+  --text-soft: #A06880;
+  --glass-bg: rgba(255, 255, 255, 0.25);
+  --glass-border: rgba(255, 255, 255, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Sarabun', sans-serif;
+  background-color: var(--pink-bg);
+  color: var(--text-dark);
+}
+
+.font-mitr {
+  font-family: 'Mitr', sans-serif;
+}
+
+/* Glassmorphism card */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+}
+
+/* Pink gradient background */
+.pink-gradient-bg {
+  background: radial-gradient(ellipse at top left, #F4789E 0%, #E05082 40%, #C23D6B 100%);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--pink-pale); }
+::-webkit-scrollbar-thumb { background: var(--pink-light); border-radius: 3px; }
+
+/* Smooth transitions */
+a, button { transition: all 0.2s ease; }
+
+/* Hero text outline style matching design */
+.hero-title {
+  font-family: 'Mitr', sans-serif;
+  font-weight: 700;
+  color: white;
+  text-shadow:
+    -2px -2px 0 #C23D6B,
+     2px -2px 0 #C23D6B,
+    -2px  2px 0 #C23D6B,
+     2px  2px 0 #C23D6B,
+     0    3px 6px rgba(0,0,0,0.3);
+  letter-spacing: 0.02em;
+}
