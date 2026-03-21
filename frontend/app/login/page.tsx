@@ -82,7 +82,6 @@ export default function LoginPage() {
                 border: '1px solid rgba(255,255,255,0.35)',
                 //backdropFilter: 'blur(8px)',
                 fontFamily: 'Sarabun, sans-serif', 
-                color: 'white',
                 marginBottom: '12px',
               }}
             />
@@ -94,12 +93,16 @@ export default function LoginPage() {
                 placeholder="รหัสผ่าน"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full px-2 py-3 pr-12 rounded-xl text-sm text-white outline-none placeholder-pink-200"
+                className="w-full px-5 py-3 rounded-full text-sm text-white outline-none placeholder-white/60"
                 style={{
+                  maxWidth: 350,
+                  margin: '0 auto',
+                  display: 'block',
                   background: 'rgba(255,255,255,0.18)',
                   border: '1px solid rgba(255,255,255,0.35)',
                   //backdropFilter: 'blur(8px)',
                   fontFamily: 'Sarabun, sans-serif',
+                  marginBottom: '12px',
                 }}
               />
               <button type="button" onClick={() => setShowPassword(!showPassword)}
