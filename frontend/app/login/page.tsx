@@ -136,7 +136,9 @@ export default function LoginPage() {
 
           <p className="text-center text-xs mt-6" style={{ fontFamily: 'Sarabun, sans-serif', color: 'white' }}>
             ยังไม่มีบัญชี?{' '}
-            <button className="font-semibold underline underline-offset-2 hover:opacity-80 transition-opacity"
+            <button
+              onClick={() => router.push('/signup')}
+              className="font-semibold underline underline-offset-2 hover:opacity-80 transition-opacity"
               style={{ color: 'white' }}>
               ลงทะเบียน
             </button>
