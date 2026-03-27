@@ -10,6 +10,127 @@ const STEPS = [
   { id: 3, title: 'ยืนยันตัวตน', subtitle: 'ตั้งรหัสผ่านให้ปลอดภัย' },
 ]
 
+
+const THAI_MONTHS = [
+  'มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+  'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม',
+]
+const DOW = ['อา','จ','อ','พ','พฤ','ศ','ส']
+
+function ThaiDatePicker({
+  value, onChange,
+}: { value: string; onChange: (v: string) => void }) {
+  const today = new Date()
+  const [open, setOpen] = useState(false)
+
+  // parse stored value (YYYY-MM-DD) or default to today
+  const parsed = value ? new Date(value) : null
+  const initYear  = parsed ? parsed.getFullYear()  : today.getFullYear()
+  const initMonth = parsed ? parsed.getMonth()      : today.getMonth()
+
+  const [viewYear,  setViewYear]  = useState(initYear)
+  const [viewMonth, setViewMonth] = useState(initMonth)
+
+  // years: 100 years back to current (CE); displayed as BE (+543)
+  const currentCE = today.getFullYear()
+  const years = Array.from({ length: 51 }, (_, i) => currentCE - 50 + i)
+
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const firstDow    = new Date(viewYear, viewMonth, 1).getDay()
+
+  const selectedDay   = parsed && parsed.getFullYear() === viewYear && parsed.getMonth() === viewMonth
+    ? parsed.getDate() : null
+
+  const selectDay = (d: number) => {
+    const ce = `${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+    onChange(ce)
+    setOpen(false)
+  }
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
+    else setViewMonth(m => m - 1)
+  }
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+    else setViewMonth(m => m + 1)
+  }
+
+  // display label in Thai (BE year)
+  const displayLabel = parsed
+    ? `${parsed.getDate()} ${THAI_MONTHS[parsed.getMonth()]} ${parsed.getFullYear() + 543}`
+    : null
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        type="button"
+        className={`date-trigger${open ? ' open' : ''}${!displayLabel ? ' placeholder' : ''}`}
+        onClick={() => setOpen(o => !o)}
+      >
+        {displayLabel ?? 'วัน/เดือน/ปี (พ.ศ.)'}
+      </button>
+
+      {open && (
+        <div className="dp-popup">
+          {/* Month/Year selects */}
+          <div className="dp-selects">
+            <select
+              className="dp-select"
+              value={viewMonth}
+              onChange={e => setViewMonth(Number(e.target.value))}
+            >
+              {THAI_MONTHS.map((m, i) => (
+                <option key={i} value={i}>{m}</option>
+              ))}
+            </select>
+            <select
+              className="dp-select"
+              value={viewYear}
+              onChange={e => setViewYear(Number(e.target.value))}
+            >
+              {years.map(y => (
+                <option key={y} value={y}>{y + 543}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Header nav */}
+          <div className="dp-header">
+            <button type="button" className="dp-nav" onClick={prevMonth}>‹</button>
+            <span className="dp-title">
+              {THAI_MONTHS[viewMonth]} {viewYear + 543}
+            </span>
+            <button type="button" className="dp-nav" onClick={nextMonth}>›</button>
+          </div>
+
+          {/* Day grid */}
+          <div className="dp-grid">
+            {DOW.map(d => (
+              <div key={d} className="dp-dow">{d}</div>
+            ))}
+            {Array.from({ length: firstDow }).map((_, i) => (
+              <div key={`e${i}`} className="dp-day empty" />
+            ))}
+            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => (
+              <button
+                key={d}
+                type="button"
+                className={`dp-day${selectedDay === d ? ' selected' : ''}${
+                  d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear() ? ' today' : ''
+                }`}
+                onClick={() => selectDay(d)}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SignUpPage() {
   const router = useRouter()
   const [step, setStep] = useState(1)
@@ -332,10 +453,7 @@ export default function SignUpPage() {
           border-color: rgba(240, 120, 170, 0.7);
           box-shadow: 0 0 0 4px rgba(220, 80, 140, 0.15);
         }
-        .field-input.date-field {
-          padding-left: 44px;
-          color-scheme: dark;
-        }
+
         .pw-toggle {
           position: absolute;
           right: 16px;
@@ -352,7 +470,7 @@ export default function SignUpPage() {
         }
         .pw-toggle:hover { opacity: 1; }
 
-        /* ── two-col grid ── */
+        /* ── Two-col grid ── */
         .grid-2 {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -452,7 +570,6 @@ export default function SignUpPage() {
         }
         .btn-submit:disabled { opacity: 0.55; cursor: not-allowed; }
 
-        /* shimmer on button */
         .btn-next::before, .btn-submit::before {
           content: '';
           position: absolute;
@@ -505,6 +622,125 @@ export default function SignUpPage() {
           padding: 0;
         }
         .login-btn:hover { color: #fff; }
+
+        /* ── Thai Date Picker ── */
+        .date-trigger {
+          width: 100%;
+          padding: 13px 18px 13px 44px;
+          border-radius: 16px;
+          font-family: 'Sarabun', sans-serif;
+          font-size: 14.5px;
+          color: #fff;
+          background: rgba(255,255,255,0.08);
+          border: 1.5px solid rgba(255,255,255,0.16);
+          transition: border-color 0.25s, box-shadow 0.25s, background 0.25s;
+          cursor: pointer;
+          text-align: left;
+          display: flex;
+          align-items: center;
+        }
+        .date-trigger:hover, .date-trigger.open {
+          background: rgba(255,255,255,0.13);
+          border-color: rgba(240, 120, 170, 0.7);
+          box-shadow: 0 0 0 4px rgba(220, 80, 140, 0.15);
+        }
+        .date-trigger.placeholder { color: rgba(255,255,255,0.35); }
+
+        .dp-popup {
+          position: absolute;
+          top: calc(100% + 8px);
+          left: 0; right: 0;
+          z-index: 100;
+          background: rgba(30, 10, 50, 0.97);
+          backdrop-filter: blur(20px);
+          border: 1px solid rgba(255,255,255,0.18);
+          border-radius: 14px;
+          padding: 10px;
+          box-shadow: 0 16px 48px rgba(0,0,0,0.65);
+          animation: dpFadeIn 0.18s ease;
+        }
+        @keyframes dpFadeIn {
+          from { opacity: 0; transform: translateY(-6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .dp-selects {
+          display: flex;
+          gap: 6px;
+          margin-bottom: 8px;
+        }
+        .dp-select {
+          flex: 1;
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.16);
+          border-radius: 8px;
+          color: white;
+          font-family: 'Sarabun', sans-serif;
+          font-size: 11px;
+          padding: 4px 6px;
+          outline: none;
+          cursor: pointer;
+          text-align: center;
+        }
+        .dp-select option { background: #1e0a32; color: white; }
+
+        .dp-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 6px;
+        }
+        .dp-nav {
+          width: 22px; height: 22px;
+          border-radius: 6px;
+          border: 1px solid rgba(255,255,255,0.2);
+          background: rgba(255,255,255,0.06);
+          color: white;
+          cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 12px;
+          transition: background 0.15s;
+        }
+        .dp-nav:hover { background: rgba(255,255,255,0.14); }
+        .dp-title {
+          font-family: 'Mitr', sans-serif;
+          font-size: 11px;
+          color: rgba(255,200,215,0.9);
+          font-weight: 500;
+        }
+
+        .dp-grid {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+          gap: 2px;
+        }
+        .dp-dow {
+          text-align: center;
+          font-size: 9px;
+          color: rgba(255,180,200,0.55);
+          padding: 2px 0;
+          font-family: 'Mitr', sans-serif;
+        }
+        .dp-day {
+          aspect-ratio: 1;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 11px;
+          border-radius: 5px;
+          cursor: pointer;
+          color: rgba(255,255,255,0.8);
+          transition: background 0.15s;
+          background: none;
+          border: none;
+          font-family: 'Sarabun', sans-serif;
+        }
+        .dp-day:hover:not(.empty):not(.selected) { background: rgba(255,255,255,0.1); }
+        .dp-day.today { color: rgba(255,180,200,1); font-weight: 700; }
+        .dp-day.selected {
+          background: linear-gradient(135deg, #e8639a, #c83880);
+          color: #fff;
+          font-weight: 600;
+        }
+        .dp-day.empty { pointer-events: none; }
       `}</style>
 
       <div className="signup-root">
@@ -580,12 +816,10 @@ export default function SignUpPage() {
 
               <div className="field-wrap">
                 <label className="field-label">วันเกิด</label>
-                <Calendar className="field-icon" size={16} />
-                <input
-                  type="date"
-                  className="field-input date-field"
+                <Calendar className="field-icon" size={16} style={{ pointerEvents: 'none' }} />
+                <ThaiDatePicker
                   value={form.birthDate}
-                  onChange={e => handleChange('birthDate', e.target.value)}
+                  onChange={v => handleChange('birthDate', v)}
                 />
               </div>
 
