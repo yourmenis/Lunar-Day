@@ -22,13 +22,13 @@ auth_bp = Blueprint("auth_bp", __name__)
 @auth_bp.route("/register", methods=["POST"])
 def register():
     data = request.json
-    username = data.get("Username", "").strip()
-    password = data.get("Password", "").strip()
-    confirm_pw = data.get("ConfirmPassword", "").strip()
-    name = data.get("Name", "").strip()
-    lastname = data.get("LastName", "").strip()
-    birthday = data.get("Birthday", "").strip()
-    email = data.get("Email", "").strip()
+    username = data.get("username", "").strip()
+    password = data.get("password", "").strip()
+    confirm_pw = data.get("confirmPassword", "").strip()
+    name = data.get("firstName", "").strip()
+    lastname = data.get("lastName", "").strip()
+    birthday = data.get("birthDate", "").strip()
+    email = data.get("email", "").strip()
 
     # --- ด่านที่ 1: เช็คข้อมูลว่าง (A2) ---
     if not all([username, password, confirm_pw, name, lastname, birthday, email]):
@@ -103,8 +103,8 @@ def register():
 @auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.json
-    username = data.get("username").strip()
-    password = data.get("password").strip()
+    username = data.get("username", "").strip()
+    password = data.get("password", "").strip()
 
     if not username or not password:
         return jsonify({"msg": "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน"}), 400
@@ -160,7 +160,7 @@ GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
 @auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
     data = request.json
-    email = data.get("Email", "").strip()
+    email = data.get("email", "").strip()
 
     if not email:
         return jsonify({"msg": "กรุณากรอกอีเมล"}), 400

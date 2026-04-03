@@ -9,16 +9,17 @@ backend/*.py[cod]
 backend/venv/
 backend/.venv/
 backend/env/
-
 # --- แนะนำให้ ignore ไฟล์ .env ---
 .env
 backend/.env
-
-
-
 # --- User Uploads (รูปภาพที่ใช้ทดสอบ) ---
 backend/uploads/
 backend/static/uploads/
 
 # --- IDE ---
 .vscode/
+/upload/
+
+*.pth
+backend/*.pth
+backend/__pycache__/

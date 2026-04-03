@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MODEL_PATH = os.path.join(os.getcwd(), "effv2.pth")
+MODEL_PATH = os.path.join(os.getcwd(), "incepv2.pth")
 
 IMG_SIZE = 512
 STD_BASE_THRESHOLD = 33.20
@@ -31,7 +31,7 @@ UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # FILE VALIDATION
-ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png"}
+ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "JPG", "JPEG", "PNG"}
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
 # INPUT VALIDATION
@@ -60,7 +60,9 @@ def get_model():
     global model
     with model_lock:
         if model is None:
-            model = smp.Unet(encoder_name="efficientnet-b0", classes=3, activation=None)
+            model = smp.Unet(
+                encoder_name="inceptionresnetv2", classes=3, activation=None
+            )
             model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
             model.to(DEVICE).eval()
     return model
@@ -183,7 +185,7 @@ def evaluate_medical_risk(ai_result, user_input):
 # ==============================
 # ROUTE
 # ==============================
-@analysis_bp.route("/analyze", methods=["POST"])
+@analysis_bp.route("/", methods=["POST"])
 @jwt_required()
 def analyze():
     current_user_id = get_jwt_identity()
