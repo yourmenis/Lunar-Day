@@ -1,0 +1,12 @@
+flask
+flask-cors
+flask-jwt-extended
+flask-sqlalchemy
+flask-migrate
+flask-bcrypt
+pymysql
+mysql-connector-python
+pillow
+torch
+torchvision
+bcrypt
