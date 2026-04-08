@@ -35,7 +35,7 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     await new Promise(r => setTimeout(r, 1000))
-    router.push('/home/analyze')
+    router.push('/home')
   }
 
   return (
