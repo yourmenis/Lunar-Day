@@ -203,9 +203,26 @@ export default function ForgotPasswordPage() {
     }
     setEmailError('')
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1000))
-    setLoading(false)
-    goTo(2)
+
+    try {
+      const response = await fetch("http://localhost:5000/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        goTo(2)
+      } else {
+        setEmailError(data.msg || "ไม่พบอีเมลนี้ในระบบ")
+      }
+    } catch (err) {
+      setEmailError("ไม่สามารถเชื่อมต่อ server ได้")
+    } finally {
+      setLoading(false)
+    }
   }
 
   // ── Step 2: verify OTP ────────────────────────────────────────────────────
@@ -237,9 +254,31 @@ export default function ForgotPasswordPage() {
     if (password !== confirmPassword) { setPwError('รหัสผ่านไม่ตรงกัน'); return }
     setPwError('')
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1100))
-    setLoading(false)
-    setDone(true)
+
+    try {
+      const response = await fetch("http://localhost:5000/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          Email: email,
+          OTP: otp.join(''),
+          NewPassword: password,
+          ConfirmPassword: confirmPassword,
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setDone(true)
+      } else {
+        setPwError(data.msg || "เกิดข้อผิดพลาด")
+      }
+    } catch (err) {
+      setPwError("ไม่สามารถเชื่อมต่อ server ได้")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const canSubmitOtp = otp.join('').length === OTP_LENGTH && !expired

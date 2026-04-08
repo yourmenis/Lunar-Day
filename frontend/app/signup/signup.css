@@ -450,7 +450,7 @@
         }
 
         .dp-selects {
-          display: none;
+          display: flex;
           gap: 6px;
           margin-bottom: 8px;
         }

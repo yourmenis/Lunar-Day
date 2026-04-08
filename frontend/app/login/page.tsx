@@ -34,8 +34,28 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1000))
-    router.push('/home/analyze')
+
+    try {
+      const response = await fetch("http://localhost:5000/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        localStorage.setItem("token", data.access_token)
+        localStorage.setItem("user", JSON.stringify(data.user))
+        router.push('/home/analyze')
+      } else {
+        alert(data.msg || "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
+      }
+    } catch (err) {
+      alert("ไม่สามารถเชื่อมต่อ server ได้")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
