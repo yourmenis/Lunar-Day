@@ -23,3 +23,4 @@ backend/static/uploads/
 *.pth
 backend/*.pth
 backend/__pycache__/
+backend/routes/__pycache__/
