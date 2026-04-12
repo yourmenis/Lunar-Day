@@ -687,7 +687,7 @@ export default function HomePage() {
               พร้อมคำแนะนำเฉพาะบุคคล เพื่อสุขภาพที่ดีกว่า
             </p>
             <div className="hero-actions">
-              <button className="btn-primary" onClick={() => router.push('/home/analyze')}>
+              <button className="btn-primary" onClick={() => router.push('/home')}>
                 <Activity size={15} /> เริ่มวิเคราะห์เลย
               </button>
               <button className="btn-ghost" onClick={() => router.push('/home/articles')}>
@@ -820,7 +820,7 @@ export default function HomePage() {
             <button
               className="btn-primary"
               style={{ marginTop: 24 }}
-              onClick={() => router.push('/home/analyze')}
+              onClick={() => router.push('/home')}
             >
               เริ่มวิเคราะห์ฟรี <ArrowRight size={15} />
             </button>
@@ -833,7 +833,7 @@ export default function HomePage() {
                     key={i}
                     className="wave-bar"
                     style={{
-                    height: `${h}px`,   // ✅ ค่าคงที่ ไม่ random ทุก render
+                    height: `${h}px`,   //ค่าคงที่ ไม่ random ทุก render
                     animationDelay: `${i * 0.09}s`,
                     }}
                 />
