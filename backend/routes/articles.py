@@ -35,7 +35,7 @@ def close_db(cursor, db):
 # ----------------------------------------------
 # 1. ดึงรายการบทความทั้งหมด
 # ----------------------------------------------
-@articles_bp.route("/articles", methods=["GET"])
+@articles_bp.route("/", methods=["GET"])
 def get_articles():
     db = None
     cursor = None
@@ -64,7 +64,7 @@ def get_articles():
 # ----------------------------------------------
 # 2. ดึงรายละเอียดบทความ
 # ----------------------------------------------
-@articles_bp.route("/articles/<int:article_id>", methods=["GET"])
+@articles_bp.route("/<int:article_id>", methods=["GET"])
 def get_article_detail(article_id):
     db = None
     cursor = None
@@ -95,7 +95,7 @@ def get_article_detail(article_id):
 # ----------------------------------------------
 # 3. ค้นหาบทความ
 # ----------------------------------------------
-@articles_bp.route("/articles/search", methods=["GET"])
+@articles_bp.route("/search", methods=["GET"])
 def search_articles():
     query = request.args.get("q", "").strip()
 

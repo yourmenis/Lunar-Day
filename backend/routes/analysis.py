@@ -1,12 +1,12 @@
 import numpy as np
-import torch
+# import torch
 import cv2
 import os
 import time
 import logging
 from threading import Lock
 from flask import Blueprint, request, jsonify
-import segmentation_models_pytorch as smp
+# import segmentation_models_pytorch as smp
 from werkzeug.utils import secure_filename
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
@@ -19,7 +19,7 @@ analysis_bp = Blueprint("analysis", __name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MODEL_PATH = os.path.join(os.getcwd(), "incepv2.pth")
 
 IMG_SIZE = 512
@@ -381,87 +381,98 @@ def evaluate_medical_risk(ai_result, user_input):
     return risk, disease, detect2, adv
 
 
+# @analysis_bp.route("/image", methods=["POST"])
+# @jwt_required()
+# def analyze_image():
+#     start_time = time.time()
+#     file = request.files.get("image")
+
+#     # ===== A1: file type =====
+#     if not file or file.filename == "":
+#         return (
+#             jsonify({"status": "error", "error_code": "A1", "msg": "ไม่พบไฟล์ภาพ"}),
+#             400,
+#         )
+
+#     if not allowed_file(file.filename):
+#         return (
+#             jsonify({"status": "error", "error_code": "A1", "msg": "รูปแบบไฟล์ไม่ถูกต้อง"}),
+#             400,
+#         )
+
+#     file_content = file.read()
+
+#     # ===== A2: file size =====
+#     if len(file_content) > MAX_FILE_SIZE:
+#         return (
+#             jsonify({"status": "error", "error_code": "A2", "msg": "ขนาดไฟล์เกินกำหนด"}),
+#             400,
+#         )
+
+#     try:
+#         img_bgr = cv2.imdecode(np.frombuffer(file_content, np.uint8), cv2.IMREAD_COLOR)
+#         if img_bgr is None:
+#             return jsonify({"status": "error", "msg": "อ่านภาพไม่ได้"}), 400
+
+#         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+#         img_resized = cv2.resize(img_rgb, (IMG_SIZE, IMG_SIZE))
+
+#         # ===== A4: not menstrual image =====
+#         hsv = cv2.cvtColor(img_resized, cv2.COLOR_RGB2HSV)
+#         mask_red = cv2.inRange(
+#             hsv, np.array([0, 75, 30]), np.array([10, 255, 255])
+#         ) | cv2.inRange(hsv, np.array([170, 75, 30]), np.array([180, 255, 255]))
+
+#         if (np.sum(mask_red > 0) / mask_red.size) < RED_RATIO_LIMIT:
+#             return (
+#                 jsonify(
+#                     {
+#                         "status": "error",
+#                         "error_code": "A4",
+#                         "msg": "ไม่พบลักษณะเลือดประจำเดือนในภาพ",
+#                     }
+#                 ),
+#                 400,
+#             )
+
+#         # ===== AI =====
+#         std_limit = calculate_dynamic_std(img_resized)
+#         mask, conf, avg_conf = run_inference(img_resized)
+#         scores = calculate_scores(mask, conf, img_resized, std_limit)
+
+#         if scores[1] >= 3 and scores[2] >= 3:
+#             ai_res = "mixed"
+#         elif scores[1] >= 3:
+#             ai_res = "clot"
+#         elif scores[2] >= 3:
+#             ai_res = "tissue"
+#         else:
+#             ai_res = "none"
+
+#         return jsonify(
+#             {
+#                 "status": "success",
+#                 "ai_result": ai_res,
+#                 "detect_label": AI_RESULT_TH.get(ai_res, ai_res),
+#                 "confidence": round(avg_conf * 100, 2),
+#                 "processing_time": round(time.time() - start_time, 2),
+#             }
+#         )
+
+#     except Exception as e:
+#         logger.exception(e)
+#         return jsonify({"status": "error", "msg": str(e)}), 500
+
 @analysis_bp.route("/image", methods=["POST"])
 @jwt_required()
 def analyze_image():
-    start_time = time.time()
-    file = request.files.get("image")
-
-    # ===== A1: file type =====
-    if not file or file.filename == "":
-        return (
-            jsonify({"status": "error", "error_code": "A1", "msg": "ไม่พบไฟล์ภาพ"}),
-            400,
-        )
-
-    if not allowed_file(file.filename):
-        return (
-            jsonify({"status": "error", "error_code": "A1", "msg": "รูปแบบไฟล์ไม่ถูกต้อง"}),
-            400,
-        )
-
-    file_content = file.read()
-
-    # ===== A2: file size =====
-    if len(file_content) > MAX_FILE_SIZE:
-        return (
-            jsonify({"status": "error", "error_code": "A2", "msg": "ขนาดไฟล์เกินกำหนด"}),
-            400,
-        )
-
-    try:
-        img_bgr = cv2.imdecode(np.frombuffer(file_content, np.uint8), cv2.IMREAD_COLOR)
-        if img_bgr is None:
-            return jsonify({"status": "error", "msg": "อ่านภาพไม่ได้"}), 400
-
-        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        img_resized = cv2.resize(img_rgb, (IMG_SIZE, IMG_SIZE))
-
-        # ===== A4: not menstrual image =====
-        hsv = cv2.cvtColor(img_resized, cv2.COLOR_RGB2HSV)
-        mask_red = cv2.inRange(
-            hsv, np.array([0, 75, 30]), np.array([10, 255, 255])
-        ) | cv2.inRange(hsv, np.array([170, 75, 30]), np.array([180, 255, 255]))
-
-        if (np.sum(mask_red > 0) / mask_red.size) < RED_RATIO_LIMIT:
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "error_code": "A4",
-                        "msg": "ไม่พบลักษณะเลือดประจำเดือนในภาพ",
-                    }
-                ),
-                400,
-            )
-
-        # ===== AI =====
-        std_limit = calculate_dynamic_std(img_resized)
-        mask, conf, avg_conf = run_inference(img_resized)
-        scores = calculate_scores(mask, conf, img_resized, std_limit)
-
-        if scores[1] >= 3 and scores[2] >= 3:
-            ai_res = "mixed"
-        elif scores[1] >= 3:
-            ai_res = "clot"
-        elif scores[2] >= 3:
-            ai_res = "tissue"
-        else:
-            ai_res = "none"
-
-        return jsonify(
-            {
-                "status": "success",
-                "ai_result": ai_res,
-                "detect_label": AI_RESULT_TH.get(ai_res, ai_res),
-                "confidence": round(avg_conf * 100, 2),
-                "processing_time": round(time.time() - start_time, 2),
-            }
-        )
-
-    except Exception as e:
-        logger.exception(e)
-        return jsonify({"status": "error", "msg": str(e)}), 500
+    return jsonify({
+        "status": "success",
+        "ai_result": "clot",
+        "detect_label": "ลิ่มเลือด",
+        "confidence": 85.0,
+        "processing_time": 0.1,
+    })
 
 
 @analysis_bp.route("/risk", methods=["POST"])

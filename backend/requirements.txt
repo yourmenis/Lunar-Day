@@ -8,9 +8,9 @@ pymysql
 python-dotenv
 mysql-connector-python
 pillow
-torch
-torchvision
+# torch
+# torchvision
 bcrypt
 opencv-python
-segmentation-models-pytorch
+# segmentation-models-pytorch
 numpy
