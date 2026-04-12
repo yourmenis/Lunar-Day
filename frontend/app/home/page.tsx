@@ -5,50 +5,6 @@ import { useRouter } from 'next/navigation'
 import { Eye, TrendingUp, BookOpen, ArrowRight, ChevronRight, Sparkles, Activity } from 'lucide-react'
 import Navbar from './components/Navbar'
 
-// ── Mock data — sorted by views ──
-const ARTICLES = [
-  {
-    id: 1,
-    title: 'ภาวะตกไข่ผิดปกติ (Ovulatory Dysfunction) — สาเหตุ อาการ และแนวทางดูแล',
-    excerpt: 'ภาวะตกไข่ผิดปกติเป็นหนึ่งในสาเหตุสำคัญที่ให้ประจำเดือนมาไม่ปกติ ทั้งที่เกิดการตกไข่ผิดปกติ...',
-    views: 12480,
-    category: 'สุขภาพรังไข่',
-    readTime: '5 นาที',
-    image: '/articles/ovulatory.jpg',
-    hot: true,
-  },
-  {
-    id: 2,
-    title: 'โรค PCOS และภาวะการตกไข่ผิดปกติ — อาการ แบบไหนบ่งบอกว่าควรใส่ใจ',
-    excerpt: 'ปัญหาที่เกี่ยวกับฮอร์โมน ระบบตกไข่ และรอบเดือนผิดปกติ สามารถส่งผลกับสุขภาพและการมีบุตร...',
-    views: 9320,
-    category: 'PCOS',
-    readTime: '7 นาที',
-    image: '/articles/pcos.jpg',
-    hot: true,
-  },
-  {
-    id: 3,
-    title: 'ภาวะตกไข่ผิดปกติ (Ovulatory Disorders) — สาเหตุ อาการ และผลต่อการมีบุตร',
-    excerpt: 'ภาวะตกไข่ผิดปกติ คือภาวะที่ร่างกายไม่สามารถปล่อยไข่ตามรอบเดือนปกติ ทำให้เกิดรอบเดือนผิดปกติ...',
-    views: 8150,
-    category: 'การเจริญพันธุ์',
-    readTime: '6 นาที',
-    image: '/articles/disorders.jpg',
-    hot: false,
-  },
-  {
-    id: 4,
-    title: 'วิธีอ่านผลการวิเคราะห์ประจำเดือนและความหมายของแต่ละค่า',
-    excerpt: 'เข้าใจผลการวิเคราะห์เลือดประจำเดือนอย่างละเอียด พร้อมคำแนะนำจากผู้เชี่ยวชาญ...',
-    views: 6890,
-    category: 'การวิเคราะห์',
-    readTime: '4 นาที',
-    image: '/articles/analysis.jpg',
-    hot: false,
-  },
-]
-
 const STATS = [
   { label: 'ผู้ใช้งาน', value: '24,500+', icon: '👥' },
   { label: 'การวิเคราะห์', value: '180,000+', icon: '🔬' },
@@ -86,19 +42,48 @@ export default function HomePage() {
   const [activeArticle, setActiveArticle] = useState(0)
 
   const [waveBars, setWaveBars] = useState<number[]>([])
+  const [articles, setArticles] = useState<any[]>([])
 
-    useEffect(() => {
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
     setMounted(true)
     setWaveBars(
-        Array.from({ length: 16 }, (_, i) =>
+      Array.from({ length: 16 }, (_, i) =>
         20 + Math.sin(i * 0.8) * 14 + Math.random() * 10
-        )
+      )
     )
     const t = setInterval(() => setActiveArticle(a => (a + 1) % 2), 4000)
-    return () => clearInterval(t)
-    }, [])
 
-  const topArticles = [...ARTICLES].sort((a, b) => b.views - a.views)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/articles/`)
+      .then(r => r.json())
+      .then(data => {
+        setArticles(data.map((a: any, i: number) => ({
+          id: a.ArticleID,
+          title: a.Title,
+          image: a.ImageURL,
+          excerpt: (() => {
+            try {
+              const parsed = JSON.parse(a.Content)
+              const text = parsed.find((b: any) => b.type === 'text')?.value ?? ''
+              return text.slice(0, 80) + '...'
+            } catch {
+              return (a.Content?.slice(0, 80) ?? 'ไม่มีคำอธิบาย') + '...'
+            }
+          })(),
+          views: 1000 - i * 100,
+          category: 'สุขภาพสตรี',
+          readTime: '5 นาที',
+          hot: i === 0,
+        })))
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+
+    return () => clearInterval(t)
+  }, [])
+
+    const topArticles = [...articles].sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
 
   return (
     <>
@@ -758,59 +743,69 @@ export default function HomePage() {
             </button>
           </div>
 
-          <div className="articles-grid">
-            {/* Featured — #1 most viewed */}
-            <div className="article-featured" onClick={() => router.push('/home/articles')}>
-              <div className="article-featured-img">🔬</div>
-              <div className="article-featured-body">
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <span className="article-rank hot">🔥 อันดับ 1</span>
-                  <span className="article-category-tag">{topArticles[0].category}</span>
-                </div>
-                <h3 className="article-featured-title">{topArticles[0].title}</h3>
-                <p className="article-featured-excerpt">{topArticles[0].excerpt}</p>
-                <div className="article-meta">
-                  <span className="article-meta-item">
-                    <Eye size={13} /> {formatViews(topArticles[0].views)} วิว
-                  </span>
-                  <span className="article-meta-item">
-                    🕐 {topArticles[0].readTime}
-                  </span>
-                </div>
-                <span className="read-more">
-                  อ่านต่อ <ArrowRight size={14} />
-                </span>
-              </div>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#9e7a8a' }}>
+              กำลังโหลดบทความ...
             </div>
+          ) : topArticles.length > 0 ? (
+            <div className="articles-grid">
+              {/* Featured — #1 most viewed */}
+              <div className="article-featured" onClick={() => router.push('/home/articles')}>
+                <div className="article-featured-img">🔬</div>
+                <div className="article-featured-body">
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <span className="article-rank hot">🔥 อันดับ 1</span>
+                    <span className="article-category-tag">{topArticles[0].category}</span>
+                  </div>
+                  <h3 className="article-featured-title">{topArticles[0].title}</h3>
+                  <p className="article-featured-excerpt">{topArticles[0].excerpt}</p>
+                  <div className="article-meta">
+                    <span className="article-meta-item">
+                      <Eye size={13} /> {formatViews(topArticles[0].views)} วิว
+                    </span>
+                    <span className="article-meta-item">
+                      🕐 {topArticles[0].readTime}
+                    </span>
+                  </div>
+                  <span className="read-more">
+                    อ่านต่อ <ArrowRight size={14} />
+                  </span>
+                </div>
+              </div>
 
-            {/* Cards — #2, #3, #4 */}
-            {topArticles.slice(1, 4).map((article, i) => {
-              const emojis = ['💊', '🌸', '📊']
-              return (
-                <div
-                  key={article.id}
-                  className="article-card"
-                  onClick={() => router.push('/home/articles')}
-                >
-                  <div className="article-card-img">{emojis[i]}</div>
-                  <div className="article-card-body">
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {article.hot && <span className="article-rank trending">📈 Hot</span>}
-                      <span className="article-category-tag">{article.category}</span>
-                    </div>
-                    <h3 className="article-card-title">{article.title}</h3>
-                    <p className="article-card-excerpt">{article.excerpt}</p>
-                    <div className="article-card-footer">
-                      <span className="views-badge">
-                        <Eye size={12} /> {formatViews(article.views)}
-                      </span>
-                      <span>🕐 {article.readTime}</span>
+              {/* Cards — #2, #3, #4 */}
+              {topArticles.slice(1, 4).map((article, i) => {
+                const emojis = ['💊', '🌸', '📊']
+                return (
+                  <div
+                    key={article.id}
+                    className="article-card"
+                    onClick={() => router.push('/home/articles')}
+                  >
+                    <div className="article-card-img">{emojis[i]}</div>
+                    <div className="article-card-body">
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        {article.hot && <span className="article-rank trending">📈 Hot</span>}
+                        <span className="article-category-tag">{article.category}</span>
+                      </div>
+                      <h3 className="article-card-title">{article.title}</h3>
+                      <p className="article-card-excerpt">{article.excerpt}</p>
+                      <div className="article-card-footer">
+                        <span className="views-badge">
+                          <Eye size={12} /> {formatViews(article.views)}
+                        </span>
+                        <span>🕐 {article.readTime}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
+            ) : (
+          <div style={{ textAlign: 'center', padding: 40, color: '#9e7a8a' }}>
+            ไม่พบบทความ
           </div>
+        )}
         </div>
 
         {/* ── CTA ── */}
