@@ -28,3 +28,7 @@ backend/static/uploads/
 
 # --- Misc ---
 *.pth
+
+# --- Frontend (Next.js) ---
+node_modules/
+frontend/.env
