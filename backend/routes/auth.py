@@ -79,6 +79,12 @@ def register():
         if cursor.fetchone():
             return jsonify({"msg": "ชื่อผู้ใช้ซ้ำ: Username นี้ถูกใช้งานแล้ว"}), 400
 
+        # check email ซ้ำ
+        check_sql = "SELECT Email FROM User WHERE Email = %s"
+        cursor.execute(check_sql, (email,))
+        if cursor.fetchone():
+            return jsonify({"msg": "อีเมลนี้ถูกใช้งานแล้ว"}), 400
+
         # ถ้าผ่านทุกด่านแล้ว ค่อยแฮชรหัสผ่าน
         hashed_pw = bcrypt.generate_password_hash(password).decode("utf-8")
 
