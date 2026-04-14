@@ -1,0 +1,16 @@
+flask
+flask-cors
+flask-jwt-extended
+flask-sqlalchemy
+flask-migrate
+flask-bcrypt
+pymysql
+python-dotenv
+mysql-connector-python
+pillow
+torch
+torchvision
+bcrypt
+opencv-python
+segmentation-models-pytorch
+numpy

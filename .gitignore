@@ -2,25 +2,36 @@
 .DS_Store
 Thumbs.db
 
-
 # --- Backend (Python/Flask) ---
-backend/__pycache__/
-backend/*.py[cod]
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
 backend/venv/
 backend/.venv/
 backend/env/
-# --- แนะนำให้ ignore ไฟล์ .env ---
+
+# --- Environment Variables ---
 .env
 backend/.env
-# --- User Uploads (รูปภาพที่ใช้ทดสอบ) ---
+
+# --- Database ---
+*.sql
+
+# --- User Uploads ---
 backend/uploads/
 backend/static/uploads/
 
 # --- IDE ---
 .vscode/
-/upload/
 
+<<<<<<< HEAD
 *.pth
 backend/*.pth
 backend/__pycache__/
 backend/routes/__pycache__/
+=======
+# --- Misc ---
+*.pth
+>>>>>>> origin/main
