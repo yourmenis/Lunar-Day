@@ -4,6 +4,8 @@ Thumbs.db
 
 # --- Backend (Python/Flask) ---
 __pycache__/
+backend/__pycache__/
+backend/routes/__pycache__/
 *.py[cod]
 *.pyo
 *.pyd
@@ -23,15 +25,7 @@ backend/.env
 backend/uploads/
 backend/static/uploads/
 
-# --- IDE ---
+# --- IDE & Misc ---
 .vscode/
-
-<<<<<<< HEAD
 *.pth
 backend/*.pth
-backend/__pycache__/
-backend/routes/__pycache__/
-=======
-# --- Misc ---
-*.pth
->>>>>>> origin/main

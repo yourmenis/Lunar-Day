@@ -7,7 +7,6 @@ import logging
 from threading import Lock
 from flask import Blueprint, request, jsonify
 import segmentation_models_pytorch as smp
-from werkzeug.utils import secure_filename
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from config.database import get_db_connection
@@ -35,13 +34,14 @@ UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # FILE VALIDATION
-ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "JPG", "JPEG", "PNG"}
+ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png"}
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
 # INPUT VALIDATION
 VALID_PAIN = ["ปกติ/ปวดเล็กน้อย", "ปวดปานกลาง", "ปวดรุนแรง"]
 VALID_DURATION = ["1-7 วัน", "มากกว่า 7 วัน"]
 VALID_PREG = ["true", "false"]
+VALID_SIZE = ["เล็กกว่าเหรียญสิบ", "ใหญ่กว่าเหรียญสิบ"]
 
 # AREA CONFIG
 MIN_AREA = 20
@@ -63,8 +63,6 @@ model_lock = Lock()
 
 # ==============================
 # MEDICAL LOOKUP TABLE
-# key: (detect_th, pain_level, duration, is_pregnant, size)
-# size=None สำหรับ เนื้อเยื่อ / พบลิ่มเลือดและเนื้อเยื่อ / ไม่พบ
 # ==============================
 RISK_TABLE = {
     # ── ลิ่มเลือด + ปกติ/ปวดเล็กน้อย ────────────────────────────────────
@@ -390,13 +388,25 @@ def analyze_image():
     # ===== A1: file type =====
     if not file or file.filename == "":
         return (
-            jsonify({"status": "error", "error_code": "A1", "msg": "ไม่พบไฟล์ภาพ"}),
+            jsonify(
+                {
+                    "status": "error",
+                    "error_code": "A1",
+                    "msg": "ไม่พบไฟล์ภาพ กรุณาอัปโหลดรูปภาพของคุณในรูปแบบ JPG, JPEG หรือ PNG",
+                }
+            ),
             400,
         )
 
     if not allowed_file(file.filename):
         return (
-            jsonify({"status": "error", "error_code": "A1", "msg": "รูปแบบไฟล์ไม่ถูกต้อง"}),
+            jsonify(
+                {
+                    "status": "error",
+                    "error_code": "A1",
+                    "msg": "รูปแบบไฟล์ไม่ถูกต้อง กรุณาอัปโหลดรูปภาพของคุณในรูปแบบ JPG, JPEG หรือ PNG",
+                }
+            ),
             400,
         )
 
@@ -405,14 +415,20 @@ def analyze_image():
     # ===== A2: file size =====
     if len(file_content) > MAX_FILE_SIZE:
         return (
-            jsonify({"status": "error", "error_code": "A2", "msg": "ขนาดไฟล์เกินกำหนด"}),
+            jsonify(
+                {
+                    "status": "error",
+                    "error_code": "A2",
+                    "msg": "ขนาดไฟล์เกินกำหนด กรุณาอัปโหลดรูปภาพของคุณที่มีขนาดไม่เกิน 10MB",
+                }
+            ),
             400,
         )
 
     try:
         img_bgr = cv2.imdecode(np.frombuffer(file_content, np.uint8), cv2.IMREAD_COLOR)
         if img_bgr is None:
-            return jsonify({"status": "error", "msg": "อ่านภาพไม่ได้"}), 400
+            return jsonify({"status": "error", "msg": "ไม่สามารถอ่านภาพได้"}), 400
 
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
         img_resized = cv2.resize(img_rgb, (IMG_SIZE, IMG_SIZE))
