@@ -15,7 +15,6 @@ from datetime import datetime, timedelta
 
 auth_bp = Blueprint("auth_bp", __name__)
 
-
 # ==========================================
 # 🆕 ส่วนที่ 1: ระบบสมาชิก (Register )
 # ==========================================
@@ -70,7 +69,10 @@ def register():
 
     # --- ด่านที่ 5: ทำงานกับ Database (A1 & บันทึก) ---
     db = get_db_connection()
-    cursor = db.cursor(dictionary=True)
+    cursor = db.cursor()
+
+    cursor.execute("SELECT DATABASE()")
+    print("📦 USING DB:", cursor.fetchone())
 
     try:
         # เช็ค Username ซ้ำ
@@ -86,8 +88,15 @@ def register():
         sql = "INSERT INTO User (Username, Password, Name, LastName, Birthday,Email) VALUES (%s, %s, %s, %s, %s, %s)"
         values = (username, hashed_pw, name, lastname, birthday, email)
 
+        print("📝 VALUES BEFORE INSERT:", values)
         cursor.execute(sql, values)
+        
         db.commit()  # ยืนยันการบันทึกลง Hard Drive
+        print("✅ INSERT SUCCESS")
+
+        cursor.execute("SELECT Username, Email FROM User WHERE Username = %s", (username,))
+        user = cursor.fetchone()
+        print("🔎 DB RESULT:", user)
         return jsonify({"msg": "สมัครสมาชิกสำเร็จ!"}), 201
 
     except mysql.connector.Error as err:
@@ -103,6 +112,7 @@ def register():
 @auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.json
+    print("📥 INPUT:", data)
     username = data.get("username", "").strip()
     password = data.get("password", "").strip()
 
@@ -110,7 +120,7 @@ def login():
         return jsonify({"msg": "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน"}), 400
 
     db = get_db_connection()
-    cursor = db.cursor(dictionary=True)
+    cursor = db.cursor()
 
     try:
         # 1. ค้นหา User จากฐานข้อมูล
