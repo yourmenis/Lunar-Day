@@ -412,6 +412,13 @@ def analyze_image():
 
     file_content = file.read()
 
+    # ===== SAVE IMAGE =====
+    filename = f"{int(time.time())}.jpg"
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+    with open(filepath, "wb") as f:
+        f.write(file_content)
+
     # ===== A2: file size =====
     if len(file_content) > MAX_FILE_SIZE:
         return (
@@ -469,6 +476,7 @@ def analyze_image():
             {
                 "status": "success",
                 "ai_result": ai_res,
+                "image_path": f"uploads/{filename}",
                 "detect_label": AI_RESULT_TH.get(ai_res, ai_res),
                 "confidence": round(avg_conf * 100, 2),
                 "processing_time": round(time.time() - start_time, 2),
@@ -485,14 +493,14 @@ def analyze_image():
 def analyze_risk():
     current_user_id = get_jwt_identity()
     start_time = time.time()
-
     data = request.form
-
     ai_res = data.get("ai_result")
     pain_level = data.get("pain_level")
     duration = data.get("duration")
     is_pregnant = (data.get("is_pregnant") or "").lower()
     size_val = data.get("size")
+    confidence = data.get("confidence")
+    image_path = data.get("image_path")
 
     # ===== A3: required fields =====
     if not ai_res or not pain_level or not duration or not is_pregnant:
@@ -550,14 +558,14 @@ def analyze_risk():
                 INSERT INTO Risk_Assessment
                 (UserID, Detect1, Detect2, Confidence, Pain_Level,
                  Duration, Is_Pregnant, Size, Risk_Level,
-                 Potential_Disease, Recommendation)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 Potential_Disease, Recommendation,Image_Path)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
                 (
                     current_user_id,
                     AI_RESULT_TH.get(ai_res, ai_res),
                     det2,
-                    None,  # confidence มาจาก API แรก
+                    confidence,
                     pain_level,
                     duration,
                     1 if is_preg_bool else 0,
@@ -565,6 +573,7 @@ def analyze_risk():
                     risk,
                     disease,
                     adv,
+                    image_path,
                 ),
             )
             db.commit()
@@ -582,6 +591,7 @@ def analyze_risk():
             "Detect2": det2,
             "Risk_Level": risk,
             "Potential_Disease": disease,
+            "Confidence": confidence,
             "Recommendation": adv,
             "processing_time": round(time.time() - start_time, 2),
             "saved": db_saved,
