@@ -194,21 +194,43 @@ export default function ForgotPasswordPage() {
     setTimeout(() => { setStep(target); setAnimating(false) }, 220)
   }
 
-  // ── Step 1: send OTP ─────────────────────────────────────────────────────
-  const handleSendOtp = async () => {
-    const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRx.test(email)) {
-      setEmailError('กรุณากรอกอีเมลให้ถูกต้อง')
-      return
+
+  const handleSendOTP = async () => {
+    const res = await fetch('http://localhost:5000/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+    
+      setStep(2)
+    } else {
+      alert(data.msg)
     }
-    setEmailError('')
-    setLoading(true)
-    await new Promise(r => setTimeout(r, 1000))
-    setLoading(false)
-    goTo(2)
   }
 
-  // ── Step 2: verify OTP ────────────────────────────────────────────────────
+  
+  const handleResetPassword = async () => {
+    const res = await fetch('http://localhost:5000/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        Email: email,
+        OTP: otp,
+        NewPassword: new_password,
+        ConfirmPassword: confirmPassword,
+      }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      router.push('/login')
+    } else {
+      alert(data.msg)
+    }
+  }
+
+  
   const handleVerifyOtp = async () => {
     const code = otp.join('')
     if (code.length < OTP_LENGTH) return
@@ -231,7 +253,7 @@ export default function ForgotPasswordPage() {
     setTimerKey(k => k + 1)
   }
 
-  // ── Step 3: set new password ──────────────────────────────────────────────
+  
   const handleSetPassword = async () => {
     if (password.length < 8) { setPwError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
     if (password !== confirmPassword) { setPwError('รหัสผ่านไม่ตรงกัน'); return }
@@ -322,13 +344,13 @@ export default function ForgotPasswordPage() {
                   placeholder="example@email.com"
                   value={email}
                   onChange={e => { setEmail(e.target.value); setEmailError('') }}
-                  onKeyDown={e => e.key === 'Enter' && handleSendOtp()}
+                  onKeyDown={e => e.key === 'Enter' && handleSendOTP()}
                 />
                 {emailError && <p className="field-hint err">{emailError}</p>}
               </div>
 
               <div className="btn-row" style={{ marginTop: 20 }}>
-                <button type="button" className="btn-primary" onClick={handleSendOtp} disabled={loading || !email}>
+                <button type="button" className="btn-primary" onClick={handleSendOTP} disabled={loading || !email}>
                   {loading ? <><div className="spinner" /> กำลังส่ง...</> : <>ส่งรหัส OTP <ChevronRight size={16} /></>}
                 </button>
               </div>

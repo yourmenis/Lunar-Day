@@ -196,8 +196,33 @@ export default function SignUpPage() {
     e.preventDefault()
     if (!agreed || loading) return
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1200))
-    router.push('/home/analyze')
+
+    try {
+      const res = await fetch('http://localhost:5000/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: form.firstName,
+          lastName: form.lastName,
+          birthDate: form.birthDate,
+          email: form.email,
+          username: form.username,
+          password: form.password,
+          confirmPassword: form.confirmPassword,
+        }),
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        router.push('/login')
+      } else {
+        alert(data.msg)
+        setLoading(false)
+      }
+    } catch {
+      alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+      setLoading(false)
+    }
   }
 
   const inputBase: React.CSSProperties = {

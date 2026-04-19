@@ -34,8 +34,27 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1000))
-    router.push('/home')
+
+    try {
+      const res = await fetch('http://localhost:5000/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        localStorage.setItem('access_token', data.access_token)
+        localStorage.setItem('user', JSON.stringify(data.user))
+        router.push('/home')
+      } else {
+        alert(data.msg)
+        setLoading(false)
+      }
+    } catch {
+      alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+      setLoading(false)
+    }
   }
 
   return (
