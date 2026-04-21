@@ -29,6 +29,10 @@ export default function LoginPage() {
         height: `${Math.random() > 0.7 ? 4 : 2}px`,
       } as React.CSSProperties))
     )
+    const token = localStorage.getItem('access_token')
+    if (token) {
+      router.push('/home')
+    }
   }, [])
 
   const handleLogin = async (e: React.FormEvent) => {

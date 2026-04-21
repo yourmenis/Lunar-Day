@@ -1,0 +1,957 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import {
+  User, Settings, Droplets, Shield, FileText,
+  LogOut, Trash2, ChevronRight, ArrowLeft,
+  Camera, Eye, EyeOff, Sparkles, Activity,
+  Calendar, Edit3, X, Check, AlertTriangle
+} from 'lucide-react'
+import Navbar from '../components/Navbar'
+
+// ============================================================
+// TYPES
+// ============================================================
+type View = 'profile' | 'editProfile' | 'history' | 'privacy' | 'terms'
+
+// ============================================================
+// MOCK DATA
+// ============================================================
+const MOCK_USER = {
+  username: 'foreveryoung',
+  firstName: 'ศิริพร',
+  lastName: 'มีสุข',
+  dob: '2000-05-14',
+  avatar: null as string | null,
+}
+
+const MOCK_HISTORY = [
+  { id: 1, date: '22 เม.ย. 2568', result: 'ความเสี่ยงต่ำ', score: 12, level: 'low' },
+  { id: 2, date: '10 มี.ค. 2568', result: 'ความเสี่ยงปานกลาง', score: 28, level: 'medium' },
+  { id: 3, date: '5 ก.พ. 2568', result: 'ความเสี่ยงสูง', score: 52, level: 'high' },
+  { id: 4, date: '18 ม.ค. 2568', result: 'ความเสี่ยงต่ำ', score: 9, level: 'low' },
+]
+
+const PRIVACY_TEXT = [
+  { title: '1. ข้อมูลที่เราจัดเก็บ', body: 'เราเก็บรวบรวมข้อมูลส่วนบุคคล เช่น ชื่อผู้ใช้ อีเมล วันเกิด และรหัสผ่านในรูปแบบที่ผ่านการเข้ารหัส (Hashing) เพื่อความปลอดภัยสูงสุด ไม่มีการจัดเก็บหรือรับข้อมูลโปรไฟล์จากผู้ให้บริการภายนอก' },
+  { title: '2. การประมวลผลข้อมูล', body: 'เราประมวลผลข้อมูลเพื่ออำนวยความสะดวกในการสร้างบัญชี แสดงโปรไฟล์ และปรับปรุงบริการตามที่ผู้ใช้ร้องขอ' },
+  { title: '3. ฐานทางกฎหมาย', body: 'เราดำเนินการภายใต้ PDPA โดยอาศัยฐานความยินยอม การปฏิบัติตามสัญญา และผลประโยชน์อันชอบธรรม' },
+  { title: '4. การเปิดเผยข้อมูล', body: 'เราไม่มีนโยบายในการขายข้อมูลส่วนบุคคลของท่านให้แก่บุคคลที่สาม อาจมีการแบ่งปันเฉพาะกรณีที่กฎหมายกำหนดเท่านั้น' },
+  { title: '5. ความปลอดภัยของข้อมูล', body: 'เราเข้ารหัสรหัสผ่านด้วยอัลกอริทึมความปลอดภัยสูง มีมาตรการทางเทคนิคและการบริหารจัดการเพื่อปกป้องข้อมูลของท่าน' },
+  { title: '6. การเก็บรักษาข้อมูล', body: 'เราจัดเก็บข้อมูลตลอดระยะเวลาที่ท่านมีบัญชี และจะลบข้อมูลทั้งหมดทันทีเมื่อท่านลบบัญชีผู้ใช้งาน' },
+]
+
+const TERMS_TEXT = [
+  { title: '1. การใช้บริการ', body: 'แอปพลิเคชัน Luna day มีวัตถุประสงค์เพื่อให้บริการข้อมูลและอำนวยความสะดวก การใช้งานอยู่ภายใต้เงื่อนไขที่คุณตกลงยอมรับข้อกำหนดทั้งหมด' },
+  { title: '2. การตรวจสอบข้อมูล', body: 'คุณต้องกรอกข้อมูลให้ครบถ้วนและถูกต้อง ระบบจะบันทึกการยอมรับนโยบายความเป็นส่วนตัวลงฐานข้อมูล' },
+  { title: '3. ความปลอดภัยรหัสผ่าน', body: 'คุณเป็นผู้รับผิดชอบในการเก็บรักษารหัสผ่านเป็นความลับ หากมีการเข้าถึงบัญชีโดยไม่ได้รับอนุญาต กรุณาเปลี่ยนรหัสผ่านและแจ้งผู้พัฒนาทันที' },
+  { title: '4. ทรัพย์สินทางปัญญา', body: 'เนื้อหาทั้งหมดใน Luna day เป็นทรัพย์สินของผู้พัฒนา ห้ามทำซ้ำหรือนำไปใช้เชิงพาณิชย์โดยไม่ได้รับอนุญาต' },
+  { title: '5. การจำกัดความรับผิดชอบ', body: 'ข้อมูลและบริการจัดทำขึ้น "ตามสภาพที่เป็นอยู่" ผู้พัฒนาไม่รับรองความสมบูรณ์หรือความขัดข้องจากปัจจัยภายนอก' },
+  { title: '6. การเก็บข้อมูลส่วนบุคคล', body: 'คุณตกลงให้ Luna day เก็บรวบรวมและใช้ข้อมูลส่วนบุคคลเพื่อวัตถุประสงค์ในการให้บริการ ตามนโยบายความเป็นส่วนตัวของเรา' },
+]
+
+// ============================================================
+// HELPERS
+// ============================================================
+function buddhistDate(iso: string) {
+  const [y, m, d] = iso.split('-')
+  const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
+  return `${parseInt(d)} ${months[parseInt(m)-1]} ${parseInt(y)+543}`
+}
+
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
+export default function ProfilePage() {
+  const router = useRouter()
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [user, setUser] = useState({ ...MOCK_USER })
+  const [view, setView] = useState<View>('profile')
+  const [mounted, setMounted] = useState(false)
+
+  // Toast
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
+  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  // Modals
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [showPw, setShowPw] = useState(false)
+
+  // Edit form
+  const [editForm, setEditForm] = useState({
+    firstName: user.firstName,
+    lastName: user.lastName,
+    username: user.username,
+    avatar: user.avatar,
+  })
+
+  useEffect(() => { setMounted(true) }, [])
+
+  const handleLogout = () => {
+    setShowLogoutModal(false)
+    setIsLoggedIn(false)
+    setView('profile')
+    showToast('คุณออกจากระบบแล้ว', 'info')
+  }
+
+  const handleDeleteAccount = () => {
+    if (!deletePassword) return showToast('กรุณากรอกรหัสผ่าน', 'error')
+    setShowDeleteConfirm(false)
+    setIsLoggedIn(false)
+    setView('profile')
+    showToast('ลบบัญชีเสร็จสิ้น', 'success')
+    router.push('/login')
+  }
+
+  const handleSaveProfile = () => {
+    setUser(prev => ({ ...prev, ...editForm }))
+    showToast('บันทึกข้อมูลเรียบร้อย')
+    setView('profile')
+  }
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setEditForm(f => ({ ...f, avatar: reader.result as string }))
+    reader.readAsDataURL(file)
+  }
+
+  const riskConfig: Record<string, { bg: string; color: string; dot: string }> = {
+    low:    { bg: 'rgba(16,185,129,0.1)',  color: '#059669', dot: '#10b981' },
+    medium: { bg: 'rgba(245,158,11,0.1)',  color: '#d97706', dot: '#f59e0b' },
+    high:   { bg: 'rgba(239,68,68,0.1)',   color: '#dc2626', dot: '#ef4444' },
+  }
+
+  // ============================================================
+  // GUEST VIEW
+  // ============================================================
+  const GuestView = () => (
+    <div style={{
+      minHeight: '80vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 0,
+      padding: '40px 20px',
+    }}>
+      {/* Decorative ring */}
+      <div style={{ position: 'relative', marginBottom: 32 }}>
+        <div style={{
+          width: 140, height: 140,
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, rgba(240,98,146,0.12), rgba(194,24,91,0.06))',
+          border: '2px solid rgba(240,98,146,0.2)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          position: 'relative',
+          animation: 'pulse 3s ease-in-out infinite',
+        }}>
+          <div style={{
+            width: 100, height: 100,
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 8px 32px rgba(194,24,91,0.2)',
+          }}>
+            <User size={44} color="#c2185b" strokeWidth={1.5} />
+          </div>
+        </div>
+        {/* Orbiting dots */}
+        {[0,90,180,270].map((deg,i) => (
+          <div key={i} style={{
+            position: 'absolute',
+            width: 8, height: 8,
+            borderRadius: '50%',
+            background: ['#f06292','#f48fb1','#ce93d8','#f06292'][i],
+            opacity: 0.6,
+            top: '50%', left: '50%',
+            transform: `rotate(${deg}deg) translateX(70px) translateY(-50%)`,
+          }} />
+        ))}
+      </div>
+
+      <h2 style={{
+        fontFamily: "'Mitr', sans-serif",
+        fontSize: 22,
+        fontWeight: 600,
+        color: '#1a0a14',
+        marginBottom: 8,
+      }}>ยินดีต้อนรับสู่ Luna day</h2>
+      <p style={{ fontSize: 14, color: '#9e7a8a', marginBottom: 32, textAlign: 'center', lineHeight: 1.6 }}>
+        เข้าสู่ระบบเพื่อเข้าถึงโปรไฟล์<br />และประวัติการวิเคราะห์ของคุณ
+      </p>
+
+      <button
+        onClick={() => { setIsLoggedIn(true); showToast('เข้าสู่ระบบสำเร็จ') }}
+        className="btn-primary"
+        style={{ padding: '14px 48px', fontSize: 15 }}
+      >
+        <Sparkles size={16} /> ลงชื่อเข้าใช้
+      </button>
+    </div>
+  )
+
+  // ============================================================
+  // PROFILE VIEW
+  // ============================================================
+  const ProfileView = () => (
+    <div style={{ paddingBottom: 60 }}>
+      {/* Profile Header Banner */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 50%, #6b2646 100%)',
+        padding: '40px 40px 80px',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        {/* bg decorations */}
+        <div style={{
+          position: 'absolute', top: -60, right: -60,
+          width: 240, height: 240, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(240,98,146,0.18), transparent 60%)',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: -40, left: '30%',
+          width: 160, height: 160, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(206,147,216,0.12), transparent 60%)',
+        }} />
+        <div style={{
+          backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+          position: 'absolute', inset: 0,
+        }} />
+
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '4px 12px', borderRadius: 999,
+              background: 'rgba(240,98,146,0.2)',
+              border: '1px solid rgba(240,98,146,0.35)',
+              fontSize: 11, color: '#f8bbd0',
+              fontFamily: "'Mitr', sans-serif", letterSpacing: '0.5px',
+            }}>
+              <Sparkles size={10} /> โปรไฟล์ของฉัน
+            </div>
+          </div>
+          <h1 style={{
+            fontFamily: "'Mitr', sans-serif",
+            fontSize: 28, fontWeight: 600,
+            color: '#fff', lineHeight: 1.3,
+          }}>สวัสดี, {user.firstName} 👋</h1>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
+            @{user.username}
+          </p>
+        </div>
+      </div>
+
+      {/* Avatar card floating */}
+      <div style={{
+        maxWidth: 680, margin: '20px auto 0',
+        padding: '0 24px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {/* <div style={{
+          background: '#fff',
+          borderRadius: 24,
+          padding: '24px 28px',
+          boxShadow: '0 8px 40px rgba(194,24,91,0.12)',
+          border: '1px solid #f5e6ec',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}> */}
+          <div style={{ position: 'relative' }}>
+            <div style={{
+              width: 150, height: 150, borderRadius: '50%',
+              border: '3px solid #f48fb1',
+              overflow: 'hidden',
+              background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 16px rgba(194,24,91,0.25)',
+            }}>
+              {user.avatar
+                ? <img src={user.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <User size={36} color="#c2185b" strokeWidth={1.5} />
+              }
+            </div>
+          {/* </div> */}
+
+        </div>
+      </div>
+
+      {/* Info + Edit card */}
+      <div style={{ maxWidth: 680, margin: '-75px auto 0', padding: '0 24px' }}>
+        <div style={{
+          background: '#fff',
+          borderRadius: 20,
+          padding: '20px 22px',
+          boxShadow: '0 4px 20px rgba(194,24,91,0.07)',
+          border: '1px solid #f5e6ec',
+          display: 'flex', alignItems: 'center', gap: 16,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 18, fontWeight: 600, color: '#1a0a14' }}>
+              {user.firstName} {user.lastName}
+            </p>
+            <p style={{ fontSize: 13, color: '#9e7a8a', marginTop: 2 }}>@{user.username}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '3px 10px', borderRadius: 999,
+                background: 'rgba(194,24,91,0.08)',
+                fontSize: 11, color: '#c2185b', fontWeight: 500,
+              }}>
+                <Activity size={10} /> {MOCK_HISTORY.length} การวิเคราะห์
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => { setEditForm({ firstName: user.firstName, lastName: user.lastName, username: user.username, avatar: user.avatar }); setView('editProfile') }}
+            style={{
+              width: 40, height: 40, borderRadius: 12,
+              border: '1.5px solid rgba(194,24,91,0.2)',
+              background: 'rgba(194,24,91,0.06)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: '#c2185b', flexShrink: 0,
+              transition: 'background 0.18s',
+            }}
+          >
+            <Edit3 size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* Menu */}
+      <div style={{ maxWidth: 680, margin: '20px auto 0', padding: '0 24px' }}>
+        {/* Section: บัญชีและข้อมูล */}
+        <p style={{ fontSize: 11, fontWeight: 600, color: '#9e7a8a', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10, padding: '0 4px' }}>
+          บัญชีและข้อมูล
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+          <MenuItem
+            icon={<Settings size={18} />}
+            label="จัดการโปรไฟล์"
+            desc="แก้ไขข้อมูลส่วนตัวและรูปภาพ"
+            onClick={() => { setEditForm({ firstName: user.firstName, lastName: user.lastName, username: user.username, avatar: user.avatar }); setView('editProfile') }}
+          />
+          <MenuItem
+            icon={<Droplets size={18} />}
+            label="ประวัติการวิเคราะห์ลิ่มเลือด"
+            desc={`${MOCK_HISTORY.length} รายการ`}
+            onClick={() => setView('history')}
+            badge={MOCK_HISTORY.length.toString()}
+          />
+        </div>
+
+        <p style={{ fontSize: 11, fontWeight: 600, color: '#9e7a8a', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10, padding: '0 4px' }}>
+          กฎหมายและนโยบาย
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+          <MenuItem
+            icon={<Shield size={18} />}
+            label="ประกาศนโยบายความเป็นส่วนตัว"
+            desc="การใช้งานและการคุ้มครองข้อมูล"
+            onClick={() => setView('privacy')}
+          />
+          <MenuItem
+            icon={<FileText size={18} />}
+            label="ข้อตกลงเงื่อนไขการใช้งาน"
+            desc="เงื่อนไขการใช้บริการ Luna day"
+            onClick={() => setView('terms')}
+          />
+        </div>
+
+        <p style={{ fontSize: 11, fontWeight: 600, color: '#9e7a8a', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10, padding: '0 4px' }}>
+          บัญชี
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <MenuItem
+            icon={<LogOut size={18} />}
+            label="ออกจากระบบ"
+            onClick={() => setShowLogoutModal(true)}
+          />
+          <MenuItem
+            icon={<Trash2 size={18} />}
+            label="ลบบัญชีผู้ใช้"
+            danger
+            onClick={() => setShowDeleteModal(true)}
+          />
+        </div>
+      </div>
+    </div>
+  )
+
+  // ============================================================
+  // EDIT PROFILE VIEW
+  // ============================================================
+  const EditProfileView = () => (
+    <div style={{ paddingBottom: 60 }}>
+      {/* Header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%)',
+        padding: '40px 24px 32px',
+        position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{
+          backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)',
+          backgroundSize: '28px 28px', position: 'absolute', inset: 0,
+        }} />
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => setView('profile')} style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: '#fff',
+          }}>
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <h1 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 20, fontWeight: 600, color: '#fff' }}>จัดการโปรไฟล์</h1>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>แก้ไขข้อมูลส่วนตัวของคุณ</p>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 24px' }}>
+        {/* Avatar Section */}
+        <div style={{
+          background: '#fff', borderRadius: 20, padding: '28px',
+          border: '1px solid #f5e6ec',
+          boxShadow: '0 4px 20px rgba(194,24,91,0.06)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
+          marginBottom: 16,
+        }}>
+          <div style={{ position: 'relative' }}>
+            <div style={{
+              width: 96, height: 96, borderRadius: '50%',
+              border: '3px solid #f48fb1', overflow: 'hidden',
+              background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 16px rgba(194,24,91,0.2)',
+            }}>
+              {editForm.avatar
+                ? <img src={editForm.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <User size={40} color="#c2185b" strokeWidth={1.5} />
+              }
+            </div>
+            <label style={{
+              position: 'absolute', bottom: 0, right: 0,
+              width: 32, height: 32, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #f06292, #c2185b)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', boxShadow: '0 2px 8px rgba(194,24,91,0.4)',
+            }}>
+              <Camera size={14} color="#fff" />
+              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
+            </label>
+          </div>
+          <p style={{ fontSize: 13, color: '#c2185b', fontWeight: 500 }}>แตะเพื่อเปลี่ยนรูปโปรไฟล์</p>
+        </div>
+
+        {/* Form */}
+        <div style={{
+          background: '#fff', borderRadius: 20, padding: '24px',
+          border: '1px solid #f5e6ec',
+          boxShadow: '0 4px 20px rgba(194,24,91,0.06)',
+          display: 'flex', flexDirection: 'column', gap: 16,
+          marginBottom: 20,
+        }}>
+          <FormField label="ชื่อ" value={editForm.firstName} onChange={v => setEditForm(f => ({ ...f, firstName: v }))} />
+          <FormField label="นามสกุล" value={editForm.lastName} onChange={v => setEditForm(f => ({ ...f, lastName: v }))} />
+          <FormField
+            label="วัน-เดือน-ปีเกิด (พ.ศ.)"
+            value={buddhistDate(user.dob)}
+            readOnly
+            icon={<Calendar size={14} />}
+          />
+          <FormField label="ชื่อผู้ใช้" value={editForm.username} onChange={v => setEditForm(f => ({ ...f, username: v }))} prefix="@" />
+        </div>
+
+        {/* Buttons */}
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button onClick={() => setView('profile')} style={{
+            flex: 1, padding: '14px', borderRadius: 14,
+            border: '1.5px solid rgba(194,24,91,0.25)',
+            background: 'transparent', color: '#c2185b',
+            fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 500,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            transition: 'background 0.18s',
+          }}>
+            <X size={15} /> ยกเลิก
+          </button>
+          <button onClick={handleSaveProfile} className="btn-primary" style={{ flex: 1, padding: '14px', justifyContent: 'center' }}>
+            <Check size={15} /> บันทึก
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ============================================================
+  // HISTORY VIEW
+  // ============================================================
+  const HistoryView = () => (
+    <div style={{ paddingBottom: 60 }}>
+      <div style={{
+        background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%)',
+        padding: '40px 24px 32px',
+        position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{
+          backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)',
+          backgroundSize: '28px 28px', position: 'absolute', inset: 0,
+        }} />
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => setView('profile')} style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: '#fff',
+          }}>
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <h1 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 20, fontWeight: 600, color: '#fff' }}>ประวัติการวิเคราะห์</h1>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>ลิ่มเลือดทั้งหมด {MOCK_HISTORY.length} รายการ</p>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px' }}>
+        {MOCK_HISTORY.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9e7a8a' }}>
+            <Droplets size={48} color="#f8bbd0" strokeWidth={1} style={{ marginBottom: 16 }} />
+            <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 16 }}>ยังไม่มีประวัติการวิเคราะห์</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {MOCK_HISTORY.map((item, i) => {
+              const cfg = riskConfig[item.level]
+              return (
+                <div key={item.id} style={{
+                  background: '#fff', borderRadius: 18, padding: '20px 22px',
+                  border: '1px solid #f5e6ec',
+                  boxShadow: '0 2px 12px rgba(194,24,91,0.05)',
+                  display: 'flex', alignItems: 'center', gap: 16,
+                  opacity: 0, animation: `fadeUp 0.4s ease ${i*0.07}s forwards`,
+                }}>
+                  {/* Score circle */}
+                  <div style={{
+                    width: 56, height: 56, borderRadius: '50%',
+                    background: cfg.bg, border: `2px solid ${cfg.dot}30`,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: cfg.color, fontFamily: "'Mitr', sans-serif", lineHeight: 1 }}>{item.score}</span>
+                    <span style={{ fontSize: 9, color: cfg.color, opacity: 0.7 }}>คะแนน</span>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        padding: '3px 10px', borderRadius: 999,
+                        background: cfg.bg, color: cfg.color,
+                        fontSize: 11, fontWeight: 600,
+                      }}>
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.dot, display: 'inline-block' }} />
+                        {item.result}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 12, color: '#9e7a8a', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Calendar size={11} /> {item.date}
+                    </p>
+                  </div>
+
+                  <ChevronRight size={16} color="#d6b4c4" />
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  // ============================================================
+  // DOC VIEW (Privacy / Terms)
+  // ============================================================
+  const DocView = ({ title, sections, icon }: { title: string; sections: {title:string; body:string}[]; icon: React.ReactNode }) => (
+    <div style={{ paddingBottom: 60 }}>
+      <div style={{
+        background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%)',
+        padding: '40px 24px 32px',
+        position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{
+          backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)',
+          backgroundSize: '28px 28px', position: 'absolute', inset: 0,
+        }} />
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => setView('profile')} style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: '#fff',
+          }}>
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: 8,
+                background: 'rgba(240,98,146,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#f8bbd0',
+              }}>{icon}</div>
+              <h1 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 18, fontWeight: 600, color: '#fff' }}>{title}</h1>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {sections.map((s, i) => (
+            <div key={i} style={{
+              background: '#fff', borderRadius: 18, padding: '20px 22px',
+              border: '1px solid #f5e6ec',
+              boxShadow: '0 2px 12px rgba(194,24,91,0.04)',
+            }}>
+              <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 600, color: '#c2185b', marginBottom: 8 }}>{s.title}</p>
+              <p style={{ fontSize: 13.5, color: '#5a3a4a', lineHeight: 1.75 }}>{s.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=Sarabun:wght@300;400;500;600&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        .profile-root {
+          min-height: 100vh;
+          font-family: 'Sarabun', sans-serif;
+          background: #faf7f5;
+          overflow-x: hidden;
+        }
+        .btn-primary {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 13px 28px; border-radius: 14px; border: none;
+          background: linear-gradient(135deg, #f06292, #c2185b);
+          color: #fff; font-family: 'Mitr', sans-serif;
+          font-size: 14px; font-weight: 500; cursor: pointer;
+          box-shadow: 0 6px 24px rgba(194,24,91,0.4);
+          transition: transform 0.18s, box-shadow 0.18s;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 32px rgba(194,24,91,0.5); }
+
+        @keyframes pulse {
+          0%,100% { box-shadow: 0 0 0 0 rgba(240,98,146,0.25); }
+          50% { box-shadow: 0 0 0 16px rgba(240,98,146,0); }
+        }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(30px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeSlideDown {
+          from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+          to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        .modal-overlay {
+          position: fixed; inset: 0; z-index: 40;
+          display: flex; align-items: flex-end; justify-content: center;
+          background: rgba(0,0,0,0.35);
+          backdrop-filter: blur(4px);
+        }
+        .modal-sheet {
+          width: 100%; max-width: 480px;
+          margin-bottom: 0;
+          background: #fff;
+          border-radius: 28px 28px 0 0;
+          padding: 32px 28px 40px;
+          animation: slideUp 0.28s ease;
+          box-shadow: 0 -8px 40px rgba(0,0,0,0.15);
+        }
+        .modal-handle {
+          width: 40px; height: 4px; border-radius: 2px;
+          background: #e5d0d8; margin: 0 auto 24px;
+        }
+      `}</style>
+
+      <div className="profile-root">
+        <Navbar />
+
+        {/* TOAST */}
+        {toast && (
+          <div style={{
+            position: 'fixed', top: 80, left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 50, padding: '12px 20px', borderRadius: 14,
+            fontSize: 13, fontWeight: 500,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+            border: '1px solid',
+            animation: 'fadeSlideDown 0.3s ease',
+            whiteSpace: 'nowrap',
+            ...(toast.type === 'success' ? { background: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' }
+              : toast.type === 'error'   ? { background: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5' }
+              : { background: '#fce4ef', color: '#9d174d', borderColor: '#f9a8d4' })
+          }}>
+            {toast.type === 'success' ? '✓ ' : toast.type === 'error' ? '✕ ' : 'ℹ '}{toast.msg}
+          </div>
+        )}
+
+        {/* VIEWS */}
+        {!isLoggedIn && <GuestView />}
+        {isLoggedIn && view === 'profile'     && <ProfileView />}
+        {isLoggedIn && view === 'editProfile' && <EditProfileView />}
+        {isLoggedIn && view === 'history'     && <HistoryView />}
+        {isLoggedIn && view === 'privacy' && (
+          <DocView title="นโยบายความเป็นส่วนตัว" sections={PRIVACY_TEXT} icon={<Shield size={14} />} />
+        )}
+        {isLoggedIn && view === 'terms' && (
+          <DocView title="ข้อตกลงเงื่อนไขการใช้งาน" sections={TERMS_TEXT} icon={<FileText size={14} />} />
+        )}
+
+        {/* LOGOUT MODAL */}
+        {showLogoutModal && (
+          <div className="modal-overlay" onClick={() => setShowLogoutModal(false)}>
+            <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+              <div className="modal-handle" />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 60, height: 60, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <LogOut size={26} color="#c2185b" strokeWidth={1.5} />
+                </div>
+                <h3 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 18, fontWeight: 600, color: '#1a0a14', textAlign: 'center' }}>
+                  คุณต้องการออกจากระบบใช่ไหม?
+                </h3>
+                <p style={{ fontSize: 13, color: '#9e7a8a', textAlign: 'center', lineHeight: 1.6 }}>
+                  คุณสามารถเข้าสู่ระบบอีกครั้งได้ตลอดเวลา
+                </p>
+                <div style={{ display: 'flex', gap: 12, width: '100%', marginTop: 8 }}>
+                  <button onClick={() => setShowLogoutModal(false)} style={{
+                    flex: 1, padding: '14px', borderRadius: 14,
+                    border: '1.5px solid rgba(194,24,91,0.2)',
+                    background: 'transparent', color: '#c2185b',
+                    fontFamily: "'Mitr', sans-serif", fontSize: 14, cursor: 'pointer',
+                  }}>ยกเลิก</button>
+                  <button onClick={handleLogout} className="btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
+                    ออกจากระบบ
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DELETE ACCOUNT MODAL */}
+        {showDeleteModal && (
+          <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
+            <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+              <div className="modal-handle" />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 60, height: 60, borderRadius: '50%',
+                  background: '#fee2e2',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <AlertTriangle size={26} color="#ef4444" strokeWidth={1.5} />
+                </div>
+                <h3 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 18, fontWeight: 600, color: '#1a0a14', textAlign: 'center' }}>
+                  คุณต้องการลบบัญชีผู้ใช้ใช่ไหม?
+                </h3>
+                <p style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', lineHeight: 1.7 }}>
+                  การกระทำนี้จะลบข้อมูลส่วนบุคคลและข้อมูลสุขภาพทั้งหมดออกจากฐานข้อมูลอย่างถาวร{' '}
+                  <span style={{ color: '#c2185b', fontWeight: 500, cursor: 'pointer' }} onClick={() => { setShowDeleteModal(false); setView('privacy') }}>
+                    ตามที่ระบุไว้ในประกาศความเป็นส่วนตัว
+                  </span>
+                </p>
+                <div style={{ display: 'flex', gap: 12, width: '100%', marginTop: 8 }}>
+                  <button onClick={() => setShowDeleteModal(false)} style={{
+                    flex: 1, padding: '14px', borderRadius: 14,
+                    border: '1.5px solid #fca5a5',
+                    background: 'transparent', color: '#ef4444',
+                    fontFamily: "'Mitr', sans-serif", fontSize: 14, cursor: 'pointer',
+                  }}>ยกเลิก</button>
+                  <button onClick={() => { setShowDeleteModal(false); setShowDeleteConfirm(true) }} style={{
+                    flex: 1, padding: '14px', borderRadius: 14,
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #f87171, #ef4444)',
+                    color: '#fff',
+                    fontFamily: "'Mitr', sans-serif", fontSize: 14, cursor: 'pointer',
+                    boxShadow: '0 4px 16px rgba(239,68,68,0.35)',
+                  }}>ยืนยัน</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DELETE CONFIRM (password) */}
+        {showDeleteConfirm && (
+          <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+            <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+              <div className="modal-handle" />
+              <h3 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 17, fontWeight: 600, color: '#1a0a14', marginBottom: 6 }}>
+                กรุณากรอกรหัสยืนยันตัวตน
+              </h3>
+              <p style={{ fontSize: 13, color: '#9e7a8a', marginBottom: 20 }}>กรอกรหัสผ่านเพื่อยืนยันการลบบัญชี</p>
+              <div style={{ position: 'relative', marginBottom: 16 }}>
+                <input
+                  type={showPw ? 'text' : 'password'}
+                  placeholder="รหัสผ่านของคุณ"
+                  value={deletePassword}
+                  onChange={e => setDeletePassword(e.target.value)}
+                  style={{
+                    width: '100%', padding: '14px 48px 14px 16px',
+                    borderRadius: 14, border: '2px solid #fca5a5',
+                    fontSize: 14, outline: 'none',
+                    fontFamily: "'Sarabun', sans-serif",
+                    color: '#1a0a14', background: '#fff',
+                  }}
+                />
+                <button
+                  onClick={() => setShowPw(!showPw)}
+                  style={{
+                    position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer', color: '#9e7a8a',
+                  }}
+                >
+                  {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button onClick={() => { setShowDeleteConfirm(false); setDeletePassword('') }} style={{
+                  flex: 1, padding: '14px', borderRadius: 14,
+                  border: '1.5px solid #fca5a5', background: 'transparent', color: '#ef4444',
+                  fontFamily: "'Mitr', sans-serif", fontSize: 14, cursor: 'pointer',
+                }}>ยกเลิก</button>
+                <button onClick={handleDeleteAccount} style={{
+                  flex: 1, padding: '14px', borderRadius: 14, border: 'none',
+                  background: 'linear-gradient(135deg, #f87171, #ef4444)',
+                  color: '#fff', fontFamily: "'Mitr', sans-serif", fontSize: 14, cursor: 'pointer',
+                  boxShadow: '0 4px 16px rgba(239,68,68,0.35)',
+                }}>ลบบัญชีผู้ใช้</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+// ============================================================
+// SHARED COMPONENTS
+// ============================================================
+function MenuItem({ icon, label, desc, onClick, danger = false, badge }: {
+  icon: React.ReactNode; label: string; desc?: string;
+  onClick: () => void; danger?: boolean; badge?: string
+}) {
+  return (
+    <button onClick={onClick} style={{
+      width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+      padding: '16px 18px', borderRadius: 16,
+      background: '#fff', border: `1px solid ${danger ? '#fee2e2' : '#f5e6ec'}`,
+      boxShadow: '0 2px 10px rgba(194,24,91,0.04)',
+      cursor: 'pointer', textAlign: 'left',
+      transition: 'transform 0.15s, box-shadow 0.15s',
+    }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'
+        ;(e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(194,24,91,0.1)'
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLElement).style.transform = 'none'
+        ;(e.currentTarget as HTMLElement).style.boxShadow = '0 2px 10px rgba(194,24,91,0.04)'
+      }}
+    >
+      <div style={{
+        width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+        background: danger ? '#fff1f2' : 'linear-gradient(135deg, #fce4ec, #f8bbd0)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: danger ? '#ef4444' : '#c2185b',
+      }}>{icon}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 14, fontWeight: 500, color: danger ? '#ef4444' : '#1a0a14', fontFamily: "'Mitr', sans-serif" }}>{label}</p>
+        {desc && <p style={{ fontSize: 12, color: '#9e7a8a', marginTop: 2 }}>{desc}</p>}
+      </div>
+      {badge && (
+        <span style={{
+          padding: '3px 10px', borderRadius: 999,
+          background: 'rgba(194,24,91,0.08)', color: '#c2185b',
+          fontSize: 12, fontWeight: 600,
+        }}>{badge}</span>
+      )}
+      <ChevronRight size={16} color={danger ? '#fca5a5' : '#d6b4c4'} />
+    </button>
+  )
+}
+
+function FormField({ label, value, onChange, readOnly = false, prefix, icon }: {
+  label: string; value: string; onChange?: (v: string) => void;
+  readOnly?: boolean; prefix?: string; icon?: React.ReactNode
+}) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#9d174d', marginBottom: 6, paddingLeft: 2 }}>
+        {label}
+      </label>
+      <div style={{ position: 'relative' }}>
+        {prefix && (
+          <span style={{
+            position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
+            fontSize: 14, color: '#c2185b', fontWeight: 500,
+          }}>{prefix}</span>
+        )}
+        {icon && (
+          <span style={{
+            position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
+            color: '#9e7a8a',
+          }}>{icon}</span>
+        )}
+        <input
+          type="text"
+          value={value}
+          readOnly={readOnly}
+          onChange={e => onChange?.(e.target.value)}
+          style={{
+            width: '100%',
+            padding: prefix ? '13px 16px 13px 28px' : '13px 16px',
+            borderRadius: 12,
+            border: `2px solid ${readOnly ? '#f3f4f6' : '#fce7f3'}`,
+            fontSize: 14, outline: 'none',
+            fontFamily: "'Sarabun', sans-serif",
+            background: readOnly ? '#f9fafb' : '#fff',
+            color: readOnly ? '#9ca3af' : '#1a0a14',
+            cursor: readOnly ? 'not-allowed' : 'text',
+            transition: 'border-color 0.18s',
+          }}
+          onFocus={e => { if (!readOnly) e.target.style.borderColor = '#f06292' }}
+          onBlur={e => { if (!readOnly) e.target.style.borderColor = '#fce7f3' }}
+        />
+      </div>
+      {readOnly && <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 4, paddingLeft: 2 }}>ไม่สามารถแก้ไขได้</p>}
+    </div>
+  )
+}

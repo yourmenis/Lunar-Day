@@ -130,7 +130,7 @@ export default function Navbar() {
         </div>
 
         <div className="nav-right">
-          <div className="nav-avatar">👩</div>
+          <div className="nav-avatar" onClick={() => router.push('/home/profile')}>👩</div>
           <button
             className="nav-logout"
             title="ออกจากระบบ"

@@ -7,6 +7,7 @@ import {
   Info, Sparkles, Activity, ArrowRight, X, ImageIcon, Loader2,
   Shield, Zap, FlaskConical
 } from 'lucide-react'
+import React from 'react'
 import Navbar from '../../components/Navbar'
 
 // ── Types ──
@@ -674,8 +675,8 @@ export default function AnalyzePage() {
               const myIdx = steps.indexOf(s.key as Step)
               const state = myIdx < curIdx ? 'done' : myIdx === curIdx ? 'active' : 'idle'
               return (
-                <>
-                  <div key={s.key} className="step-node">
+                <React.Fragment key={s.key}>
+                  <div className="step-node">
                     <div className={`step-circle ${state}`}>
                       {state === 'done' ? <CheckCircle2 size={15} /> : s.num}
                     </div>
@@ -687,11 +688,13 @@ export default function AnalyzePage() {
                   {i < arr.length - 1 && (
                     <div key={`conn-${i}`} className={`step-connector ${myIdx < curIdx ? 'done' : ''}`} />
                   )}
-                </>
-              )
+                </React.Fragment>
+                )
             })}
           </div>
         </div>
+
+
 
         {/* ── Main card ── */}
         <div className="analyze-main">
