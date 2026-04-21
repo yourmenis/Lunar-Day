@@ -218,7 +218,7 @@ export default function ForgotPasswordPage() {
       body: JSON.stringify({
         Email: email,
         OTP: otp,
-        NewPassword: new_password,
+        NewPassword: password,
         ConfirmPassword: confirmPassword,
       }),
     })

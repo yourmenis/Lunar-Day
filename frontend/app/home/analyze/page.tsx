@@ -616,7 +616,7 @@ export default function IntroPage() {
               <button className="btn-cta" onClick={() => router.push('/home/analyze/start')}>
                 เริ่มวิเคราะห์เลย <ArrowRight size={16} />
               </button>
-              <a href="/home/analyze/start" className="btn-ghost-hero">
+              <a href="/home/articles" className="btn-ghost-hero">
                 อ่านบทความ <ChevronRight size={15} />
               </a>
             </div>
