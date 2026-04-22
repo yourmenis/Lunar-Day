@@ -16,23 +16,8 @@ import Navbar from '../components/Navbar'
 type View = 'profile' | 'editProfile' | 'history' | 'privacy' | 'terms'
 
 // ============================================================
-// MOCK DATA
+// STATIC TEXT
 // ============================================================
-const MOCK_USER = {
-  username: 'foreveryoung',
-  firstName: 'ศิริพร',
-  lastName: 'มีสุข',
-  dob: '2000-05-14',
-  avatar: null as string | null,
-}
-
-const MOCK_HISTORY = [
-  { id: 1, date: '22 เม.ย. 2568', result: 'ความเสี่ยงต่ำ', score: 12, level: 'low' },
-  { id: 2, date: '10 มี.ค. 2568', result: 'ความเสี่ยงปานกลาง', score: 28, level: 'medium' },
-  { id: 3, date: '5 ก.พ. 2568', result: 'ความเสี่ยงสูง', score: 52, level: 'high' },
-  { id: 4, date: '18 ม.ค. 2568', result: 'ความเสี่ยงต่ำ', score: 9, level: 'low' },
-]
-
 const PRIVACY_TEXT = [
   { title: '1. ข้อมูลที่เราจัดเก็บ', body: 'เราเก็บรวบรวมข้อมูลส่วนบุคคล เช่น ชื่อผู้ใช้ อีเมล วันเกิด และรหัสผ่านในรูปแบบที่ผ่านการเข้ารหัส (Hashing) เพื่อความปลอดภัยสูงสุด ไม่มีการจัดเก็บหรือรับข้อมูลโปรไฟล์จากผู้ให้บริการภายนอก' },
   { title: '2. การประมวลผลข้อมูล', body: 'เราประมวลผลข้อมูลเพื่ออำนวยความสะดวกในการสร้างบัญชี แสดงโปรไฟล์ และปรับปรุงบริการตามที่ผู้ใช้ร้องขอ' },
@@ -42,19 +27,21 @@ const PRIVACY_TEXT = [
   { title: '6. การเก็บรักษาข้อมูล', body: 'เราจัดเก็บข้อมูลตลอดระยะเวลาที่ท่านมีบัญชี และจะลบข้อมูลทั้งหมดทันทีเมื่อท่านลบบัญชีผู้ใช้งาน' },
 ]
 
+// FIX #2 — เพิ่ม TERMS_TEXT ที่หายไป
 const TERMS_TEXT = [
-  { title: '1. การใช้บริการ', body: 'แอปพลิเคชัน Luna day มีวัตถุประสงค์เพื่อให้บริการข้อมูลและอำนวยความสะดวก การใช้งานอยู่ภายใต้เงื่อนไขที่คุณตกลงยอมรับข้อกำหนดทั้งหมด' },
-  { title: '2. การตรวจสอบข้อมูล', body: 'คุณต้องกรอกข้อมูลให้ครบถ้วนและถูกต้อง ระบบจะบันทึกการยอมรับนโยบายความเป็นส่วนตัวลงฐานข้อมูล' },
-  { title: '3. ความปลอดภัยรหัสผ่าน', body: 'คุณเป็นผู้รับผิดชอบในการเก็บรักษารหัสผ่านเป็นความลับ หากมีการเข้าถึงบัญชีโดยไม่ได้รับอนุญาต กรุณาเปลี่ยนรหัสผ่านและแจ้งผู้พัฒนาทันที' },
-  { title: '4. ทรัพย์สินทางปัญญา', body: 'เนื้อหาทั้งหมดใน Luna day เป็นทรัพย์สินของผู้พัฒนา ห้ามทำซ้ำหรือนำไปใช้เชิงพาณิชย์โดยไม่ได้รับอนุญาต' },
-  { title: '5. การจำกัดความรับผิดชอบ', body: 'ข้อมูลและบริการจัดทำขึ้น "ตามสภาพที่เป็นอยู่" ผู้พัฒนาไม่รับรองความสมบูรณ์หรือความขัดข้องจากปัจจัยภายนอก' },
-  { title: '6. การเก็บข้อมูลส่วนบุคคล', body: 'คุณตกลงให้ Luna day เก็บรวบรวมและใช้ข้อมูลส่วนบุคคลเพื่อวัตถุประสงค์ในการให้บริการ ตามนโยบายความเป็นส่วนตัวของเรา' },
+  { title: '1. การยอมรับเงื่อนไข', body: 'การใช้งานบริการ Luna Day ถือว่าท่านได้อ่านและยอมรับเงื่อนไขการใช้งานทั้งหมดแล้ว หากท่านไม่ยอมรับเงื่อนไขเหล่านี้ กรุณาหยุดใช้บริการ' },
+  { title: '2. การใช้บริการ', body: 'ท่านตกลงใช้บริการเพื่อวัตถุประสงค์ที่ถูกกฎหมายเท่านั้น และไม่กระทำการใดๆ ที่อาจก่อให้เกิดความเสียหายต่อระบบหรือผู้ใช้รายอื่น' },
+  { title: '3. ข้อมูลสุขภาพ', body: 'ข้อมูลที่ได้จากการวิเคราะห์ในแอปพลิเคชันเป็นเพียงข้อมูลเบื้องต้น ไม่สามารถใช้แทนการวินิจฉัยจากแพทย์ผู้เชี่ยวชาญได้' },
+  { title: '4. ทรัพย์สินทางปัญญา', body: 'เนื้อหา โลโก้ และซอฟต์แวร์ทั้งหมดในแอปพลิเคชันเป็นทรัพย์สินของ Luna Day ห้ามทำซ้ำหรือนำไปใช้โดยไม่ได้รับอนุญาต' },
+  { title: '5. การยกเลิกบริการ', body: 'เราขอสงวนสิทธิ์ในการระงับหรือยกเลิกบัญชีที่ละเมิดเงื่อนไขการใช้งานโดยไม่ต้องแจ้งล่วงหน้า' },
+  { title: '6. การเปลี่ยนแปลงเงื่อนไข', body: 'เราอาจปรับปรุงเงื่อนไขการใช้งานเป็นครั้งคราว การใช้งานต่อเนื่องหลังจากมีการเปลี่ยนแปลงถือว่าท่านยอมรับเงื่อนไขใหม่' },
 ]
 
 // ============================================================
 // HELPERS
 // ============================================================
 function buddhistDate(iso: string) {
+  if (!iso) return '-'
   const [y, m, d] = iso.split('-')
   const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
   return `${parseInt(d)} ${months[parseInt(m)-1]} ${parseInt(y)+543}`
@@ -65,10 +52,10 @@ function buddhistDate(iso: string) {
 // ============================================================
 export default function ProfilePage() {
   const router = useRouter()
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [user, setUser] = useState({ ...MOCK_USER })
   const [view, setView] = useState<View>('profile')
   const [mounted, setMounted] = useState(false)
+  const [profile, setProfile] = useState<any>(null)
+  const [history, setHistory] = useState<any[]>([])
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
@@ -86,42 +73,138 @@ export default function ProfilePage() {
 
   // Edit form
   const [editForm, setEditForm] = useState({
-    firstName: user.firstName,
-    lastName: user.lastName,
-    username: user.username,
-    avatar: user.avatar,
+    name: '',
+    lastname: '',
+    username: '',
+    avatarFile: null as File | null,
   })
 
-  useEffect(() => { setMounted(true) }, [])
+  // FIX #4 — previewUrl state แยกออกมาเพื่อไม่ให้เกิด memory leak
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!editForm.avatarFile) {
+      setPreviewUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(editForm.avatarFile)
+    setPreviewUrl(url)
+    return () => URL.revokeObjectURL(url) // cleanup ทุกครั้งที่ file เปลี่ยน
+  }, [editForm.avatarFile])
+
+  // FIX #5 — เพิ่ม error handling
+  const fetchProfile = async () => {
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await fetch('http://localhost:5000/profile/', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache',
+        },
+      })
+      if (!res.ok) {
+        if (res.status === 401) router.push('/login')
+        return
+      }
+      const data = await res.json()
+      if (data.data) setProfile(data.data)
+    } catch {
+      showToast('ไม่สามารถโหลดข้อมูลโปรไฟล์ได้', 'error')
+    }
+  }
+
+  // FIX #5 — เพิ่ม error handling
+  const fetchHistory = async () => {
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await fetch('http://localhost:5000/history/', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      if (data.status === 'success') setHistory(data.data)
+    } catch {
+      showToast('ไม่สามารถโหลดประวัติได้', 'error')
+    }
+  }
+
+  // FIX #6 — เพิ่ม router ใน dependency array
+  useEffect(() => {
+    setMounted(true)
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      router.push('/login')
+      return
+    }
+    fetchProfile()
+    fetchHistory()
+  }, [router])
 
   const handleLogout = () => {
     setShowLogoutModal(false)
-    setIsLoggedIn(false)
-    setView('profile')
-    showToast('คุณออกจากระบบแล้ว', 'info')
-  }
-
-  const handleDeleteAccount = () => {
-    if (!deletePassword) return showToast('กรุณากรอกรหัสผ่าน', 'error')
-    setShowDeleteConfirm(false)
-    setIsLoggedIn(false)
-    setView('profile')
-    showToast('ลบบัญชีเสร็จสิ้น', 'success')
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('user')
     router.push('/login')
   }
 
-  const handleSaveProfile = () => {
-    setUser(prev => ({ ...prev, ...editForm }))
-    showToast('บันทึกข้อมูลเรียบร้อย')
-    setView('profile')
+  // FIX #3 — เรียก API จริงก่อนลบบัญชี
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) return showToast('กรุณากรอกรหัสผ่าน', 'error')
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await fetch('http://localhost:5000/profile/delete', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password: deletePassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) return showToast(data.msg || 'รหัสผ่านไม่ถูกต้อง', 'error')
+      setShowDeleteConfirm(false)
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('user')
+      router.push('/login')
+    } catch {
+      showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error')
+    }
+  }
+
+  const handleSaveProfile = async () => {
+    const token = localStorage.getItem('access_token')
+    const form = new FormData()
+    form.append('username', editForm.username)
+    form.append('name', editForm.name)
+    form.append('lastname', editForm.lastname)
+    form.append('birthday', profile?.Birthday || '')
+    if (editForm.avatarFile) form.append('profile_img', editForm.avatarFile)
+
+    try {
+      const res = await fetch('http://localhost:5000/profile/update', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      })
+      const data = await res.json()
+      if (res.ok) {
+        showToast('บันทึกข้อมูลเรียบร้อย')
+        setEditForm(f => ({ ...f, avatarFile: null }))
+        setPreviewUrl(null)
+        await fetchProfile()
+        setView('profile')
+      } else {
+        showToast(data.msg || 'เกิดข้อผิดพลาด', 'error')
+      }
+    } catch {
+      showToast('ไม่สามารถบันทึกข้อมูลได้', 'error')
+    }
   }
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => setEditForm(f => ({ ...f, avatar: reader.result as string }))
-    reader.readAsDataURL(file)
+    setEditForm(f => ({ ...f, avatarFile: file }))
   }
 
   const riskConfig: Record<string, { bg: string; color: string; dot: string }> = {
@@ -129,75 +212,6 @@ export default function ProfilePage() {
     medium: { bg: 'rgba(245,158,11,0.1)',  color: '#d97706', dot: '#f59e0b' },
     high:   { bg: 'rgba(239,68,68,0.1)',   color: '#dc2626', dot: '#ef4444' },
   }
-
-  // ============================================================
-  // GUEST VIEW
-  // ============================================================
-  const GuestView = () => (
-    <div style={{
-      minHeight: '80vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 0,
-      padding: '40px 20px',
-    }}>
-      {/* Decorative ring */}
-      <div style={{ position: 'relative', marginBottom: 32 }}>
-        <div style={{
-          width: 140, height: 140,
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, rgba(240,98,146,0.12), rgba(194,24,91,0.06))',
-          border: '2px solid rgba(240,98,146,0.2)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          position: 'relative',
-          animation: 'pulse 3s ease-in-out infinite',
-        }}>
-          <div style={{
-            width: 100, height: 100,
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 8px 32px rgba(194,24,91,0.2)',
-          }}>
-            <User size={44} color="#c2185b" strokeWidth={1.5} />
-          </div>
-        </div>
-        {/* Orbiting dots */}
-        {[0,90,180,270].map((deg,i) => (
-          <div key={i} style={{
-            position: 'absolute',
-            width: 8, height: 8,
-            borderRadius: '50%',
-            background: ['#f06292','#f48fb1','#ce93d8','#f06292'][i],
-            opacity: 0.6,
-            top: '50%', left: '50%',
-            transform: `rotate(${deg}deg) translateX(70px) translateY(-50%)`,
-          }} />
-        ))}
-      </div>
-
-      <h2 style={{
-        fontFamily: "'Mitr', sans-serif",
-        fontSize: 22,
-        fontWeight: 600,
-        color: '#1a0a14',
-        marginBottom: 8,
-      }}>ยินดีต้อนรับสู่ Luna day</h2>
-      <p style={{ fontSize: 14, color: '#9e7a8a', marginBottom: 32, textAlign: 'center', lineHeight: 1.6 }}>
-        เข้าสู่ระบบเพื่อเข้าถึงโปรไฟล์<br />และประวัติการวิเคราะห์ของคุณ
-      </p>
-
-      <button
-        onClick={() => { setIsLoggedIn(true); showToast('เข้าสู่ระบบสำเร็จ') }}
-        className="btn-primary"
-        style={{ padding: '14px 48px', fontSize: 15 }}
-      >
-        <Sparkles size={16} /> ลงชื่อเข้าใช้
-      </button>
-    </div>
-  )
 
   // ============================================================
   // PROFILE VIEW
@@ -211,7 +225,6 @@ export default function ProfilePage() {
         position: 'relative',
         overflow: 'hidden',
       }}>
-        {/* bg decorations */}
         <div style={{
           position: 'absolute', top: -60, right: -60,
           width: 240, height: 240, borderRadius: '50%',
@@ -245,9 +258,9 @@ export default function ProfilePage() {
             fontFamily: "'Mitr', sans-serif",
             fontSize: 28, fontWeight: 600,
             color: '#fff', lineHeight: 1.3,
-          }}>สวัสดี, {user.firstName} 👋</h1>
+          }}>สวัสดี, {profile?.Name} 👋</h1>
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
-            @{user.username}
+            @{profile?.Username}
           </p>
         </div>
       </div>
@@ -258,30 +271,20 @@ export default function ProfilePage() {
         padding: '0 24px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {/* <div style={{
-          background: '#fff',
-          borderRadius: 24,
-          padding: '24px 28px',
-          boxShadow: '0 8px 40px rgba(194,24,91,0.12)',
-          border: '1px solid #f5e6ec',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}> */}
-          <div style={{ position: 'relative' }}>
-            <div style={{
-              width: 150, height: 150, borderRadius: '50%',
-              border: '3px solid #f48fb1',
-              overflow: 'hidden',
-              background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(194,24,91,0.25)',
-            }}>
-              {user.avatar
-                ? <img src={user.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <User size={36} color="#c2185b" strokeWidth={1.5} />
-              }
-            </div>
-          {/* </div> */}
-
+        <div style={{ position: 'relative' }}>
+          <div style={{
+            width: 150, height: 150, borderRadius: '50%',
+            border: '3px solid #f48fb1',
+            overflow: 'hidden',
+            background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 16px rgba(194,24,91,0.25)',
+          }}>
+            {profile?.Profile_Image
+              ? <img src={`http://localhost:5000/static/uploads/profiles/${profile.Profile_Image}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <User size={36} color="#c2185b" strokeWidth={1.5} />
+            }
+          </div>
         </div>
       </div>
 
@@ -297,29 +300,21 @@ export default function ProfilePage() {
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 18, fontWeight: 600, color: '#1a0a14' }}>
-              {user.firstName} {user.lastName}
+              {profile?.Name} {profile?.LastName}
             </p>
-            <p style={{ fontSize: 13, color: '#9e7a8a', marginTop: 2 }}>@{user.username}</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                padding: '3px 10px', borderRadius: 999,
-                background: 'rgba(194,24,91,0.08)',
-                fontSize: 11, color: '#c2185b', fontWeight: 500,
-              }}>
-                <Activity size={10} /> {MOCK_HISTORY.length} การวิเคราะห์
-              </div>
-            </div>
+            <p style={{ fontSize: 13, color: '#9e7a8a', marginTop: 2 }}>@{profile?.Username}</p>
           </div>
           <button
-            onClick={() => { setEditForm({ firstName: user.firstName, lastName: user.lastName, username: user.username, avatar: user.avatar }); setView('editProfile') }}
+            onClick={() => {
+              setEditForm({ name: profile?.Name || '', lastname: profile?.LastName || '', username: profile?.Username || '', avatarFile: null })
+              setView('editProfile')
+            }}
             style={{
               width: 40, height: 40, borderRadius: 12,
               border: '1.5px solid rgba(194,24,91,0.2)',
               background: 'rgba(194,24,91,0.06)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', color: '#c2185b', flexShrink: 0,
-              transition: 'background 0.18s',
             }}
           >
             <Edit3 size={16} />
@@ -329,7 +324,6 @@ export default function ProfilePage() {
 
       {/* Menu */}
       <div style={{ maxWidth: 680, margin: '20px auto 0', padding: '0 24px' }}>
-        {/* Section: บัญชีและข้อมูล */}
         <p style={{ fontSize: 11, fontWeight: 600, color: '#9e7a8a', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10, padding: '0 4px' }}>
           บัญชีและข้อมูล
         </p>
@@ -338,14 +332,17 @@ export default function ProfilePage() {
             icon={<Settings size={18} />}
             label="จัดการโปรไฟล์"
             desc="แก้ไขข้อมูลส่วนตัวและรูปภาพ"
-            onClick={() => { setEditForm({ firstName: user.firstName, lastName: user.lastName, username: user.username, avatar: user.avatar }); setView('editProfile') }}
+            onClick={() => {
+              setEditForm({ name: profile?.Name || '', lastname: profile?.LastName || '', username: profile?.Username || '', avatarFile: null })
+              setView('editProfile')
+            }}
           />
           <MenuItem
             icon={<Droplets size={18} />}
             label="ประวัติการวิเคราะห์ลิ่มเลือด"
-            desc={`${MOCK_HISTORY.length} รายการ`}
+            desc={`${history.length} รายการ`}
             onClick={() => setView('history')}
-            badge={MOCK_HISTORY.length.toString()}
+            badge={history.length.toString()}
           />
         </div>
 
@@ -392,7 +389,6 @@ export default function ProfilePage() {
   // ============================================================
   const EditProfileView = () => (
     <div style={{ paddingBottom: 60 }}>
-      {/* Header */}
       <div style={{
         background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%)',
         padding: '40px 24px 32px',
@@ -435,9 +431,12 @@ export default function ProfilePage() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: '0 4px 16px rgba(194,24,91,0.2)',
             }}>
-              {editForm.avatar
-                ? <img src={editForm.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <User size={40} color="#c2185b" strokeWidth={1.5} />
+              {/* FIX #4 — ใช้ previewUrl แทน URL.createObjectURL ตรงๆ */}
+              {previewUrl
+                ? <img src={previewUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : profile?.Profile_Image
+                  ? <img src={`http://localhost:5000/static/uploads/profiles/${profile.Profile_Image}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <User size={40} color="#c2185b" strokeWidth={1.5} />
               }
             </div>
             <label style={{
@@ -462,11 +461,11 @@ export default function ProfilePage() {
           display: 'flex', flexDirection: 'column', gap: 16,
           marginBottom: 20,
         }}>
-          <FormField label="ชื่อ" value={editForm.firstName} onChange={v => setEditForm(f => ({ ...f, firstName: v }))} />
-          <FormField label="นามสกุล" value={editForm.lastName} onChange={v => setEditForm(f => ({ ...f, lastName: v }))} />
+          <FormField label="ชื่อ" value={editForm.name} onChange={v => setEditForm(f => ({ ...f, name: v }))} />
+          <FormField label="นามสกุล" value={editForm.lastname} onChange={v => setEditForm(f => ({ ...f, lastname: v }))} />
           <FormField
             label="วัน-เดือน-ปีเกิด (พ.ศ.)"
-            value={buddhistDate(user.dob)}
+            value={buddhistDate(profile?.Birthday || '')}
             readOnly
             icon={<Calendar size={14} />}
           />
@@ -481,7 +480,6 @@ export default function ProfilePage() {
             background: 'transparent', color: '#c2185b',
             fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 500,
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            transition: 'background 0.18s',
           }}>
             <X size={15} /> ยกเลิก
           </button>
@@ -494,7 +492,7 @@ export default function ProfilePage() {
   )
 
   // ============================================================
-  // HISTORY VIEW
+  // HISTORY VIEW — FIX #1: ปิด div ให้ครบ
   // ============================================================
   const HistoryView = () => (
     <div style={{ paddingBottom: 60 }}>
@@ -518,38 +516,44 @@ export default function ProfilePage() {
           </button>
           <div>
             <h1 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 20, fontWeight: 600, color: '#fff' }}>ประวัติการวิเคราะห์</h1>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>ลิ่มเลือดทั้งหมด {MOCK_HISTORY.length} รายการ</p>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>ลิ่มเลือดทั้งหมด {history.length} รายการ</p>
           </div>
         </div>
       </div>
 
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px' }}>
-        {MOCK_HISTORY.length === 0 ? (
+        {history.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9e7a8a' }}>
             <Droplets size={48} color="#f8bbd0" strokeWidth={1} style={{ marginBottom: 16 }} />
             <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 16 }}>ยังไม่มีประวัติการวิเคราะห์</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {MOCK_HISTORY.map((item, i) => {
-              const cfg = riskConfig[item.level]
+            {history.map((item, i) => {
+              const levelMap: Record<string, string> = {
+                'ฉุกเฉิน': 'high',
+                'เสี่ยงสูง': 'high',
+                'เสี่ยงปานกลาง': 'medium',
+                'ปกติ': 'low',
+              }
+              const cfg = riskConfig[levelMap[item.Risk_Level] || 'low']
+
               return (
-                <div key={item.id} style={{
-                  background: '#fff', borderRadius: 18, padding: '20px 22px',
+                <div key={item.AssessmentID} style={{
+                  background: '#fff', borderRadius: 18, padding: '16px 20px',
                   border: '1px solid #f5e6ec',
-                  boxShadow: '0 2px 12px rgba(194,24,91,0.05)',
+                  boxShadow: '0 2px 12px rgba(194,24,91,0.04)',
                   display: 'flex', alignItems: 'center', gap: 16,
-                  opacity: 0, animation: `fadeUp 0.4s ease ${i*0.07}s forwards`,
+                  cursor: 'pointer',
+                  opacity: 0, animation: `fadeUp 0.4s ease ${i * 0.07}s forwards`,
                 }}>
-                  {/* Score circle */}
                   <div style={{
                     width: 56, height: 56, borderRadius: '50%',
                     background: cfg.bg, border: `2px solid ${cfg.dot}30`,
                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0,
                   }}>
-                    <span style={{ fontSize: 16, fontWeight: 700, color: cfg.color, fontFamily: "'Mitr', sans-serif", lineHeight: 1 }}>{item.score}</span>
-                    <span style={{ fontSize: 9, color: cfg.color, opacity: 0.7 }}>คะแนน</span>
+                    <Droplets size={20} color={cfg.color} strokeWidth={1.5} />
                   </div>
 
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -561,11 +565,26 @@ export default function ProfilePage() {
                         fontSize: 11, fontWeight: 600,
                       }}>
                         <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.dot, display: 'inline-block' }} />
-                        {item.result}
+                        {item.Risk_Level}
                       </span>
                     </div>
+
+                    <p style={{
+                      fontSize: 13, color: '#1a0a14', fontWeight: 500,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      marginBottom: 4,
+                    }}>
+                      {item.Detect2}
+                    </p>
+
                     <p style={{ fontSize: 12, color: '#9e7a8a', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Calendar size={11} /> {item.date}
+                      <Calendar size={11} />
+                      {item.Create_At
+                        ? new Date(item.Create_At).toLocaleDateString('th-TH', {
+                            year: 'numeric', month: 'short', day: 'numeric',
+                          })
+                        : '-'
+                      }
                     </p>
                   </div>
 
@@ -576,7 +595,7 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
-    </div>
+    </div>  // ← FIX #1: div ที่ปิดให้ครบ
   )
 
   // ============================================================
@@ -658,10 +677,6 @@ export default function ProfilePage() {
         }
         .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 32px rgba(194,24,91,0.5); }
 
-        @keyframes pulse {
-          0%,100% { box-shadow: 0 0 0 0 rgba(240,98,146,0.25); }
-          50% { box-shadow: 0 0 0 16px rgba(240,98,146,0); }
-        }
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -682,7 +697,6 @@ export default function ProfilePage() {
         }
         .modal-sheet {
           width: 100%; max-width: 480px;
-          margin-bottom: 0;
           background: #fff;
           border-radius: 28px 28px 0 0;
           padding: 32px 28px 40px;
@@ -717,17 +731,11 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* VIEWS */}
-        {!isLoggedIn && <GuestView />}
-        {isLoggedIn && view === 'profile'     && <ProfileView />}
-        {isLoggedIn && view === 'editProfile' && <EditProfileView />}
-        {isLoggedIn && view === 'history'     && <HistoryView />}
-        {isLoggedIn && view === 'privacy' && (
-          <DocView title="นโยบายความเป็นส่วนตัว" sections={PRIVACY_TEXT} icon={<Shield size={14} />} />
-        )}
-        {isLoggedIn && view === 'terms' && (
-          <DocView title="ข้อตกลงเงื่อนไขการใช้งาน" sections={TERMS_TEXT} icon={<FileText size={14} />} />
-        )}
+        {view === 'profile'     && <ProfileView />}
+        {view === 'editProfile' && <EditProfileView />}
+        {view === 'history'     && <HistoryView />}
+        {view === 'privacy'     && <DocView title="ประกาศนโยบายความเป็นส่วนตัว" sections={PRIVACY_TEXT} icon={<Shield size={14} />} />}
+        {view === 'terms'       && <DocView title="ข้อตกลงเงื่อนไขการใช้งาน" sections={TERMS_TEXT} icon={<FileText size={14} />} />}
 
         {/* LOGOUT MODAL */}
         {showLogoutModal && (
