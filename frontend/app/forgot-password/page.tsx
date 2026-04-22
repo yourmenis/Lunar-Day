@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Mail, Lock, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react'
 import './forgot-password.css'
+import Image from 'next/image'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const OTP_LENGTH = 5
@@ -270,9 +271,15 @@ export default function ForgotPasswordPage() {
 
       <div className={`card-wrap ${mounted ? 'visible' : ''}`}>
         {/* Moon */}
-        <div className="moon-motif">
-          <div className="moon-circle">🌙</div>
-        </div>
+        <div className="moon-motif" style={{ display: 'flex', justifyContent: 'center' }}>
+            <Image 
+              src="/logolunar.png" 
+              alt="Lunar Day Logo" 
+              width={80} 
+              height={80}
+              style={{ borderRadius: '50%' }}
+            />
+          </div>
 
         <p className="app-name">Lunar Day</p>
 

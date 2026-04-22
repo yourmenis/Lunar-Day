@@ -62,25 +62,6 @@ export default function IntroPage() {
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    // ── ตรวจ token ──────────────────────────────────────────
-    const token = localStorage.getItem('token')
-
-    if (!token) {
-      router.replace('/login')
-      return
-    }
-
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]))
-      const isExpired = payload.exp && payload.exp * 1000 < Date.now()
-      if (isExpired) {
-        localStorage.removeItem('token')
-        router.replace('/login')
-        return
-      }
-    } catch {
-    }
-
     setMounted(true)
     intervalRef.current = setInterval(() => {
       setActiveStep(s => (s + 1) % STEPS.length)

@@ -15,7 +15,7 @@ export default function HomePage() {
   const fetchArticles = async () => {
     try {
       const res = await api.get('/articles')
-      console.log('Articles:', res.data)
+      // console.log('Articles:', res.data)
       setArticles(res.data)
     } catch {
       console.error('โหลดบทความไม่สำเร็จ')

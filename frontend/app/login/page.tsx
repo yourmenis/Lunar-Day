@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
 import './login.css'
+import Image from 'next/image'
 
 
 export default function LoginPage() {
@@ -80,11 +81,15 @@ export default function LoginPage() {
         </div>
 
         <div className={`card-wrap ${mounted ? 'visible' : ''}`}>
-
-          <div className="moon-motif">
-            <div className="moon-circle">🌙</div>
+          <div className="moon-motif" style={{ display: 'flex', justifyContent: 'center' }}>
+            <Image 
+              src="/logolunar.png" 
+              alt="Lunar Day Logo" 
+              width={80} 
+              height={80}
+              style={{ borderRadius: '50%' }}
+            />
           </div>
-
           <p className="app-name">Lunar Day</p>
           <h1 className="headline">เข้าสู่ระบบ</h1>
 

@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { Activity, BookOpen, Phone, LogOut, User } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import api from '../../lib/api'
+import Image from 'next/image'
 
 const NAV_LINKS = [
   { href: '/home/analyze', label: 'วิเคราะห์เลือด', icon: Activity },
@@ -49,7 +50,7 @@ export default function Navbar() {
         .nav-logo {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 16px;
           cursor: pointer;
           text-decoration: none;
         }
@@ -64,7 +65,7 @@ export default function Navbar() {
         .nav-logo-text {
           font-family: 'Mitr', sans-serif;
           font-weight: 600;
-          font-size: 17px;
+          font-size: 30px;
           color: #1a0a14;
           letter-spacing: 0.3px;
         }
@@ -133,7 +134,15 @@ export default function Navbar() {
 
       <nav className="navbar">
         <div className="nav-logo" onClick={() => router.push('/home')}>
-          <div className="nav-logo-icon">🌙</div>
+          <div className="nav-logo-icon">
+            <Image 
+              src="/logolunar.png" 
+              alt="Lunar Day Logo" 
+              width={45} 
+              height={45}
+              style={{ borderRadius: '50%' }}
+            />
+          </div>
           <span className="nav-logo-text">Lunar Day</span>
         </div>
 

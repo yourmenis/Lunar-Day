@@ -77,11 +77,11 @@ export default function ArticleDetailPage() {
       </div>
 
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '40px 32px' }}>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 32 }}>
+        {/* <div style={{ display: 'flex', gap: 10, marginBottom: 32 }}>
           {[
             { icon: <Heart size={14} fill={liked ? 'currentColor' : 'none'} />, label: 'ถูกใจ', active: liked, fn: () => setLiked(p => !p) },
             { icon: <Bookmark size={14} fill={saved ? 'currentColor' : 'none'} />, label: saved ? 'บันทึกแล้ว' : 'บันทึก', active: saved, fn: () => setSaved(p => !p) },
-            { icon: <Share2 size={14} />, label: 'แชร์', active: false, fn: () => {} },
+            { icon: <Share2 size={14} />, label: 'แชร์', active: false, fn: () => {} }
           ].map((btn, i) => (
             <button key={i} onClick={btn.fn} style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -94,7 +94,7 @@ export default function ArticleDetailPage() {
               {btn.icon} {btn.label}
             </button>
           ))}
-        </div>
+        </div> */}
 
         <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #f5e6ec', padding: 40, boxShadow: '0 4px 24px rgba(194,24,91,.06)' }}>
           {loading && [...Array(8)].map((_, i) => (
