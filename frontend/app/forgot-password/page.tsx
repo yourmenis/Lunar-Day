@@ -209,40 +209,10 @@ export default function ForgotPasswordPage() {
       alert(data.msg)
     }
   }
-
   
-  const handleResetPassword = async () => {
-    const res = await fetch('http://localhost:5000/auth/reset-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        Email: email,
-        OTP: otp,
-        NewPassword: password,
-        ConfirmPassword: confirmPassword,
-      }),
-    })
-    const data = await res.json()
-    if (res.ok) {
-      router.push('/login')
-    } else {
-      alert(data.msg)
-    }
-  }
-
-  
-  const handleVerifyOtp = async () => {
+  const handleVerifyOtp = () => {
     const code = otp.join('')
     if (code.length < OTP_LENGTH) return
-    setLoading(true)
-    await new Promise(r => setTimeout(r, 900))
-    setLoading(false)
-    // Simulate wrong OTP with "00000"
-    if (code === '00000') {
-      setOtpError(true)
-      setTimeout(() => setOtpError(false), 600)
-      return
-    }
     goTo(3)
   }
 
@@ -252,16 +222,36 @@ export default function ForgotPasswordPage() {
     setExpired(false)
     setTimerKey(k => k + 1)
   }
-
   
   const handleSetPassword = async () => {
     if (password.length < 8) { setPwError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
     if (password !== confirmPassword) { setPwError('รหัสผ่านไม่ตรงกัน'); return }
     setPwError('')
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1100))
-    setLoading(false)
-    setDone(true)
+
+    try {
+      const res = await fetch('http://localhost:5000/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          Email: email,
+          OTP: otp.join(''),
+          NewPassword: password,
+          ConfirmPassword: confirmPassword,
+        }),
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        setDone(true)
+      } else {
+        setPwError(data.msg)
+      }
+    } catch {
+      setPwError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const canSubmitOtp = otp.join('').length === OTP_LENGTH && !expired
