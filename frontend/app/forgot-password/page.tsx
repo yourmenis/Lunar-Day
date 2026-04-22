@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Mail, Lock, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react'
 import './forgot-password.css'
+import Image from 'next/image'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const OTP_LENGTH = 5
@@ -194,33 +195,25 @@ export default function ForgotPasswordPage() {
     setTimeout(() => { setStep(target); setAnimating(false) }, 220)
   }
 
-  // ── Step 1: send OTP ─────────────────────────────────────────────────────
-  const handleSendOtp = async () => {
-    const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRx.test(email)) {
-      setEmailError('กรุณากรอกอีเมลให้ถูกต้อง')
-      return
-    }
-    setEmailError('')
-    setLoading(true)
-    await new Promise(r => setTimeout(r, 1000))
-    setLoading(false)
-    goTo(2)
-  }
 
-  // ── Step 2: verify OTP ────────────────────────────────────────────────────
-  const handleVerifyOtp = async () => {
+  const handleSendOTP = async () => {
+    const res = await fetch('http://localhost:5000/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+    
+      setStep(2)
+    } else {
+      alert(data.msg)
+    }
+  }
+  
+  const handleVerifyOtp = () => {
     const code = otp.join('')
     if (code.length < OTP_LENGTH) return
-    setLoading(true)
-    await new Promise(r => setTimeout(r, 900))
-    setLoading(false)
-    // Simulate wrong OTP with "00000"
-    if (code === '00000') {
-      setOtpError(true)
-      setTimeout(() => setOtpError(false), 600)
-      return
-    }
     goTo(3)
   }
 
@@ -230,16 +223,36 @@ export default function ForgotPasswordPage() {
     setExpired(false)
     setTimerKey(k => k + 1)
   }
-
-  // ── Step 3: set new password ──────────────────────────────────────────────
+  
   const handleSetPassword = async () => {
     if (password.length < 8) { setPwError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
     if (password !== confirmPassword) { setPwError('รหัสผ่านไม่ตรงกัน'); return }
     setPwError('')
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1100))
-    setLoading(false)
-    setDone(true)
+
+    try {
+      const res = await fetch('http://localhost:5000/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          Email: email,
+          OTP: otp.join(''),
+          NewPassword: password,
+          ConfirmPassword: confirmPassword,
+        }),
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        setDone(true)
+      } else {
+        setPwError(data.msg)
+      }
+    } catch {
+      setPwError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const canSubmitOtp = otp.join('').length === OTP_LENGTH && !expired
@@ -258,9 +271,15 @@ export default function ForgotPasswordPage() {
 
       <div className={`card-wrap ${mounted ? 'visible' : ''}`}>
         {/* Moon */}
-        <div className="moon-motif">
-          <div className="moon-circle">🌙</div>
-        </div>
+        <div className="moon-motif" style={{ display: 'flex', justifyContent: 'center' }}>
+            <Image 
+              src="/logolunar.png" 
+              alt="Lunar Day Logo" 
+              width={80} 
+              height={80}
+              style={{ borderRadius: '50%' }}
+            />
+          </div>
 
         <p className="app-name">Lunar Day</p>
 
@@ -322,13 +341,13 @@ export default function ForgotPasswordPage() {
                   placeholder="example@email.com"
                   value={email}
                   onChange={e => { setEmail(e.target.value); setEmailError('') }}
-                  onKeyDown={e => e.key === 'Enter' && handleSendOtp()}
+                  onKeyDown={e => e.key === 'Enter' && handleSendOTP()}
                 />
                 {emailError && <p className="field-hint err">{emailError}</p>}
               </div>
 
               <div className="btn-row" style={{ marginTop: 20 }}>
-                <button type="button" className="btn-primary" onClick={handleSendOtp} disabled={loading || !email}>
+                <button type="button" className="btn-primary" onClick={handleSendOTP} disabled={loading || !email}>
                   {loading ? <><div className="spinner" /> กำลังส่ง...</> : <>ส่งรหัส OTP <ChevronRight size={16} /></>}
                 </button>
               </div>

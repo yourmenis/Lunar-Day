@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, User, Mail, Lock, Calendar, AtSign, ChevronRight, ChevronLeft } from 'lucide-react'
 import './signup.css'
+import Image from 'next/image'
 
 const STEPS = [
   { id: 1, title: 'ข้อมูลส่วนตัว', subtitle: 'บอกเราเกี่ยวกับคุณ' },
@@ -196,8 +197,33 @@ export default function SignUpPage() {
     e.preventDefault()
     if (!agreed || loading) return
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1200))
-    router.push('/home/analyze')
+
+    try {
+      const res = await fetch('http://localhost:5000/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: form.firstName,
+          lastName: form.lastName,
+          birthDate: form.birthDate,
+          email: form.email,
+          username: form.username,
+          password: form.password,
+          confirmPassword: form.confirmPassword,
+        }),
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        router.push('/login')
+      } else {
+        alert(data.msg)
+        setLoading(false)
+      }
+    } catch {
+      alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+      setLoading(false)
+    }
   }
 
   const inputBase: React.CSSProperties = {
@@ -231,8 +257,14 @@ export default function SignUpPage() {
 
         <div className={`card-wrap ${mounted ? 'visible' : ''}`}>
           {/* Moon */}
-          <div className="moon-motif">
-            <div className="moon-circle">🌙</div>
+          <div className="moon-motif" style={{ display: 'flex', justifyContent: 'center' }}>
+            <Image 
+              src="/logolunar.png" 
+              alt="Lunar Day Logo" 
+              width={80} 
+              height={80}
+              style={{ borderRadius: '50%' }}
+            />
           </div>
 
           <p className="app-name">Lunar Day</p>

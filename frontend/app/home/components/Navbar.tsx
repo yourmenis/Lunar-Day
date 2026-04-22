@@ -1,7 +1,10 @@
 'use client'
 
 import { useRouter, usePathname } from 'next/navigation'
-import { Activity, BookOpen, Phone, LogOut } from 'lucide-react'
+import { Activity, BookOpen, Phone, LogOut, User } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import api from '../../lib/api'
+import Image from 'next/image'
 
 const NAV_LINKS = [
   { href: '/home/analyze', label: 'วิเคราะห์เลือด', icon: Activity },
@@ -12,6 +15,20 @@ const NAV_LINKS = [
 export default function Navbar() {
   const router = useRouter()
   const pathname = usePathname()
+  const [profileImage, setProfileImage] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchAvatar = async () => {
+      try {
+        const res = await api.get('/profile/')
+        const img = res.data?.data?.Profile_Image
+        if (img) {
+          setProfileImage(`http://localhost:5000/static/uploads/profiles/${img}`)
+        }
+      } catch {}
+    }
+    fetchAvatar()
+  }, [pathname]) 
 
   return (
     <>
@@ -33,7 +50,7 @@ export default function Navbar() {
         .nav-logo {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 16px;
           cursor: pointer;
           text-decoration: none;
         }
@@ -48,7 +65,7 @@ export default function Navbar() {
         .nav-logo-text {
           font-family: 'Mitr', sans-serif;
           font-weight: 600;
-          font-size: 17px;
+          font-size: 30px;
           color: #1a0a14;
           letter-spacing: 0.3px;
         }
@@ -90,7 +107,12 @@ export default function Navbar() {
           border: 2px solid rgba(240,98,146,0.3);
           cursor: pointer;
           display: flex; align-items: center; justify-content: center;
-          font-size: 16px;
+          overflow: hidden;
+          transition: border-color 0.18s, box-shadow 0.18s;
+        }
+        .nav-avatar:hover {
+          border-color: #f06292;
+          box-shadow: 0 0 0 3px rgba(240,98,146,0.15);
         }
         .nav-logout {
           width: 36px; height: 36px;
@@ -104,7 +126,6 @@ export default function Navbar() {
         }
         .nav-logout:hover { background: rgba(240,98,146,0.08); color: #c2185b; }
 
-        /* Mobile */
         @media (max-width: 768px) {
           .navbar { padding: 0 20px; }
           .nav-links { display: none; }
@@ -113,7 +134,15 @@ export default function Navbar() {
 
       <nav className="navbar">
         <div className="nav-logo" onClick={() => router.push('/home')}>
-          <div className="nav-logo-icon">🌙</div>
+          <div className="nav-logo-icon">
+            <Image 
+              src="/logolunar.png" 
+              alt="Lunar Day Logo" 
+              width={45} 
+              height={45}
+              style={{ borderRadius: '50%' }}
+            />
+          </div>
           <span className="nav-logo-text">Lunar Day</span>
         </div>
 
@@ -130,11 +159,26 @@ export default function Navbar() {
         </div>
 
         <div className="nav-right">
-          <div className="nav-avatar">👩</div>
+          <div className="nav-avatar" onClick={() => router.push('/home/profile')}>
+            {profileImage ? (
+              <img
+                src={profileImage}
+                alt="avatar"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={() => setProfileImage(null)}
+              />
+            ) : (
+              <User size={18} color="#c2185b" strokeWidth={1.5} />
+            )}
+          </div>
+
           <button
             className="nav-logout"
             title="ออกจากระบบ"
-            onClick={() => router.push('/login')}
+            onClick={() => {
+              localStorage.removeItem('access_token')
+              router.replace('/login')
+            }}
           >
             <LogOut size={16} />
           </button>

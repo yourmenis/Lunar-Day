@@ -2,103 +2,37 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Eye, TrendingUp, BookOpen, ArrowRight, ChevronRight, Sparkles, Activity } from 'lucide-react'
+import { TrendingUp, BookOpen, ArrowRight, ChevronRight, Sparkles, Activity } from 'lucide-react'
 import Navbar from './components/Navbar'
-
-// ── Mock data — sorted by views ──
-const ARTICLES = [
-  {
-    id: 1,
-    title: 'ภาวะตกไข่ผิดปกติ (Ovulatory Dysfunction) — สาเหตุ อาการ และแนวทางดูแล',
-    excerpt: 'ภาวะตกไข่ผิดปกติเป็นหนึ่งในสาเหตุสำคัญที่ให้ประจำเดือนมาไม่ปกติ ทั้งที่เกิดการตกไข่ผิดปกติ...',
-    views: 12480,
-    category: 'สุขภาพรังไข่',
-    readTime: '5 นาที',
-    image: '/articles/ovulatory.jpg',
-    hot: true,
-  },
-  {
-    id: 2,
-    title: 'โรค PCOS และภาวะการตกไข่ผิดปกติ — อาการ แบบไหนบ่งบอกว่าควรใส่ใจ',
-    excerpt: 'ปัญหาที่เกี่ยวกับฮอร์โมน ระบบตกไข่ และรอบเดือนผิดปกติ สามารถส่งผลกับสุขภาพและการมีบุตร...',
-    views: 9320,
-    category: 'PCOS',
-    readTime: '7 นาที',
-    image: '/articles/pcos.jpg',
-    hot: true,
-  },
-  {
-    id: 3,
-    title: 'ภาวะตกไข่ผิดปกติ (Ovulatory Disorders) — สาเหตุ อาการ และผลต่อการมีบุตร',
-    excerpt: 'ภาวะตกไข่ผิดปกติ คือภาวะที่ร่างกายไม่สามารถปล่อยไข่ตามรอบเดือนปกติ ทำให้เกิดรอบเดือนผิดปกติ...',
-    views: 8150,
-    category: 'การเจริญพันธุ์',
-    readTime: '6 นาที',
-    image: '/articles/disorders.jpg',
-    hot: false,
-  },
-  {
-    id: 4,
-    title: 'วิธีอ่านผลการวิเคราะห์ประจำเดือนและความหมายของแต่ละค่า',
-    excerpt: 'เข้าใจผลการวิเคราะห์เลือดประจำเดือนอย่างละเอียด พร้อมคำแนะนำจากผู้เชี่ยวชาญ...',
-    views: 6890,
-    category: 'การวิเคราะห์',
-    readTime: '4 นาที',
-    image: '/articles/analysis.jpg',
-    hot: false,
-  },
-]
-
-const STATS = [
-  { label: 'ผู้ใช้งาน', value: '24,500+', icon: '👥' },
-  { label: 'การวิเคราะห์', value: '180,000+', icon: '🔬' },
-  { label: 'ความแม่นยำ', value: '94%', icon: '✓' },
-]
-
-function formatViews(n: number) {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return n.toString()
-}
-
-// Animated counter
-function Counter({ target, suffix = '' }: { target: number; suffix?: string }) {
-  const [count, setCount] = useState(0)
-  const ref = useRef<HTMLSpanElement>(null)
-
-  useEffect(() => {
-    let start = 0
-    const duration = 1800
-    const step = target / (duration / 16)
-    const timer = setInterval(() => {
-      start += step
-      if (start >= target) { setCount(target); clearInterval(timer) }
-      else setCount(Math.floor(start))
-    }, 16)
-    return () => clearInterval(timer)
-  }, [target])
-
-  return <span ref={ref}>{count.toLocaleString()}{suffix}</span>
-}
+import api from '../lib/api'
 
 export default function HomePage() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
-  const [activeArticle, setActiveArticle] = useState(0)
-
   const [waveBars, setWaveBars] = useState<number[]>([])
+  const [articles, setArticles] = useState<any[]>([])
 
-    useEffect(() => {
+  const fetchArticles = async () => {
+    try {
+      const res = await api.get('/articles')
+      // console.log('Articles:', res.data)
+      setArticles(res.data)
+    } catch {
+      console.error('โหลดบทความไม่สำเร็จ')
+    }
+  }
+
+  useEffect(() => {
     setMounted(true)
     setWaveBars(
-        Array.from({ length: 16 }, (_, i) =>
+      Array.from({ length: 16 }, (_, i) =>
         20 + Math.sin(i * 0.8) * 14 + Math.random() * 10
-        )
+      )
     )
-    const t = setInterval(() => setActiveArticle(a => (a + 1) % 2), 4000)
-    return () => clearInterval(t)
-    }, [])
+    fetchArticles()
+  }, [])
 
-  const topArticles = [...ARTICLES].sort((a, b) => b.views - a.views)
+  const topArticles = [...articles]
 
   return (
     <>
@@ -113,8 +47,6 @@ export default function HomePage() {
           background: #faf7f5;
           overflow-x: hidden;
         }
-
-        /* Navbar handled by _components/Navbar.tsx */
 
         /* ── Hero ── */
         .hero {
@@ -181,18 +113,18 @@ export default function HomePage() {
         .hero-title {
           font-family: 'Mitr', sans-serif;
           font-weight: 600;
-          font-size: clamp(26px, 4vw, 40px);
+          font-size: clamp(28px, 4vw, 42px);
           color: #fff;
           line-height: 1.3;
-          margin-bottom: 16px;
+          margin-bottom: 14px;
           letter-spacing: 0.3px;
         }
-        .hero-title span {
-          background: linear-gradient(135deg, #f48fb1, #f06292);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
+        // .hero-title span {
+        //   background: linear-gradient(135deg, #f48fb1, #f06292);
+        //   -webkit-background-clip: text;
+        //   -webkit-text-fill-color: transparent;
+        //   background-clip: text;
+        // }
         .hero-desc {
           font-size: 15px;
           color: rgba(255,255,255,0.65);
@@ -300,42 +232,6 @@ export default function HomePage() {
         .cycle-dot:nth-child(1) { top: -5px; left: 50%; transform: translateX(-50%); }
         .cycle-dot:nth-child(2) { bottom: -5px; left: 50%; transform: translateX(-50%); background: #f48fb1; }
         .cycle-dot:nth-child(3) { left: -5px; top: 50%; transform: translateY(-50%); background: #ce93d8; }
-
-        /* ── Stats strip ── */
-        .stats-strip {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0;
-          background: #fff;
-          border-bottom: 1px solid #f5e6ec;
-          padding: 0;
-        }
-        .stat-item {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
-          padding: 20px 32px;
-          border-right: 1px solid #f5e6ec;
-          opacity: 0;
-          transform: translateY(12px);
-          transition: opacity 0.5s ease, transform 0.5s ease;
-        }
-        .stat-item:last-child { border-right: none; }
-        .stat-item.visible { opacity: 1; transform: translateY(0); }
-        .stat-emoji { font-size: 22px; }
-        .stat-value {
-          font-family: 'Mitr', sans-serif;
-          font-size: 22px;
-          font-weight: 600;
-          color: #c2185b;
-        }
-        .stat-label {
-          font-size: 12.5px;
-          color: #9e7a8a;
-        }
 
         /* ── Section ── */
         .section {
@@ -498,7 +394,6 @@ export default function HomePage() {
         }
         .read-more:hover { gap: 8px; }
 
-        /* small cards */
         .article-card {
           background: #fff;
           border-radius: 16px;
@@ -571,7 +466,7 @@ export default function HomePage() {
           font-weight: 500;
         }
 
-        /* ── Quick analyze CTA ── */
+        /* ── CTA ── */
         .cta-section {
           margin: 0 40px 56px;
           border-radius: 24px;
@@ -628,8 +523,6 @@ export default function HomePage() {
           align-items: flex-end;
           gap: 12px;
         }
-
-        /* mini waveform */
         .waveform {
           display: flex;
           align-items: flex-end;
@@ -661,23 +554,18 @@ export default function HomePage() {
 
         /* ── Responsive ── */
         @media (max-width: 768px) {
-          .navbar { padding: 0 20px; }
-          .nav-links { display: none; }
           .hero { padding: 48px 20px; min-height: auto; }
           .hero-graphic { display: none; }
           .section { padding: 40px 20px; }
           .articles-grid { grid-template-columns: 1fr; }
           .article-featured { grid-template-columns: 1fr; }
           .article-featured-img { min-height: 180px; }
-          .stats-strip { flex-direction: column; }
-          .stat-item { border-right: none; border-bottom: 1px solid #f5e6ec; width: 100%; }
           .cta-section { margin: 0 20px 40px; padding: 32px 24px; flex-direction: column; }
           .cta-graphic { display: none; }
         }
       `}</style>
 
       <div className="home-root">
-
         <Navbar />
 
         {/* ── Hero ── */}
@@ -711,7 +599,6 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Decorative cycle graphic */}
           <div className={`hero-graphic ${mounted ? 'visible' : ''}`}>
             <div className="cycle-ring">
               <div className="cycle-dot" />
@@ -723,23 +610,6 @@ export default function HomePage() {
             </div>
           </div>
         </section>
-
-        {/* ── Stats ── */}
-        <div className="stats-strip">
-          {STATS.map((s, i) => (
-            <div
-              key={i}
-              className={`stat-item ${mounted ? 'visible' : ''}`}
-              style={{ transitionDelay: `${i * 0.12}s` }}
-            >
-              <span className="stat-emoji">{s.icon}</span>
-              <div>
-                <div className="stat-value">{s.value}</div>
-                <div className="stat-label">{s.label}</div>
-              </div>
-            </div>
-          ))}
-        </div>
 
         {/* ── Articles ── */}
         <div className="section">
@@ -759,53 +629,30 @@ export default function HomePage() {
           </div>
 
           <div className="articles-grid">
-            {/* Featured — #1 most viewed */}
-            <div className="article-featured" onClick={() => router.push('/home/articles')}>
+            {topArticles.length > 0 && (
+            <div className="article-featured" 
+              onClick={() => {
+                console.log('Navigating to article:', topArticles[0].ArticleID)
+                router.push(`/home/articles/${topArticles[0].ArticleID}`)
+              }}>
               <div className="article-featured-img">🔬</div>
               <div className="article-featured-body">
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <span className="article-rank hot">🔥 อันดับ 1</span>
-                  <span className="article-category-tag">{topArticles[0].category}</span>
                 </div>
-                <h3 className="article-featured-title">{topArticles[0].title}</h3>
-                <p className="article-featured-excerpt">{topArticles[0].excerpt}</p>
-                <div className="article-meta">
-                  <span className="article-meta-item">
-                    <Eye size={13} /> {formatViews(topArticles[0].views)} วิว
-                  </span>
-                  <span className="article-meta-item">
-                    🕐 {topArticles[0].readTime}
-                  </span>
-                </div>
-                <span className="read-more">
-                  อ่านต่อ <ArrowRight size={14} />
-                </span>
+                <h3 className="article-featured-title">{topArticles[0].Title}</h3>
+                <span className="read-more">อ่านต่อ <ArrowRight size={14} /></span>
               </div>
             </div>
+            )}
 
-            {/* Cards — #2, #3, #4 */}
             {topArticles.slice(1, 4).map((article, i) => {
               const emojis = ['💊', '🌸', '📊']
               return (
-                <div
-                  key={article.id}
-                  className="article-card"
-                  onClick={() => router.push('/home/articles')}
-                >
+                <div key={article.ArticleID} className="article-card" onClick={() => router.push(`/home/articles/${article.ArticleID}`)}>
                   <div className="article-card-img">{emojis[i]}</div>
                   <div className="article-card-body">
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {article.hot && <span className="article-rank trending">📈 Hot</span>}
-                      <span className="article-category-tag">{article.category}</span>
-                    </div>
-                    <h3 className="article-card-title">{article.title}</h3>
-                    <p className="article-card-excerpt">{article.excerpt}</p>
-                    <div className="article-card-footer">
-                      <span className="views-badge">
-                        <Eye size={12} /> {formatViews(article.views)}
-                      </span>
-                      <span>🕐 {article.readTime}</span>
-                    </div>
+                    <h3 className="article-card-title">{article.Title}</h3>
                   </div>
                 </div>
               )
@@ -822,11 +669,7 @@ export default function HomePage() {
               เพื่อสุขภาพ<span>ที่ดีกว่า</span>
             </h2>
             <p className="cta-desc">รับผลวิเคราะห์ละเอียดพร้อมคำแนะนำเฉพาะบุคคลภายในไม่กี่นาที</p>
-            <button
-              className="btn-primary"
-              style={{ marginTop: 24 }}
-              onClick={() => router.push('/home/analyze')}
-            >
+            <button className="btn-primary" style={{ marginTop: 24 }} onClick={() => router.push('/home/analyze')}>
               เริ่มวิเคราะห์ฟรี <ArrowRight size={15} />
             </button>
           </div>
@@ -834,15 +677,8 @@ export default function HomePage() {
           <div className="cta-graphic">
             <div className="waveform">
               {waveBars.map((h, i) => (
-                <div
-                    key={i}
-                    className="wave-bar"
-                    style={{
-                    height: `${h}px`,   // ✅ ค่าคงที่ ไม่ random ทุก render
-                    animationDelay: `${i * 0.09}s`,
-                    }}
-                />
-                ))}
+                <div key={i} className="wave-bar" style={{ height: `${h}px`, animationDelay: `${i * 0.09}s` }} />
+              ))}
             </div>
             <div style={{
               background: 'rgba(240,98,146,0.12)',
@@ -865,7 +701,6 @@ export default function HomePage() {
           <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
           <span>นโยบายความเป็นส่วนตัว · ติดต่อเรา</span>
         </footer>
-
       </div>
     </>
   )
