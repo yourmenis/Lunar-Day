@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -23,8 +25,9 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 
 # --- 2. ตั้งค่าระบบความปลอดภัย (JWT) ---
 app.config["JWT_SECRET_KEY"] = os.environ.get(
-    "JWT_SECRET_KEY", "luna-day-default-key-2026"
+    "JWT_SECRET_KEY", "luna-day-default-secret-key-2026-secure"
 )
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24) 
 jwt = JWTManager(app)
 
 # --- 3. ตั้งค่า Bcrypt ---
@@ -34,7 +37,7 @@ bcrypt = Bcrypt(app)
 # --- 4. ลงทะเบียน Blueprint (Route ทั้งหมด) ---
 # กำหนด Prefix ให้ชัดเจน เพื่อให้เรียกใช้ผ่าน Postman/Frontend ได้ง่าย
 app.register_blueprint(auth_bp, url_prefix="/auth")
-app.register_blueprint(articles_bp, url_prefix="/articles")
+app.register_blueprint(articles_bp, url_prefix="/")
 app.register_blueprint(analysis_bp, url_prefix="/analysis")
 app.register_blueprint(profile_bp, url_prefix="/profile")
 app.register_blueprint(history_bp, url_prefix="/history")

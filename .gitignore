@@ -28,4 +28,6 @@ backend/static/uploads/
 # --- IDE & Misc ---
 .vscode/
 *.pth
-backend/*.pth
+backend/*.pth"node_modules/" 
+"node_modules/" 
+node_modules/
