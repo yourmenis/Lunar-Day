@@ -2,61 +2,25 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Eye, TrendingUp, BookOpen, ArrowRight, ChevronRight, Sparkles, Activity } from 'lucide-react'
+import { TrendingUp, BookOpen, ArrowRight, ChevronRight, Sparkles, Activity } from 'lucide-react'
 import Navbar from './components/Navbar'
-
-const ARTICLES = [
-  {
-    id: 1,
-    title: 'ภาวะตกไข่ผิดปกติ (Ovulatory Dysfunction) — สาเหตุ อาการ และแนวทางดูแล',
-    excerpt: 'ภาวะตกไข่ผิดปกติเป็นหนึ่งในสาเหตุสำคัญที่ให้ประจำเดือนมาไม่ปกติ ทั้งที่เกิดการตกไข่ผิดปกติ...',
-    views: 12480,
-    category: 'สุขภาพรังไข่',
-    readTime: '5 นาที',
-    image: '/articles/ovulatory.jpg',
-    hot: true,
-  },
-  {
-    id: 2,
-    title: 'โรค PCOS และภาวะการตกไข่ผิดปกติ — อาการ แบบไหนบ่งบอกว่าควรใส่ใจ',
-    excerpt: 'ปัญหาที่เกี่ยวกับฮอร์โมน ระบบตกไข่ และรอบเดือนผิดปกติ สามารถส่งผลกับสุขภาพและการมีบุตร...',
-    views: 9320,
-    category: 'PCOS',
-    readTime: '7 นาที',
-    image: '/articles/pcos.jpg',
-    hot: true,
-  },
-  {
-    id: 3,
-    title: 'ภาวะตกไข่ผิดปกติ (Ovulatory Disorders) — สาเหตุ อาการ และผลต่อการมีบุตร',
-    excerpt: 'ภาวะตกไข่ผิดปกติ คือภาวะที่ร่างกายไม่สามารถปล่อยไข่ตามรอบเดือนปกติ ทำให้เกิดรอบเดือนผิดปกติ...',
-    views: 8150,
-    category: 'การเจริญพันธุ์',
-    readTime: '6 นาที',
-    image: '/articles/disorders.jpg',
-    hot: false,
-  },
-  {
-    id: 4,
-    title: 'วิธีอ่านผลการวิเคราะห์ประจำเดือนและความหมายของแต่ละค่า',
-    excerpt: 'เข้าใจผลการวิเคราะห์เลือดประจำเดือนอย่างละเอียด พร้อมคำแนะนำจากผู้เชี่ยวชาญ...',
-    views: 6890,
-    category: 'การวิเคราะห์',
-    readTime: '4 นาที',
-    image: '/articles/analysis.jpg',
-    hot: false,
-  },
-]
-
-function formatViews(n: number) {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return n.toString()
-}
+import api from '../lib/api'
 
 export default function HomePage() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [waveBars, setWaveBars] = useState<number[]>([])
+  const [articles, setArticles] = useState<any[]>([])
+
+  const fetchArticles = async () => {
+    try {
+      const res = await api.get('/articles')
+      console.log('Articles:', res.data)
+      setArticles(res.data)
+    } catch {
+      console.error('โหลดบทความไม่สำเร็จ')
+    }
+  }
 
   useEffect(() => {
     setMounted(true)
@@ -65,9 +29,10 @@ export default function HomePage() {
         20 + Math.sin(i * 0.8) * 14 + Math.random() * 10
       )
     )
+    fetchArticles()
   }, [])
 
-  const topArticles = [...ARTICLES].sort((a, b) => b.views - a.views)
+  const topArticles = [...articles]
 
   return (
     <>
@@ -664,41 +629,30 @@ export default function HomePage() {
           </div>
 
           <div className="articles-grid">
-            <div className="article-featured" onClick={() => router.push('/home/articles')}>
+            {topArticles.length > 0 && (
+            <div className="article-featured" 
+              onClick={() => {
+                console.log('Navigating to article:', topArticles[0].ArticleID)
+                router.push(`/home/articles/${topArticles[0].ArticleID}`)
+              }}>
               <div className="article-featured-img">🔬</div>
               <div className="article-featured-body">
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <span className="article-rank hot">🔥 อันดับ 1</span>
-                  <span className="article-category-tag">{topArticles[0].category}</span>
                 </div>
-                <h3 className="article-featured-title">{topArticles[0].title}</h3>
-                <p className="article-featured-excerpt">{topArticles[0].excerpt}</p>
-                <div className="article-meta">
-                  <span className="article-meta-item">
-                    <Eye size={13} /> {formatViews(topArticles[0].views)} วิว
-                  </span>
-                  <span className="article-meta-item">🕐 {topArticles[0].readTime}</span>
-                </div>
+                <h3 className="article-featured-title">{topArticles[0].Title}</h3>
                 <span className="read-more">อ่านต่อ <ArrowRight size={14} /></span>
               </div>
             </div>
+            )}
 
             {topArticles.slice(1, 4).map((article, i) => {
               const emojis = ['💊', '🌸', '📊']
               return (
-                <div key={article.id} className="article-card" onClick={() => router.push('/home/articles')}>
+                <div key={article.ArticleID} className="article-card" onClick={() => router.push(`/home/articles/${article.ArticleID}`)}>
                   <div className="article-card-img">{emojis[i]}</div>
                   <div className="article-card-body">
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {article.hot && <span className="article-rank trending">📈 Hot</span>}
-                      <span className="article-category-tag">{article.category}</span>
-                    </div>
-                    <h3 className="article-card-title">{article.title}</h3>
-                    <p className="article-card-excerpt">{article.excerpt}</p>
-                    <div className="article-card-footer">
-                      <span className="views-badge"><Eye size={12} /> {formatViews(article.views)}</span>
-                      <span>🕐 {article.readTime}</span>
-                    </div>
+                    <h3 className="article-card-title">{article.Title}</h3>
                   </div>
                 </div>
               )
