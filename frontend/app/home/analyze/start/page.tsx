@@ -9,6 +9,7 @@ import {
   Shield, Zap, FlaskConical, Baby, Clock, Ruler
 } from 'lucide-react'
 import Navbar from '../../components/Navbar'
+import LoginToast from '../../components/LoginToast'
 
 // ─────────────────────────────────────────────
 // Types
@@ -24,10 +25,11 @@ interface SymptomForm {
 
 interface ImageResult {
   status: string
-  ai_result: string          // "clot" | "tissue" | "mixed" | "none"
-  detect_label: string       // ภาษาไทย
+  ai_result: string
+  detect_label: string
   confidence: number
   processing_time: number
+  image_path: string | null
 }
 
 interface RiskResult {
@@ -44,7 +46,7 @@ interface RiskResult {
 // ─────────────────────────────────────────────
 // Config  ← เปลี่ยน BASE_URL ให้ตรงกับ backend
 // ─────────────────────────────────────────────
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
 // ─────────────────────────────────────────────
 // Form Options (ตรงกับ VALID_* ใน backend)
@@ -208,6 +210,7 @@ export default function AnalyzePage() {
   const [imageFile,  setImageFile] = useState<File | null>(null)
   const [dragOver,   setDragOver]  = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [showLoginToast, setShowLoginToast] = useState(false)
 
   // symptom form state
   const [form, setForm] = useState<SymptomForm>({
@@ -223,7 +226,9 @@ export default function AnalyzePage() {
   const [apiError,     setApiError]     = useState<string | null>(null)
   const [imageLoading, setImageLoading] = useState(false)
 
-  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => { 
+    setMounted(true) 
+  }, [])
 
   // ── file helpers ──
   const handleFile = useCallback((file: File) => {
@@ -242,75 +247,86 @@ export default function AnalyzePage() {
   // ── form valid: บล็อกถ้า image API ยังไม่เสร็จ ──
   const formValid = (() => {
     if (imageLoading) return false
+    if (!imageResult) return false
+    if (apiError) return false
     if (!form.pain_level || !form.duration || !form.is_pregnant) return false
     if (imageResult?.ai_result === 'clot' && !form.size) return false
     return true
-  })()
+})()
 
   // ── Step 1→2: ส่งรูปไป /analysis/image พร้อมกับแสดง form ──
   const goToSymptoms = async () => {
-    if (!imageFile) return
-    setApiError(null)
-    setImageLoading(true)
-    setStep('symptoms')
-
-    try {
-      const token = localStorage.getItem('access_token') ?? ''
-      const fd = new FormData()
-      fd.append('image', imageFile)
-      const res = await fetch(`${BASE_URL}/analysis/image`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      })
-      const data: ImageResult = await res.json()
-      console.log('image API response:', data)
-      if (data.status !== 'success') {
-        setApiError((data as any).msg ?? 'วิเคราะห์ภาพไม่สำเร็จ')
-      } else {
-        setImageResult(data)
-        if (data.ai_result !== 'clot') setForm(f => ({ ...f, size: '' }))
+      const token = localStorage.getItem('access_token')
+      if (!token) {
+        setShowLoginToast(true)
+        return
       }
-    } catch {
-      setApiError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
-    } finally {
-      setImageLoading(false)
+      if (!imageFile) return
+      setApiError(null)
+      setImageLoading(true)
+      setStep('symptoms')
+
+      try {
+        const fd = new FormData()
+        fd.append('image', imageFile)
+        const res = await fetch(`${BASE_URL}/analysis/image`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        })
+        const data: ImageResult = await res.json()
+        if (data.status !== 'success') {
+          setApiError((data as any).msg ?? 'วิเคราะห์ภาพไม่สำเร็จ')
+        } else {
+          setImageResult(data)
+          if (data.ai_result !== 'clot') setForm(f => ({ ...f, size: '' }))
+        }
+      } catch {
+        setApiError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+      } finally {
+        setImageLoading(false)
+      }
     }
-  }
+
 
   // ── Step 3: analyzing → call /analysis/risk ──
   const runAnalysis = async () => {
-    if (!formValid) return
-    setStep('analyzing')
-    setApiError(null)
-
-    try {
-      const token = localStorage.getItem('access_token') ?? ''
-      const fd = new FormData()
-      fd.append('ai_result',    imageResult?.ai_result ?? 'none')
-      fd.append('pain_level',   form.pain_level)
-      fd.append('duration',     form.duration)
-      fd.append('is_pregnant',  form.is_pregnant)
-      if (imageResult?.ai_result === 'clot' && form.size) fd.append('size', form.size)
-
-      const res = await fetch(`${BASE_URL}/analysis/risk`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      })
-      const data: RiskResult = await res.json()
-      if (data.status !== 'success') {
-        setApiError((data as any).msg ?? 'ประเมินความเสี่ยงไม่สำเร็จ')
-        setStep('symptoms')
-      } else {
-        setRiskResult(data)
-        setStep('result')
+      const token = localStorage.getItem('access_token')
+      if (!token) {
+        setShowLoginToast(true)
+        return
       }
-    } catch {
-      setApiError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
-      setStep('symptoms')
+      if (!formValid) return
+      setStep('analyzing')
+      setApiError(null)
+
+      try {
+        const fd = new FormData()
+        fd.append('ai_result',    imageResult?.ai_result ?? 'none')
+        fd.append('pain_level',   form.pain_level)
+        fd.append('duration',     form.duration)
+        fd.append('is_pregnant',  form.is_pregnant)
+        fd.append('image_path',   imageResult?.image_path ?? '')
+        if (imageResult?.ai_result === 'clot' && form.size) fd.append('size', form.size)
+
+        const res = await fetch(`${BASE_URL}/analysis/risk`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        })
+        const data: RiskResult = await res.json()
+        if (data.status !== 'success') {
+          setApiError((data as any).msg ?? 'ประเมินความเสี่ยงไม่สำเร็จ')
+          setStep('symptoms')
+        } else {
+          setRiskResult(data)
+          setStep('result')
+        }
+      } catch {
+        setApiError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+        setStep('symptoms')
+      }
     }
-  }
 
   // ── result helpers ──
   const rc = riskResult ? (RISK_COLORS[riskResult.Risk_Level] ?? DEFAULT_RC) : DEFAULT_RC
@@ -806,6 +822,10 @@ export default function AnalyzePage() {
           <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
           <span>นโยบายความเป็นส่วนตัว · ติดต่อเรา</span>
         </footer>
+         <LoginToast
+          show={showLoginToast}
+          onClose={() => setShowLoginToast(false)}
+        />
       </div>
     </>
   )

@@ -32,7 +32,7 @@ export default function LoginPage() {
     )
     const token = localStorage.getItem('access_token')
     if (token) {
-      router.push('/home')
+      router.replace('/home')
     }
   }, [])
 
@@ -41,7 +41,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const res = await fetch('http://localhost:5000/auth/login', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -51,7 +51,7 @@ export default function LoginPage() {
       if (res.ok) {
         localStorage.setItem('access_token', data.access_token)
         localStorage.setItem('user', JSON.stringify(data.user))
-        router.push('/home')
+        router.replace('/home')
       } else {
         alert(data.msg)
         setLoading(false)

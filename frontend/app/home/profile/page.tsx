@@ -13,7 +13,7 @@ import Navbar from '../components/Navbar'
 // ============================================================
 // TYPES
 // ============================================================
-type View = 'profile' | 'editProfile' | 'history' | 'privacy' | 'terms'
+type View = 'profile' | 'editProfile' | 'history' | 'historyDetail' | 'privacy' | 'terms'
 
 // ============================================================
 // STATIC TEXT
@@ -27,7 +27,6 @@ const PRIVACY_TEXT = [
   { title: '6. การเก็บรักษาข้อมูล', body: 'เราจัดเก็บข้อมูลตลอดระยะเวลาที่ท่านมีบัญชี และจะลบข้อมูลทั้งหมดทันทีเมื่อท่านลบบัญชีผู้ใช้งาน' },
 ]
 
-// FIX #2 — เพิ่ม TERMS_TEXT ที่หายไป
 const TERMS_TEXT = [
   { title: '1. การยอมรับเงื่อนไข', body: 'การใช้งานบริการ Luna Day ถือว่าท่านได้อ่านและยอมรับเงื่อนไขการใช้งานทั้งหมดแล้ว หากท่านไม่ยอมรับเงื่อนไขเหล่านี้ กรุณาหยุดใช้บริการ' },
   { title: '2. การใช้บริการ', body: 'ท่านตกลงใช้บริการเพื่อวัตถุประสงค์ที่ถูกกฎหมายเท่านั้น และไม่กระทำการใดๆ ที่อาจก่อให้เกิดความเสียหายต่อระบบหรือผู้ใช้รายอื่น' },
@@ -47,176 +46,45 @@ function buddhistDate(iso: string) {
   return `${parseInt(d)} ${months[parseInt(m)-1]} ${parseInt(y)+543}`
 }
 
+const riskConfig: Record<string, { bg: string; color: string; dot: string }> = {
+  low:    { bg: 'rgba(16,185,129,0.1)',  color: '#059669', dot: '#10b981' },
+  medium: { bg: 'rgba(245,158,11,0.1)',  color: '#d97706', dot: '#f59e0b' },
+  high:   { bg: 'rgba(239,68,68,0.1)',   color: '#dc2626', dot: '#ef4444' },
+}
+
 // ============================================================
-// MAIN COMPONENT
+// EDIT FORM TYPE
 // ============================================================
-export default function ProfilePage() {
-  const router = useRouter()
-  const [view, setView] = useState<View>('profile')
-  const [mounted, setMounted] = useState(false)
-  const [profile, setProfile] = useState<any>(null)
-  const [history, setHistory] = useState<any[]>([])
+type EditForm = {
+  name: string
+  lastname: string
+  username: string
+  avatarFile: File | null
+}
 
-  // Toast
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
-  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
-  }
-
-  // Modals
-  const [showLogoutModal, setShowLogoutModal] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [deletePassword, setDeletePassword] = useState('')
-  const [showPw, setShowPw] = useState(false)
-
-  // Edit form
-  const [editForm, setEditForm] = useState({
-    name: '',
-    lastname: '',
-    username: '',
-    avatarFile: null as File | null,
-  })
-
-  // FIX #4 — previewUrl state แยกออกมาเพื่อไม่ให้เกิด memory leak
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!editForm.avatarFile) {
-      setPreviewUrl(null)
-      return
-    }
-    const url = URL.createObjectURL(editForm.avatarFile)
-    setPreviewUrl(url)
-    return () => URL.revokeObjectURL(url) // cleanup ทุกครั้งที่ file เปลี่ยน
-  }, [editForm.avatarFile])
-
-  // FIX #5 — เพิ่ม error handling
-  const fetchProfile = async () => {
-    try {
-      const token = localStorage.getItem('access_token')
-      const res = await fetch('http://localhost:5000/profile/', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Cache-Control': 'no-cache',
-        },
-      })
-      if (!res.ok) {
-        if (res.status === 401) router.push('/login')
-        return
-      }
-      const data = await res.json()
-      if (data.data) setProfile(data.data)
-    } catch {
-      showToast('ไม่สามารถโหลดข้อมูลโปรไฟล์ได้', 'error')
-    }
-  }
-
-  // FIX #5 — เพิ่ม error handling
-  const fetchHistory = async () => {
-    try {
-      const token = localStorage.getItem('access_token')
-      const res = await fetch('http://localhost:5000/history/', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) return
-      const data = await res.json()
-      if (data.status === 'success') setHistory(data.data)
-    } catch {
-      showToast('ไม่สามารถโหลดประวัติได้', 'error')
-    }
-  }
-
-  // FIX #6 — เพิ่ม router ใน dependency array
-  useEffect(() => {
-    setMounted(true)
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      router.push('/login')
-      return
-    }
-    fetchProfile()
-    fetchHistory()
-  }, [router])
-
-  const handleLogout = () => {
-    setShowLogoutModal(false)
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('user')
-    router.push('/login')
-  }
-
-  // FIX #3 — เรียก API จริงก่อนลบบัญชี
-  const handleDeleteAccount = async () => {
-    if (!deletePassword) return showToast('กรุณากรอกรหัสผ่าน', 'error')
-    try {
-      const token = localStorage.getItem('access_token')
-      const res = await fetch('http://localhost:5000/profile/delete', {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ password: deletePassword }),
-      })
-      const data = await res.json()
-      if (!res.ok) return showToast(data.msg || 'รหัสผ่านไม่ถูกต้อง', 'error')
-      setShowDeleteConfirm(false)
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('user')
-      router.push('/login')
-    } catch {
-      showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error')
-    }
-  }
-
-  const handleSaveProfile = async () => {
-    const token = localStorage.getItem('access_token')
-    const form = new FormData()
-    form.append('username', editForm.username)
-    form.append('name', editForm.name)
-    form.append('lastname', editForm.lastname)
-    form.append('birthday', profile?.Birthday || '')
-    if (editForm.avatarFile) form.append('profile_img', editForm.avatarFile)
-
-    try {
-      const res = await fetch('http://localhost:5000/profile/update', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      })
-      const data = await res.json()
-      if (res.ok) {
-        showToast('บันทึกข้อมูลเรียบร้อย')
-        setEditForm(f => ({ ...f, avatarFile: null }))
-        setPreviewUrl(null)
-        await fetchProfile()
-        setView('profile')
-      } else {
-        showToast(data.msg || 'เกิดข้อผิดพลาด', 'error')
-      }
-    } catch {
-      showToast('ไม่สามารถบันทึกข้อมูลได้', 'error')
-    }
-  }
-
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setEditForm(f => ({ ...f, avatarFile: file }))
-  }
-
-  const riskConfig: Record<string, { bg: string; color: string; dot: string }> = {
-    low:    { bg: 'rgba(16,185,129,0.1)',  color: '#059669', dot: '#10b981' },
-    medium: { bg: 'rgba(245,158,11,0.1)',  color: '#d97706', dot: '#f59e0b' },
-    high:   { bg: 'rgba(239,68,68,0.1)',   color: '#dc2626', dot: '#ef4444' },
-  }
-
-  // ============================================================
-  // PROFILE VIEW
-  // ============================================================
-  const ProfileView = () => (
+// ============================================================
+// PROFILE VIEW 
+// ============================================================
+function ProfileView({
+  profile,
+  history,
+  onEditProfile,
+  onViewHistory,
+  onViewPrivacy,
+  onViewTerms,
+  onLogout,
+  onDeleteAccount,
+}: {
+  profile: any
+  history: any[]
+  onEditProfile: () => void
+  onViewHistory: () => void
+  onViewPrivacy: () => void
+  onViewTerms: () => void
+  onLogout: () => void
+  onDeleteAccount: () => void
+}) {
+  return (
     <div style={{ paddingBottom: 60 }}>
       {/* Profile Header Banner */}
       <div style={{
@@ -281,7 +149,7 @@ export default function ProfilePage() {
             boxShadow: '0 4px 16px rgba(194,24,91,0.25)',
           }}>
             {profile?.Profile_Image
-              ? <img src={`http://localhost:5000/static/uploads/profiles/${profile.Profile_Image}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ? <img src={`${process.env.NEXT_PUBLIC_API_URL}/static/uploads/profiles/${profile.Profile_Image}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : <User size={36} color="#c2185b" strokeWidth={1.5} />
             }
           </div>
@@ -305,10 +173,7 @@ export default function ProfilePage() {
             <p style={{ fontSize: 13, color: '#9e7a8a', marginTop: 2 }}>@{profile?.Username}</p>
           </div>
           <button
-            onClick={() => {
-              setEditForm({ name: profile?.Name || '', lastname: profile?.LastName || '', username: profile?.Username || '', avatarFile: null })
-              setView('editProfile')
-            }}
+            onClick={onEditProfile}
             style={{
               width: 40, height: 40, borderRadius: 12,
               border: '1.5px solid rgba(194,24,91,0.2)',
@@ -332,16 +197,13 @@ export default function ProfilePage() {
             icon={<Settings size={18} />}
             label="จัดการโปรไฟล์"
             desc="แก้ไขข้อมูลส่วนตัวและรูปภาพ"
-            onClick={() => {
-              setEditForm({ name: profile?.Name || '', lastname: profile?.LastName || '', username: profile?.Username || '', avatarFile: null })
-              setView('editProfile')
-            }}
+            onClick={onEditProfile}
           />
           <MenuItem
             icon={<Droplets size={18} />}
             label="ประวัติการวิเคราะห์ลิ่มเลือด"
             desc={`${history.length} รายการ`}
-            onClick={() => setView('history')}
+            onClick={onViewHistory}
             badge={history.length.toString()}
           />
         </div>
@@ -354,13 +216,13 @@ export default function ProfilePage() {
             icon={<Shield size={18} />}
             label="ประกาศนโยบายความเป็นส่วนตัว"
             desc="การใช้งานและการคุ้มครองข้อมูล"
-            onClick={() => setView('privacy')}
+            onClick={onViewPrivacy}
           />
           <MenuItem
             icon={<FileText size={18} />}
             label="ข้อตกลงเงื่อนไขการใช้งาน"
             desc="เงื่อนไขการใช้บริการ Luna day"
-            onClick={() => setView('terms')}
+            onClick={onViewTerms}
           />
         </div>
 
@@ -371,23 +233,41 @@ export default function ProfilePage() {
           <MenuItem
             icon={<LogOut size={18} />}
             label="ออกจากระบบ"
-            onClick={() => setShowLogoutModal(true)}
+            onClick={onLogout}
           />
           <MenuItem
             icon={<Trash2 size={18} />}
             label="ลบบัญชีผู้ใช้"
             danger
-            onClick={() => setShowDeleteModal(true)}
+            onClick={onDeleteAccount}
           />
         </div>
       </div>
     </div>
   )
+}
 
-  // ============================================================
-  // EDIT PROFILE VIEW
-  // ============================================================
-  const EditProfileView = () => (
+// ============================================================
+// EDIT PROFILE VIEW 
+// ============================================================
+function EditProfileView({
+  profile,
+  editForm,
+  setEditForm,
+  previewUrl,
+  handleAvatarChange,
+  handleSaveProfile,
+  onBack,
+}: {
+  profile: any
+  editForm: EditForm
+  setEditForm: React.Dispatch<React.SetStateAction<EditForm>>
+  previewUrl: string | null
+  handleAvatarChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  handleSaveProfile: () => void
+  onBack: () => void
+}) {
+  return (
     <div style={{ paddingBottom: 60 }}>
       <div style={{
         background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%)',
@@ -399,7 +279,7 @@ export default function ProfilePage() {
           backgroundSize: '28px 28px', position: 'absolute', inset: 0,
         }} />
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => setView('profile')} style={{
+          <button onClick={onBack} style={{
             width: 36, height: 36, borderRadius: 10,
             background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -431,11 +311,10 @@ export default function ProfilePage() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: '0 4px 16px rgba(194,24,91,0.2)',
             }}>
-              {/* FIX #4 — ใช้ previewUrl แทน URL.createObjectURL ตรงๆ */}
               {previewUrl
                 ? <img src={previewUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : profile?.Profile_Image
-                  ? <img src={`http://localhost:5000/static/uploads/profiles/${profile.Profile_Image}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ? <img src={`${process.env.NEXT_PUBLIC_API_URL}/static/uploads/profiles/${profile.Profile_Image}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : <User size={40} color="#c2185b" strokeWidth={1.5} />
               }
             </div>
@@ -461,20 +340,20 @@ export default function ProfilePage() {
           display: 'flex', flexDirection: 'column', gap: 16,
           marginBottom: 20,
         }}>
-          <FormField label="ชื่อ" value={editForm.name} onChange={v => setEditForm(f => ({ ...f, name: v }))} />
-          <FormField label="นามสกุล" value={editForm.lastname} onChange={v => setEditForm(f => ({ ...f, lastname: v }))} />
+          <FormField label="ชื่อ"        value={editForm.name}     onChange={v => setEditForm(f => ({ ...f, name: v }))}     onKeyDown={e => e.key === 'Enter' && handleSaveProfile()} />
+          <FormField label="นามสกุล"    value={editForm.lastname}  onChange={v => setEditForm(f => ({ ...f, lastname: v }))} onKeyDown={e => e.key === 'Enter' && handleSaveProfile()} />
           <FormField
             label="วัน-เดือน-ปีเกิด (พ.ศ.)"
             value={buddhistDate(profile?.Birthday || '')}
             readOnly
             icon={<Calendar size={14} />}
           />
-          <FormField label="ชื่อผู้ใช้" value={editForm.username} onChange={v => setEditForm(f => ({ ...f, username: v }))} prefix="@" />
+          <FormField label="ชื่อผู้ใช้" value={editForm.username}  onChange={v => setEditForm(f => ({ ...f, username: v }))} prefix="@" onKeyDown={e => e.key === 'Enter' && handleSaveProfile()} />
         </div>
 
         {/* Buttons */}
         <div style={{ display: 'flex', gap: 12 }}>
-          <button onClick={() => setView('profile')} style={{
+          <button onClick={onBack} style={{
             flex: 1, padding: '14px', borderRadius: 14,
             border: '1.5px solid rgba(194,24,91,0.25)',
             background: 'transparent', color: '#c2185b',
@@ -490,11 +369,22 @@ export default function ProfilePage() {
       </div>
     </div>
   )
+}
 
-  // ============================================================
-  // HISTORY VIEW — FIX #1: ปิด div ให้ครบ
-  // ============================================================
-  const HistoryView = () => (
+// ============================================================
+// HISTORY VIEW
+// ============================================================
+function HistoryView({
+  history,
+  onBack,
+  onSelectItem,
+}: {
+  history: any[]
+  onBack: () => void
+  onSelectItem: (item: any) => void
+}) {
+
+  return (
     <div style={{ paddingBottom: 60 }}>
       <div style={{
         background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%)',
@@ -506,7 +396,7 @@ export default function ProfilePage() {
           backgroundSize: '28px 28px', position: 'absolute', inset: 0,
         }} />
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => setView('profile')} style={{
+          <button onClick={onBack} style={{
             width: 36, height: 36, borderRadius: 10,
             background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -539,7 +429,7 @@ export default function ProfilePage() {
               const cfg = riskConfig[levelMap[item.Risk_Level] || 'low']
 
               return (
-                <div key={item.AssessmentID} style={{
+                <div key={item.AssessmentID} onClick={() => onSelectItem(item)} style={{
                   background: '#fff', borderRadius: 18, padding: '16px 20px',
                   border: '1px solid #f5e6ec',
                   boxShadow: '0 2px 12px rgba(194,24,91,0.04)',
@@ -595,13 +485,20 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
-    </div>  // ← FIX #1: div ที่ปิดให้ครบ
+    </div>
   )
+}
 
-  // ============================================================
-  // DOC VIEW (Privacy / Terms)
-  // ============================================================
-  const DocView = ({ title, sections, icon }: { title: string; sections: {title:string; body:string}[]; icon: React.ReactNode }) => (
+// ============================================================
+// DOC VIEW (Privacy / Terms) — อยู่นอกอยู่แล้ว ✅
+// ============================================================
+function DocView({ title, sections, icon, onBack }: {
+  title: string
+  sections: { title: string; body: string }[]
+  icon: React.ReactNode
+  onBack: () => void
+}) {
+  return (
     <div style={{ paddingBottom: 60 }}>
       <div style={{
         background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%)',
@@ -613,7 +510,7 @@ export default function ProfilePage() {
           backgroundSize: '28px 28px', position: 'absolute', inset: 0,
         }} />
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => setView('profile')} style={{
+          <button onClick={onBack} style={{
             width: 36, height: 36, borderRadius: 10,
             background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -651,6 +548,176 @@ export default function ProfilePage() {
       </div>
     </div>
   )
+}
+
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
+export default function ProfilePage() {
+  const router = useRouter()
+  const [view, setView] = useState<View>('profile')
+  const [mounted, setMounted] = useState(false)
+  const [profile, setProfile] = useState<any>(null)
+  const [history, setHistory] = useState<any[]>([])
+  const [selectedHistory, setSelectedHistory] = useState<any>(null)
+
+  // Toast
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
+  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  // Modals
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [showPw, setShowPw] = useState(false)
+
+  // Edit form
+  const [editForm, setEditForm] = useState<EditForm>({
+    name: '',
+    lastname: '',
+    username: '',
+    avatarFile: null,
+  })
+
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!editForm.avatarFile) {
+      setPreviewUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(editForm.avatarFile)
+    setPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [editForm.avatarFile])
+
+  const fetchProfile = async () => {
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache',
+        },
+      })
+      if (!res.ok) {
+        if (res.status === 401) router.replace('/login')
+        return
+      }
+      const data = await res.json()
+      if (data.data) setProfile(data.data)
+    } catch {
+      showToast('ไม่สามารถโหลดข้อมูลโปรไฟล์ได้', 'error')
+    }
+  }
+
+  const fetchHistory = async () => {
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/history/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        if (res.status === 401) router.replace('/login')
+        return
+      }
+      const data = await res.json()
+      if (data.status === 'success') setHistory(data.data)
+    } catch {
+      showToast('ไม่สามารถโหลดประวัติได้', 'error')
+    }
+  }
+
+  useEffect(() => {
+    setMounted(true)
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      router.replace('/login')
+      return
+    }
+    fetchProfile()
+    fetchHistory()
+  }, [router])
+
+  const handleLogout = () => {
+    setShowLogoutModal(false)
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('user')
+    router.push('/login')
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) return showToast('กรุณากรอกรหัสผ่าน', 'error')
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/delete`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password: deletePassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) return showToast(data.msg || 'รหัสผ่านไม่ถูกต้อง', 'error')
+      setShowDeleteConfirm(false)
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('user')
+      router.push('/login')
+    } catch {
+      showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error')
+    }
+  }
+
+  const handleSaveProfile = async () => {
+    const token = localStorage.getItem('access_token')
+    const form = new FormData()
+    form.append('username', editForm.username)
+    form.append('name', editForm.name)
+    form.append('lastname', editForm.lastname)
+    form.append('birthday', profile?.Birthday || '')
+    if (editForm.avatarFile) form.append('profile_img', editForm.avatarFile)
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/update`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      })
+      const data = await res.json()
+      if (res.ok) {
+        showToast('บันทึกข้อมูลเรียบร้อย')
+        setEditForm(f => ({ ...f, avatarFile: null }))
+        setPreviewUrl(null)
+        await fetchProfile()
+        setView('profile')
+      } else {
+        showToast(data.msg || 'เกิดข้อผิดพลาด', 'error')
+      }
+    } catch {
+      showToast('ไม่สามารถบันทึกข้อมูลได้', 'error')
+    }
+  }
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setEditForm(f => ({ ...f, avatarFile: file }))
+  }
+
+  const handleGoToEditProfile = () => {
+    setEditForm({
+      name: profile?.Name || '',
+      lastname: profile?.LastName || '',
+      username: profile?.Username || '',
+      avatarFile: null,
+    })
+    setView('editProfile')
+  }
 
   // ============================================================
   // RENDER
@@ -731,11 +798,67 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {view === 'profile'     && <ProfileView />}
-        {view === 'editProfile' && <EditProfileView />}
-        {view === 'history'     && <HistoryView />}
-        {view === 'privacy'     && <DocView title="ประกาศนโยบายความเป็นส่วนตัว" sections={PRIVACY_TEXT} icon={<Shield size={14} />} />}
-        {view === 'terms'       && <DocView title="ข้อตกลงเงื่อนไขการใช้งาน" sections={TERMS_TEXT} icon={<FileText size={14} />} />}
+        {/* VIEWS */}
+        {view === 'profile' && (
+          <ProfileView
+            profile={profile}
+            history={history}
+            onEditProfile={handleGoToEditProfile}
+            onViewHistory={() => setView('history')}
+            onViewPrivacy={() => setView('privacy')}
+            onViewTerms={() => setView('terms')}
+            onLogout={() => setShowLogoutModal(true)}
+            onDeleteAccount={() => setShowDeleteModal(true)}
+          />
+        )}
+
+        {view === 'editProfile' && (
+          <EditProfileView
+            profile={profile}
+            editForm={editForm}
+            setEditForm={setEditForm}
+            previewUrl={previewUrl}
+            handleAvatarChange={handleAvatarChange}
+            handleSaveProfile={handleSaveProfile}
+            onBack={() => setView('profile')}
+          />
+        )}
+
+        {view === 'history' && (
+          <HistoryView
+            history={history}
+            onBack={() => setView('profile')}
+            onSelectItem={(item) => {
+              setSelectedHistory(item)
+              setView('historyDetail')
+            }}
+          />
+        )}
+
+        {view === 'historyDetail' && selectedHistory && (
+          <HistoryDetailView
+            item={selectedHistory}
+            onBack={() => setView('history')}
+          />
+        )}
+
+        {view === 'privacy' && (
+          <DocView
+            title="ประกาศนโยบายความเป็นส่วนตัว"
+            sections={PRIVACY_TEXT}
+            icon={<Shield size={14} />}
+            onBack={() => setView('profile')}
+          />
+        )}
+
+        {view === 'terms' && (
+          <DocView
+            title="ข้อตกลงเงื่อนไขการใช้งาน"
+            sections={TERMS_TEXT}
+            icon={<FileText size={14} />}
+            onBack={() => setView('profile')}
+          />
+        )}
 
         {/* LOGOUT MODAL */}
         {showLogoutModal && (
@@ -916,9 +1039,10 @@ function MenuItem({ icon, label, desc, onClick, danger = false, badge }: {
   )
 }
 
-function FormField({ label, value, onChange, readOnly = false, prefix, icon }: {
+function FormField({ label, value, onChange, readOnly = false, prefix, icon, onKeyDown }: {
   label: string; value: string; onChange?: (v: string) => void;
-  readOnly?: boolean; prefix?: string; icon?: React.ReactNode
+  readOnly?: boolean; prefix?: string; icon?: React.ReactNode;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
 }) {
   return (
     <div>
@@ -943,6 +1067,7 @@ function FormField({ label, value, onChange, readOnly = false, prefix, icon }: {
           value={value}
           readOnly={readOnly}
           onChange={e => onChange?.(e.target.value)}
+          onKeyDown={e => onKeyDown?.(e)}
           style={{
             width: '100%',
             padding: prefix ? '13px 16px 13px 28px' : '13px 16px',
@@ -960,6 +1085,193 @@ function FormField({ label, value, onChange, readOnly = false, prefix, icon }: {
         />
       </div>
       {readOnly && <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 4, paddingLeft: 2 }}>ไม่สามารถแก้ไขได้</p>}
+    </div>
+  )
+}
+
+function HistoryDetailView({
+  item,
+  onBack,
+}: {
+  item: any
+  onBack: () => void
+}) {
+  // state สำหรับเก็บข้อมูลฉบับเต็ม
+  const [detail, setDetail] = useState<any>(item)
+  const [loading, setLoading] = useState(true)
+
+  // fetch ข้อมูลฉบับเต็มตอน mount
+  useEffect(() => {
+    const fetchDetail = async () => {
+      try {
+        const token = localStorage.getItem('access_token')
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/history/${item.AssessmentID}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        const data = await res.json()
+        if (data.status === 'success') {
+          setDetail(data.data)
+          console.log('Image_Path:', data.data.Image_Path)
+        }
+      } catch {
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchDetail()
+  }, [item.AssessmentID])
+
+  const levelMap: Record<string, string> = {
+    'ฉุกเฉิน': 'high', 'เสี่ยงสูง': 'high',
+    'เสี่ยงปานกลาง': 'medium', 'ปกติ': 'low',
+  }
+  const cfg = riskConfig[levelMap[detail.Risk_Level] || 'low']
+
+  const rows = [
+    { label: 'ผลการวิเคราะห์ภาพ (AI)', value: detail.Detect1, emoji: '🩸' },
+    { label: 'รายละเอียดที่พบ',         value: detail.Detect2, emoji: '🔬' },
+    { label: 'โรคที่อาจเกี่ยวข้อง',    value: detail.Potential_Disease, emoji: '🎯' },
+    { label: 'ระดับความเสี่ยง',         value: detail.Risk_Level, emoji: '📊' },
+    { label: 'วันที่วิเคราะห์',         value: detail.Create_At
+        ? new Date(detail.Create_At).toLocaleDateString('th-TH', { year:'numeric', month:'long', day:'numeric' })
+        : '-', emoji: '📅' },
+  ]
+
+  return (
+    <div style={{ paddingBottom: 60 }}>
+      {/* Header */}
+      <div style={{
+        background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%)',
+        padding: '40px 24px 32px', position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)', backgroundSize: '28px 28px', position: 'absolute', inset: 0 }} />
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={onBack} style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: '#fff',
+          }}>
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <h1 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 20, fontWeight: 600, color: '#fff' }}>รายละเอียดการวิเคราะห์</h1>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>ผลการวิเคราะห์ครั้งนี้</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Loading */}
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%',
+            border: '3px solid #fce4ec',
+            borderTopColor: '#c2185b',
+            animation: 'spin 0.7s linear infinite',
+          }} />
+        </div>
+      ) : (
+        <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px' }}>
+          {/* Risk Badge */}
+          <div style={{
+            background: cfg.bg, border: `1.5px solid ${cfg.dot}40`,
+            borderRadius: 18, padding: '20px 22px', marginBottom: 16,
+            display: 'flex', alignItems: 'center', gap: 14,
+          }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: '50%',
+              background: cfg.bg, border: `2px solid ${cfg.dot}40`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <Droplets size={24} color={cfg.color} strokeWidth={1.5} />
+            </div>
+            <div>
+              <p style={{ fontSize: 12, color: cfg.color, fontWeight: 600, marginBottom: 4 }}>ระดับความเสี่ยง</p>
+              <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 20, fontWeight: 600, color: cfg.color }}>{detail.Risk_Level}</p>
+            </div>
+          </div>
+
+          {/* Analyzed Image */}
+          <div style={{
+            background: '#fff', borderRadius: 18,
+            border: '1px solid #f5e6ec', overflow: 'hidden',
+            marginBottom: 16,
+          }}>
+            <p style={{
+              fontFamily: "'Mitr', sans-serif", fontSize: 13,
+              fontWeight: 600, color: '#9e7a8a',
+              padding: '14px 20px 0',
+            }}>
+              ภาพที่วิเคราะห์
+            </p>
+
+            {detail.Image_Path ? (
+              <img
+                src={`${process.env.NEXT_PUBLIC_API_URL}/${detail.Image_Path}`}
+                alt="Analyzed"
+                onError={(e) => {
+                  // fallback ถ้าโหลดรูปไม่ได้
+                  (e.target as HTMLImageElement).style.display = 'none'
+                }}
+                style={{ width: '100%', display: 'block' }}
+              />
+            ) : (
+              <div style={{
+                textAlign: 'center', padding: '20px',
+                color: '#9e7a8a', fontSize: 13
+              }}>
+                ไม่มีรูปภาพสำหรับการวิเคราะห์นี้
+              </div>
+            )}
+          </div>
+
+          {/* Detail rows */}
+          <div style={{ background: '#fff', borderRadius: 18, border: '1px solid #f5e6ec', overflow: 'hidden', marginBottom: 16 }}>
+            {rows.map((row, i) => (
+              <div key={i} style={{
+                display: 'flex', gap: 14, padding: '16px 20px',
+                borderBottom: i < rows.length - 1 ? '1px solid #f5e6ec' : 'none',
+              }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                  background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16,
+                }}>{row.emoji}</div>
+                <div>
+                  <p style={{ fontSize: 11.5, color: '#9e7a8a', marginBottom: 3 }}>{row.label}</p>
+                  <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 500, color: '#1a0a14' }}>{row.value || '-'}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Recommendation */}
+          {detail.Recommendation && (
+            <>
+              <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 600, color: '#1a0a14', marginBottom: 10 }}>คำแนะนำ</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {detail.Recommendation.split(/[·•]/).filter(Boolean).map((s: string, i: number) => (
+                  <div key={i} style={{
+                    display: 'flex', gap: 10, padding: '12px 16px',
+                    background: '#fff', borderRadius: 14, border: '1px solid #f5e6ec',
+                  }}>
+                    <div style={{
+                      width: 22, height: 22, borderRadius: 7, flexShrink: 0,
+                      background: 'linear-gradient(135deg, #f06292, #c2185b)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontFamily: "'Mitr', sans-serif", fontSize: 11, color: '#fff', fontWeight: 600,
+                    }}>{i + 1}</div>
+                    <p style={{ fontSize: 13.5, color: '#4a2a3a', lineHeight: 1.6 }}>{s.trim()}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

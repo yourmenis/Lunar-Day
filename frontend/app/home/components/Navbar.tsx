@@ -19,16 +19,19 @@ export default function Navbar() {
 
   useEffect(() => {
     const fetchAvatar = async () => {
+      const token = localStorage.getItem('access_token')
+      if (!token) return
+
       try {
         const res = await api.get('/profile/')
         const img = res.data?.data?.Profile_Image
         if (img) {
-          setProfileImage(`http://localhost:5000/static/uploads/profiles/${img}`)
+          setProfileImage(img.startsWith('http') ? img : `${process.env.NEXT_PUBLIC_API_URL}/static/uploads/profiles/${img}`)
         }
       } catch {}
     }
     fetchAvatar()
-  }, [pathname]) 
+  }, [pathname])
 
   return (
     <>
@@ -135,12 +138,11 @@ export default function Navbar() {
       <nav className="navbar">
         <div className="nav-logo" onClick={() => router.push('/home')}>
           <div className="nav-logo-icon">
-            <Image 
-              src="/logolunar.png" 
-              alt="Lunar Day Logo" 
-              width={45} 
-              height={45}
-              style={{ borderRadius: '50%' }}
+            <Image src="/logolunar.png" 
+            alt="Lunar Day Logo" 
+            width={45} 
+            height={45} 
+            style={{ borderRadius: '50%' }}
             />
           </div>
           <span className="nav-logo-text">Lunar Day</span>

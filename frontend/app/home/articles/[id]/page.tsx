@@ -110,7 +110,7 @@ export default function ArticleDetailPage() {
           {!loading && !error && lines.map((line, i) => {
             if (line.startsWith('[IMG:')) {
               const src = line.slice(5, -1)
-              return <img key={i} src={src.startsWith('http') ? src : `http://localhost:5000${src}`} alt="" style={{ width: '100%', borderRadius: 14, margin: '16px 0', display: 'block' }} onError={e => (e.currentTarget.style.display = 'none')} />
+              return <img key={i} src={src.startsWith('http') ? src : `${process.env.NEXT_PUBLIC_API_URL}${src}`} alt="" style={{ width: '100%', borderRadius: 14, margin: '16px 0', display: 'block' }} onError={e => (e.currentTarget.style.display = 'none')} />
             }
             if (line.startsWith('**') && line.endsWith('**'))
               return <strong key={i} style={{ display: 'block', color: '#c2185b', fontSize: 17, margin: '28px 0 10px', fontFamily: 'Mitr, sans-serif' }}>{line.slice(2, -2)}</strong>

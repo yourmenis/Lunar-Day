@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation'
 import { TrendingUp, BookOpen, ArrowRight, ChevronRight, Sparkles, Activity } from 'lucide-react'
 import Navbar from './components/Navbar'
 import api from '../lib/api'
+import LoginToast from './components/LoginToast'
 
 export default function HomePage() {
+  const [showLoginToast, setShowLoginToast] = useState(false)
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [waveBars, setWaveBars] = useState<number[]>([])
@@ -15,7 +17,6 @@ export default function HomePage() {
   const fetchArticles = async () => {
     try {
       const res = await api.get('/articles')
-      // console.log('Articles:', res.data)
       setArticles(res.data)
     } catch {
       console.error('โหลดบทความไม่สำเร็จ')
@@ -34,7 +35,33 @@ export default function HomePage() {
 
   const topArticles = [...articles]
 
+  // ── ตรวจ token ก่อนไปหน้าวิเคราะห์ ──
+  // const goToAnalyze = () => {
+  //   const token = localStorage.getItem('access_token')
+  //   if (!token) {
+  //     setShowLoginToast(true)
+  //     return
+  //   }
+  //   console.log('go analyze')
+  //   router.push('/home/analyze')
+  // }
+
+  const goToAnalyze = () => {
+    const token = localStorage.getItem('access_token')
+    console.log('TOKEN:', token)
+
+    if (!token) {
+      console.log('BLOCKED: no token')
+      setShowLoginToast(true)
+      return
+    }
+
+    console.log('GO TO ANALYZE')
+    router.push('/home/analyze')
+  }
+
   return (
+    
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
@@ -119,12 +146,6 @@ export default function HomePage() {
           margin-bottom: 14px;
           letter-spacing: 0.3px;
         }
-        // .hero-title span {
-        //   background: linear-gradient(135deg, #f48fb1, #f06292);
-        //   -webkit-background-clip: text;
-        //   -webkit-text-fill-color: transparent;
-        //   background-clip: text;
-        // }
         .hero-desc {
           font-size: 15px;
           color: rgba(255,255,255,0.65);
@@ -512,7 +533,6 @@ export default function HomePage() {
           line-height: 1.3;
           margin-bottom: 12px;
         }
-        .cta-title span { color: #f48fb1; }
         .cta-desc { font-size: 14px; color: rgba(255,255,255,0.55); }
         .cta-graphic {
           position: relative;
@@ -528,6 +548,7 @@ export default function HomePage() {
           align-items: flex-end;
           gap: 3px;
           height: 48px;
+          margin-right: 35px;
         }
         .wave-bar {
           width: 4px;
@@ -581,16 +602,17 @@ export default function HomePage() {
               <Sparkles size={11} /> เทคโนโลยีวิเคราะห์ขั้นสูง
             </div>
             <h1 className="hero-title">
-              ดูแลสุขภาพ<span>สตรี</span><br />
+              ดูแลสุขภาพสตรี<br />
               ด้วยการวิเคราะห์<br />
-              ลิ่มเลือดอัจฉริยะ
+              ลิ่มเลือด
             </h1>
             <p className="hero-desc">
               วิเคราะห์ผลเลือดประจำเดือนอย่างแม่นยำด้วย AI
               พร้อมคำแนะนำเฉพาะบุคคล เพื่อสุขภาพที่ดีกว่า
             </p>
             <div className="hero-actions">
-              <button className="btn-primary" onClick={() => router.push('/home/analyze')}>
+              {/* <button className="btn-primary" onClick={() => router.push('/home/analyze')}> */}
+              <button className="btn-primary" onClick={goToAnalyze}>
                 <Activity size={15} /> เริ่มวิเคราะห์เลย
               </button>
               <button className="btn-ghost" onClick={() => router.push('/home/articles')}>
@@ -630,26 +652,29 @@ export default function HomePage() {
 
           <div className="articles-grid">
             {topArticles.length > 0 && (
-            <div className="article-featured" 
-              onClick={() => {
-                console.log('Navigating to article:', topArticles[0].ArticleID)
-                router.push(`/home/articles/${topArticles[0].ArticleID}`)
-              }}>
-              <div className="article-featured-img">🔬</div>
-              <div className="article-featured-body">
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <span className="article-rank hot">🔥 อันดับ 1</span>
+              <div
+                className="article-featured"
+                onClick={() => router.push(`/home/articles/${topArticles[0].ArticleID}`)}
+              >
+                <div className="article-featured-img">🔬</div>
+                <div className="article-featured-body">
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <span className="article-rank hot">🔥 อันดับ 1</span>
+                  </div>
+                  <h3 className="article-featured-title">{topArticles[0].Title}</h3>
+                  <span className="read-more">อ่านต่อ <ArrowRight size={14} /></span>
                 </div>
-                <h3 className="article-featured-title">{topArticles[0].Title}</h3>
-                <span className="read-more">อ่านต่อ <ArrowRight size={14} /></span>
               </div>
-            </div>
             )}
 
             {topArticles.slice(1, 4).map((article, i) => {
               const emojis = ['💊', '🌸', '📊']
               return (
-                <div key={article.ArticleID} className="article-card" onClick={() => router.push(`/home/articles/${article.ArticleID}`)}>
+                <div
+                  key={article.ArticleID}
+                  className="article-card"
+                  onClick={() => router.push(`/home/articles/${article.ArticleID}`)}
+                >
                   <div className="article-card-img">{emojis[i]}</div>
                   <div className="article-card-body">
                     <h3 className="article-card-title">{article.Title}</h3>
@@ -666,10 +691,10 @@ export default function HomePage() {
             <p className="cta-label">✦ เริ่มต้นวันนี้</p>
             <h2 className="cta-title">
               วิเคราะห์ผลเลือด<br />
-              เพื่อสุขภาพ<span>ที่ดีกว่า</span>
+              เพื่อสุขภาพที่ดีกว่า
             </h2>
             <p className="cta-desc">รับผลวิเคราะห์ละเอียดพร้อมคำแนะนำเฉพาะบุคคลภายในไม่กี่นาที</p>
-            <button className="btn-primary" style={{ marginTop: 24 }} onClick={() => router.push('/home/analyze')}>
+            <button className="btn-primary" style={{ marginTop: 24 }} onClick={goToAnalyze}>
               เริ่มวิเคราะห์ฟรี <ArrowRight size={15} />
             </button>
           </div>
@@ -702,6 +727,7 @@ export default function HomePage() {
           <span>นโยบายความเป็นส่วนตัว · ติดต่อเรา</span>
         </footer>
       </div>
+      <LoginToast show={showLoginToast} onClose={() => setShowLoginToast(false)} />
     </>
   )
 }

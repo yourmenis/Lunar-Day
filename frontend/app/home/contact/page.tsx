@@ -568,11 +568,11 @@ export default function ContactPage() {
                   <ExternalLink size={13} className="email-chip-icon" />
                 </a>
                 <a
-                  href="mailto:aaumboon.rap@dome.tu.ac.th"
+                  href="mailto:aumboon.rap@dome.tu.ac.th"
                   className="email-chip"
                 >
                   <span className="email-chip-dot" />
-                  <span className="email-chip-text">aaumboon.rap@dome.tu.ac.th</span>
+                  <span className="email-chip-text">aumboon.rap@dome.tu.ac.th</span>
                   <ExternalLink size={13} className="email-chip-icon" />
                 </a>
               </div>
@@ -616,7 +616,7 @@ export default function ContactPage() {
               <p className="cta-tag">✦ Lunar Day</p>
               <p className="cta-text">
                 ลองใช้งานระบบวิเคราะห์<br />
-                <span>สุขภาพสตรี</span> วันนี้ฟรี
+                <span>สุขภาพสตรี</span>
               </p>
             </div>
             <div className="cta-right">
