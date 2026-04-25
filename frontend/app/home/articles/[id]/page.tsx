@@ -49,6 +49,11 @@ export default function ArticleDetailPage() {
     ? new Date(iso).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })
     : ''
 
+  const extractUrl = (text: string) => {
+    const match = text.match(/https?:\/\/[^\s]+/)
+    return match ? match[0] : null
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: '#faf7f5', fontFamily: "'Sarabun', sans-serif" }}>
       <Navbar />
@@ -110,7 +115,7 @@ export default function ArticleDetailPage() {
           {!loading && !error && lines.map((line, i) => {
             if (line.startsWith('[IMG:')) {
               const src = line.slice(5, -1)
-              return <img key={i} src={src.startsWith('http') ? src : `http://localhost:5000${src}`} alt="" style={{ width: '100%', borderRadius: 14, margin: '16px 0', display: 'block' }} onError={e => (e.currentTarget.style.display = 'none')} />
+              return <img key={i} src={src.startsWith('http') ? src : `${process.env.NEXT_PUBLIC_API_URL}${src}`} alt="" style={{ width: '100%', borderRadius: 14, margin: '16px 0', display: 'block' }} onError={e => (e.currentTarget.style.display = 'none')} />
             }
             if (line.startsWith('**') && line.endsWith('**'))
               return <strong key={i} style={{ display: 'block', color: '#c2185b', fontSize: 17, margin: '28px 0 10px', fontFamily: 'Mitr, sans-serif' }}>{line.slice(2, -2)}</strong>
@@ -128,12 +133,19 @@ export default function ArticleDetailPage() {
           {!loading && links.length > 0 && (
             <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid #f5e6ec' }}>
               <p style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 600, color: '#c2185b', marginBottom: 10, fontSize: 14 }}>แหล่งอ้างอิง</p>
-              {links.map((l, i) => (
-                <a key={i} href={l.url ?? '#'} target={l.url ? '_blank' : undefined} rel="noopener noreferrer"
-                  style={{ display: 'block', fontSize: 12.5, color: '#9e7a8a', lineHeight: 1.8, textDecoration: 'none' }}>
-                  {i + 1}. {typeof l === 'string' ? l : l.text}
-                </a>
-              ))}
+              {links.map((l, i) => {
+                const text = typeof l === 'string' ? l : l.text
+                const url = (typeof l === 'object' && l.url) ? l.url : extractUrl(text)
+                return (
+                  <a key={i}
+                    href={url ?? '#'}
+                    target={url ? '_blank' : undefined}
+                    rel="noopener noreferrer"
+                    style={{ display: 'block', fontSize: 12.5, color: '#9e7a8a', lineHeight: 1.8, textDecoration: 'none' }}>
+                    {i + 1}. {text}
+                  </a>
+                )
+              })}
             </div>
           )}
         </div>
