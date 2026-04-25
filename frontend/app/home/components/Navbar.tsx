@@ -1,133 +1,145 @@
 'use client'
 
 import { useRouter, usePathname } from 'next/navigation'
-import { Activity, BookOpen, Phone, LogOut, User } from 'lucide-react'
+import { Activity, BookOpen, Phone, User, LogOut } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import api from '../../lib/api'
 import Image from 'next/image'
 
 const NAV_LINKS = [
-  { href: '/home/analyze', label: 'วิเคราะห์เลือด', icon: Activity },
-  { href: '/home/articles', label: 'บทความ', icon: BookOpen },
-  { href: '/home/contact', label: 'ติดต่อเรา', icon: Phone },
+  { href: '/home/analyze',  label: 'วิเคราะห์เลือด', icon: Activity },
+  { href: '/home/articles', label: 'บทความ',          icon: BookOpen },
+  { href: '/home/contact',  label: 'ติดต่อเรา',       icon: Phone },
 ]
 
 export default function Navbar() {
-  const router = useRouter()
+  const router   = useRouter()
   const pathname = usePathname()
-  const [profileImage, setProfileImage] = useState<string | null>(null)
+
+  const [profileImage,    setProfileImage]    = useState<string | null>(null)
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
+
+  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   useEffect(() => {
     const fetchAvatar = async () => {
       const token = localStorage.getItem('access_token')
       if (!token) return
-
       try {
         const res = await api.get('/profile/')
         const img = res.data?.data?.Profile_Image
         if (img) {
-          setProfileImage(img.startsWith('http') ? img : `${process.env.NEXT_PUBLIC_API_URL}/static/uploads/profiles/${img}`)
+          setProfileImage(
+            img.startsWith('http')
+              ? img
+              : `${process.env.NEXT_PUBLIC_API_URL}/static/uploads/profiles/${img}`
+          )
         }
       } catch {}
     }
     fetchAvatar()
   }, [pathname])
 
+  const handleLogout = () => {
+    setShowLogoutModal(false)
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('user')
+    showToast('ออกจากระบบเรียบร้อยแล้ว')
+    setTimeout(() => router.push('/login'), 1000)
+  }
+
   return (
     <>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=Sarabun:wght@300;400;500;600&display=swap');
+
         .navbar {
-          position: sticky;
-          top: 0;
-          z-index: 50;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0 40px;
-          height: 64px;
+          position: sticky; top: 0; z-index: 50;
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0 40px; height: 64px;
           background: rgba(255,255,255,0.85);
           backdrop-filter: blur(20px);
           border-bottom: 1px solid rgba(220,80,120,0.1);
           font-family: 'Sarabun', sans-serif;
         }
         .nav-logo {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          cursor: pointer;
-          text-decoration: none;
+          display: flex; align-items: center; gap: 16px;
+          cursor: pointer; text-decoration: none;
         }
         .nav-logo-icon {
-          width: 38px; height: 38px;
-          border-radius: 12px;
+          width: 38px; height: 38px; border-radius: 12px;
           background: linear-gradient(135deg, #f06292, #c2185b);
           display: flex; align-items: center; justify-content: center;
-          font-size: 18px;
-          box-shadow: 0 4px 12px rgba(192,24,91,0.3);
+          font-size: 18px; box-shadow: 0 4px 12px rgba(192,24,91,0.3);
         }
         .nav-logo-text {
-          font-family: 'Mitr', sans-serif;
-          font-weight: 600;
-          font-size: 30px;
-          color: #1a0a14;
-          letter-spacing: 0.3px;
+          font-family: 'Mitr', sans-serif; font-weight: 600;
+          font-size: 30px; color: #1a0a14; letter-spacing: 0.3px;
         }
-        .nav-links {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
+        .nav-links { display: flex; align-items: center; gap: 4px; }
         .nav-link {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-          padding: 8px 16px;
-          border-radius: 10px;
-          border: none;
-          background: transparent;
-          font-family: 'Sarabun', sans-serif;
-          font-size: 14px;
-          color: #5a3a4a;
-          cursor: pointer;
-          transition: background 0.18s, color 0.18s;
-          text-decoration: none;
+          display: flex; align-items: center; gap: 7px;
+          padding: 8px 16px; border-radius: 10px; border: none;
+          background: transparent; font-family: 'Sarabun', sans-serif;
+          font-size: 14px; color: #5a3a4a; cursor: pointer;
+          transition: background 0.18s, color 0.18s; text-decoration: none;
         }
-        .nav-link:hover { background: rgba(240,98,146,0.08); color: #c2185b; }
-        .nav-link.active {
-          background: rgba(240,98,146,0.12);
-          color: #c2185b;
-          font-weight: 500;
-        }
-        .nav-right {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
+        .nav-link:hover  { background: rgba(240,98,146,0.08); color: #c2185b; }
+        .nav-link.active { background: rgba(240,98,146,0.12); color: #c2185b; font-weight: 500; }
+        .nav-right { display: flex; align-items: center; gap: 8px; }
         .nav-avatar {
-          width: 36px; height: 36px;
-          border-radius: 50%;
+          width: 36px; height: 36px; border-radius: 50%;
           background: linear-gradient(135deg, #f8bbd0, #f48fb1);
           border: 2px solid rgba(240,98,146,0.3);
-          cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-          overflow: hidden;
-          transition: border-color 0.18s, box-shadow 0.18s;
+          cursor: pointer; display: flex; align-items: center; justify-content: center;
+          overflow: hidden; transition: border-color 0.18s, box-shadow 0.18s;
         }
-        .nav-avatar:hover {
-          border-color: #f06292;
-          box-shadow: 0 0 0 3px rgba(240,98,146,0.15);
+        .nav-avatar:hover { border-color: #f06292; box-shadow: 0 0 0 3px rgba(240,98,146,0.15); }
+        .nav-logout-btn {
+          width: 36px; height: 36px; border-radius: 50%; border: none;
+          background: transparent; display: flex; align-items: center; justify-content: center;
+          cursor: pointer; transition: background 0.18s; color: #9e7a8a;
         }
-        .nav-logout {
-          width: 36px; height: 36px;
-          border-radius: 50%;
-          border: none;
-          background: transparent;
-          display: flex; align-items: center; justify-content: center;
-          cursor: pointer;
-          transition: background 0.18s;
-          color: #9e7a8a;
+        .nav-logout-btn:hover { background: rgba(240,98,146,0.08); color: #c2185b; }
+
+        /* Modal */
+        .modal-overlay {
+          position: fixed; inset: 0; z-index: 40;
+          display: flex; align-items: flex-end; justify-content: center;
+          background: rgba(0,0,0,0.35); backdrop-filter: blur(4px);
         }
-        .nav-logout:hover { background: rgba(240,98,146,0.08); color: #c2185b; }
+        .modal-sheet {
+          width: 100%; max-width: 480px; background: #fff;
+          border-radius: 28px 28px 0 0; padding: 32px 28px 40px;
+          animation: slideUp 0.28s ease; box-shadow: 0 -8px 40px rgba(0,0,0,0.15);
+        }
+        .modal-handle {
+          width: 40px; height: 4px; border-radius: 2px;
+          background: #e5d0d8; margin: 0 auto 24px;
+        }
+        .btn-primary {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 13px 28px; border-radius: 14px; border: none;
+          background: linear-gradient(135deg, #f06292, #c2185b);
+          color: #fff; font-family: 'Mitr', sans-serif;
+          font-size: 14px; font-weight: 500; cursor: pointer;
+          box-shadow: 0 6px 24px rgba(194,24,91,0.4);
+          transition: transform 0.18s, box-shadow 0.18s;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 32px rgba(194,24,91,0.5); }
+
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(30px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeSlideDown {
+          from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+          to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
 
         @media (max-width: 768px) {
           .navbar { padding: 0 20px; }
@@ -135,14 +147,35 @@ export default function Navbar() {
         }
       `}</style>
 
+      {/* TOAST */}
+      {toast && (
+        <div style={{
+          position: 'fixed', top: 80, left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 9999, padding: '12px 20px', borderRadius: 14,
+          fontSize: 13, fontWeight: 500,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+          border: '1px solid', animation: 'fadeSlideDown 0.3s ease',
+          whiteSpace: 'nowrap', fontFamily: "'Sarabun', sans-serif",
+          ...(toast.type === 'success'
+            ? { background: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' }
+            : toast.type === 'error'
+            ? { background: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5' }
+            : { background: '#fce4ef', color: '#9d174d', borderColor: '#f9a8d4' })
+        }}>
+          {toast.type === 'success' ? '✓ ' : toast.type === 'error' ? '✕ ' : 'ℹ '}{toast.msg}
+        </div>
+      )}
+
       <nav className="navbar">
         <div className="nav-logo" onClick={() => router.push('/home')}>
           <div className="nav-logo-icon">
-            <Image src="/logolunar.png" 
-            alt="Lunar Day Logo" 
-            width={45} 
-            height={45} 
-            style={{ borderRadius: '50%' }}
+            <Image
+              src="/logolunar.png"
+              alt="Lunar Day Logo"
+              width={45}
+              height={45}
+              style={{ borderRadius: '50%' }}
             />
           </div>
           <span className="nav-logo-text">Lunar Day</span>
@@ -161,6 +194,7 @@ export default function Navbar() {
         </div>
 
         <div className="nav-right">
+          {/* Avatar */}
           <div className="nav-avatar" onClick={() => router.push('/home/profile')}>
             {profileImage ? (
               <img
@@ -174,18 +208,55 @@ export default function Navbar() {
             )}
           </div>
 
-          <button
-            className="nav-logout"
-            title="ออกจากระบบ"
-            onClick={() => {
-              localStorage.removeItem('access_token')
-              router.replace('/login')
-            }}
-          >
-            <LogOut size={16} />
+          {/* Logout button */}
+          <button className="nav-logout-btn" onClick={() => setShowLogoutModal(true)}>
+            <LogOut size={18} />
           </button>
         </div>
       </nav>
+
+      {/* LOGOUT MODAL */}
+      {showLogoutModal && (
+        <div className="modal-overlay" onClick={() => setShowLogoutModal(false)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-handle" />
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 60, height: 60, borderRadius: '50%',
+                background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <LogOut size={26} color="#c2185b" strokeWidth={1.5} />
+              </div>
+              <h3 style={{
+                fontFamily: "'Mitr', sans-serif", fontSize: 18, fontWeight: 600,
+                color: '#1a0a14', textAlign: 'center',
+              }}>
+                คุณต้องการออกจากระบบใช่ไหม?
+              </h3>
+              <p style={{ fontSize: 13, color: '#9e7a8a', textAlign: 'center', lineHeight: 1.6 }}>
+                คุณสามารถเข้าสู่ระบบอีกครั้งได้ตลอดเวลา
+              </p>
+              <div style={{ display: 'flex', gap: 12, width: '100%', marginTop: 8 }}>
+                <button
+                  onClick={() => setShowLogoutModal(false)}
+                  style={{
+                    flex: 1, padding: '14px', borderRadius: 14,
+                    border: '1.5px solid rgba(194,24,91,0.2)',
+                    background: 'transparent', color: '#c2185b',
+                    fontFamily: "'Mitr', sans-serif", fontSize: 14, cursor: 'pointer',
+                  }}
+                >
+                  ยกเลิก
+                </button>
+                <button onClick={handleLogout} className="btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
+                  ออกจากระบบ
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

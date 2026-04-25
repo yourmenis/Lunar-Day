@@ -19,119 +19,118 @@ const THAI_MONTHS = [
 ]
 const DOW = ['อา','จ','อ','พ','พฤ','ศ','ส']
 
-function ThaiDatePicker({
-  value, onChange,
-}: { value: string; onChange: (v: string) => void }) {
-  const today = new Date()
-  const [open, setOpen] = useState(false)
+  function ThaiDatePicker({
+    value, onChange,
+  }: { value: string; onChange: (v: string) => void }) {
+    const today = new Date()
+    const [open, setOpen] = useState(false)
 
-  // parse stored value (YYYY-MM-DD) or default to today
-  const parsed = value ? new Date(value) : null
-  const initYear  = parsed ? parsed.getFullYear()  : today.getFullYear()
-  const initMonth = parsed ? parsed.getMonth()      : today.getMonth()
+    const parsed = value ? new Date(value) : null
+    const initYear  = parsed ? parsed.getFullYear()  : today.getFullYear()
+    const initMonth = parsed ? parsed.getMonth()      : today.getMonth()
 
-  const [viewYear,  setViewYear]  = useState(initYear)
-  const [viewMonth, setViewMonth] = useState(initMonth)
+    const [viewYear,  setViewYear]  = useState(initYear)
+    const [viewMonth, setViewMonth] = useState(initMonth)
 
-  // years: 100 years back to current (CE); displayed as BE (+543)
-  const currentCE = today.getFullYear()
-  const years = Array.from({ length: 51 }, (_, i) => currentCE - 50 + i)
+    const currentCE = today.getFullYear()
+    const years = Array.from({ length: 101 }, (_, i) => currentCE - 100 + i)
 
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
-  const firstDow    = new Date(viewYear, viewMonth, 1).getDay()
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+    const firstDow    = new Date(viewYear, viewMonth, 1).getDay()
 
-  const selectedDay   = parsed && parsed.getFullYear() === viewYear && parsed.getMonth() === viewMonth
-    ? parsed.getDate() : null
+    const selectedDay = parsed && parsed.getFullYear() === viewYear && parsed.getMonth() === viewMonth
+      ? parsed.getDate() : null
 
-  const selectDay = (d: number) => {
-    const ce = `${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-    onChange(ce)
-    setOpen(false)
-  }
+    const selectDay = (d: number) => {
+      const ce = `${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+      onChange(ce)
+      setOpen(false)
+    }
 
-  const prevMonth = () => {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
-    else setViewMonth(m => m - 1)
-  }
-  const nextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
-    else setViewMonth(m => m + 1)
-  }
+    const prevMonth = () => {
+      if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
+      else setViewMonth(m => m - 1)
+    }
+    const nextMonth = () => {
+      if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+      else setViewMonth(m => m + 1)
+    }
 
-  // display label in Thai (BE year)
-  const displayLabel = parsed
-    ? `${parsed.getDate()} ${THAI_MONTHS[parsed.getMonth()]} ${parsed.getFullYear() + 543}`
-    : null
+    const displayLabel = parsed
+      ? `${parsed.getDate()} ${THAI_MONTHS[parsed.getMonth()]} ${parsed.getFullYear() + 543}`
+      : null
 
-  return (
-    <div style={{ position: 'relative' }}>
-      <button
-        type="button"
-        className={`date-trigger${open ? ' open' : ''}${!displayLabel ? ' placeholder' : ''}`}
-        onClick={() => setOpen(o => !o)}
-      >
-        {displayLabel ?? 'วัน/เดือน/ปี (พ.ศ.)'}
-      </button>
+    return (
+      <div style={{ position: 'relative' }}>
+        <button
+          type="button"
+          className={`date-trigger${open ? ' open' : ''}${!displayLabel ? ' placeholder' : ''}`}
+          onClick={() => setOpen(o => !o)}
+        >
+          {displayLabel ?? 'วัน/เดือน/ปี (พ.ศ.)'}
+        </button>
 
-      {open && (
-        <div className="dp-popup">
-          {/* Month/Year selects */}
-          <div className="dp-selects">
-            <select
-              className="dp-select"
-              value={viewMonth}
-              onChange={e => setViewMonth(Number(e.target.value))}
-            >
-              {THAI_MONTHS.map((m, i) => (
-                <option key={i} value={i}>{m}</option>
-              ))}
-            </select>
-            <select
-              className="dp-select"
-              value={viewYear}
-              onChange={e => setViewYear(Number(e.target.value))}
-            >
-              {years.map(y => (
-                <option key={y} value={y}>{y + 543}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Header nav */}
-          <div className="dp-header">
-            <button type="button" className="dp-nav" onClick={prevMonth}>‹</button>
-            <span className="dp-title">
-              {THAI_MONTHS[viewMonth]} {viewYear + 543}
-            </span>
-            <button type="button" className="dp-nav" onClick={nextMonth}>›</button>
-          </div>
-
-          {/* Day grid */}
-          <div className="dp-grid">
-            {DOW.map(d => (
-              <div key={d} className="dp-dow">{d}</div>
-            ))}
-            {Array.from({ length: firstDow }).map((_, i) => (
-              <div key={`e${i}`} className="dp-day empty" />
-            ))}
-            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => (
-              <button
-                key={d}
-                type="button"
-                className={`dp-day${selectedDay === d ? ' selected' : ''}${
-                  d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear() ? ' today' : ''
-                }`}
-                onClick={() => selectDay(d)}
+        {open && (
+          <div className="dp-popup">
+            {/* Month / Year selects */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              <select
+                className="dp-select"
+                value={viewMonth}
+                onChange={e => setViewMonth(Number(e.target.value))}
+                style={{ display: 'block' }}
               >
-                {d}
-              </button>
-            ))}
+                {THAI_MONTHS.map((m, i) => (
+                  <option key={i} value={i}>{m}</option>
+                ))}
+              </select>
+              <select
+                className="dp-select"
+                value={viewYear}
+                onChange={e => setViewYear(Number(e.target.value))}
+                style={{ display: 'block' }}
+              >
+                {years.map(y => (
+                  <option key={y} value={y}>{y + 543}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Header nav */}
+            <div className="dp-header">
+              <button type="button" className="dp-nav" onClick={prevMonth}>‹</button>
+              <span className="dp-title">
+                {THAI_MONTHS[viewMonth]} {viewYear + 543}
+              </span>
+              <button type="button" className="dp-nav" onClick={nextMonth}>›</button>
+            </div>
+
+            {/* Day grid */}
+            <div className="dp-grid">
+              {DOW.map(d => (
+                <div key={d} className="dp-dow">{d}</div>
+              ))}
+              {Array.from({ length: firstDow }).map((_, i) => (
+                <div key={`e${i}`} className="dp-day empty" />
+              ))}
+              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => (
+                <button
+                  key={d}
+                  type="button"
+                  className={`dp-day${selectedDay === d ? ' selected' : ''}${
+                    d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear() ? ' today' : ''
+                  }`}
+                  onClick={() => selectDay(d)}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
-  )
-}
+        )}
+      </div>
+    )
+  }
 
 export default function SignUpPage() {
   const router = useRouter()
