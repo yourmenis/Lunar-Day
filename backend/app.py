@@ -10,24 +10,33 @@ from dotenv import load_dotenv
 # --- นำเข้า Blueprint จากโฟลเดอร์ routes ---
 from routes.auth import auth_bp
 from routes.articles import articles_bp
-from routes.analysis import analysis_bp
+from routes.analysis import UPLOAD_FOLDER, analysis_bp
 from routes.profile import profile_bp
 from routes.history import history_bp
+from flask import send_from_directory
 
 # โหลดค่าจากไฟล์ .env (พวก DB_PASSWORD, JWT_SECRET_KEY)
 load_dotenv()
 
 app = Flask(__name__)
 
-# --- 1. ตั้งค่า CORS (สำคัญมาก!) ---
-# อนุญาตให้ Frontend (พอร์ต 3000) คุยกับ Backend (พอร์ต 5000) ได้
+
+@app.route("/uploads/<filename>", methods=["GET"])
+def get_uploaded_image(filename):
+    try:
+        return send_from_directory(UPLOAD_FOLDER, filename)
+    except Exception as e:
+        return {"error": "File not found"}, 404
+
+
+# --- 1. ตั้งค่า CORS
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 # --- 2. ตั้งค่าระบบความปลอดภัย (JWT) ---
 app.config["JWT_SECRET_KEY"] = os.environ.get(
     "JWT_SECRET_KEY", "luna-day-default-secret-key-2026-secure"
 )
-app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24) 
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)
 jwt = JWTManager(app)
 
 # --- 3. ตั้งค่า Bcrypt ---

@@ -5,7 +5,7 @@ import os
 import time
 import logging
 from threading import Lock
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, app, request, jsonify, send_from_directory
 import segmentation_models_pytorch as smp
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
@@ -370,7 +370,6 @@ def evaluate_medical_risk(ai_result, user_input):
     else:
         detect2 = "ไม่พบลิ่มเลือดและเนื้อเยื่อ"
 
-    # clot ใช้ size เป็น key, อื่นๆ ไม่ใช้
     size_key = user_size if ai_result == "clot" else None
     key = (detect_th, pain, duration, is_preg, size_key)
     risk, disease = RISK_TABLE.get(key, ("ปกติ", "ประจำเดือนมาตามปกติ"))
@@ -382,6 +381,7 @@ def evaluate_medical_risk(ai_result, user_input):
 @analysis_bp.route("/image", methods=["POST"])
 @jwt_required()
 def analyze_image():
+    current_user_id = get_jwt_identity()
     start_time = time.time()
     file = request.files.get("image")
 
@@ -413,7 +413,8 @@ def analyze_image():
     file_content = file.read()
 
     # ===== SAVE IMAGE =====
-    filename = f"{int(time.time())}.jpg"
+    timestamp = int(time.time())
+    filename = f"user_{current_user_id}_{timestamp}.jpg"
     filepath = os.path.join(UPLOAD_FOLDER, filename)
 
     with open(filepath, "wb") as f:
@@ -421,6 +422,8 @@ def analyze_image():
 
     # ===== A2: file size =====
     if len(file_content) > MAX_FILE_SIZE:
+        if os.path.exists(filepath):
+            os.remove(filepath)
         return (
             jsonify(
                 {
@@ -447,16 +450,18 @@ def analyze_image():
         ) | cv2.inRange(hsv, np.array([170, 75, 30]), np.array([180, 255, 255]))
 
         if (np.sum(mask_red > 0) / mask_red.size) < RED_RATIO_LIMIT:
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "error_code": "A4",
-                        "msg": "ไม่พบลักษณะเลือดประจำเดือนในภาพ",
-                    }
-                ),
-                400,
-            )
+            if os.path.exists(filepath):
+                os.remove(filepath)
+                return (
+                    jsonify(
+                        {
+                            "status": "error",
+                            "error_code": "A4",
+                            "msg": "ไม่พบลักษณะเลือดประจำเดือนในภาพ",
+                        }
+                    ),
+                    400,
+                )
 
         # ===== AI =====
         std_limit = calculate_dynamic_std(img_resized)
@@ -471,12 +476,49 @@ def analyze_image():
             ai_res = "tissue"
         else:
             ai_res = "none"
+        img_visual = img_resized.copy()
+
+        # กำหนดสี (OpenCV ใช้ BGR): ลิ่มเลือด(ม่วง), เนื้อเยื่อ(แดง)
+        class_info = {
+            1: {"name": "Blood Clot", "color": (128, 0, 128)},  # ม่วง
+            2: {"name": "Tissue", "color": (255, 0, 0)},
+        }
+
+        for cls_id, info in class_info.items():
+            # สร้าง Binary Mask จากผลลัพธ์ AI และ Confidence
+            m = ((mask == cls_id) & (conf > CONF_THRESHOLD)).astype(np.uint8)
+            cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            for c in cnts:
+                if cv2.contourArea(c) > MIN_AREA:
+                    # วาดเส้นขอบลงบนภาพ
+                    cv2.drawContours(img_visual, [c], -1, info["color"], 3)
+
+                    # ใส่ชื่อคลาสกำกับ
+                    x, y, w, h = cv2.boundingRect(c)
+                    cv2.putText(
+                        img_visual,
+                        info["name"],
+                        (x, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,  # ขนาดตัวอักษร
+                        info["color"],
+                        2,  # ความหนาของตัวอักษร
+                    )
+
+        # ตั้งชื่อไฟล์ใหม่สำหรับภาพที่วาดผลแล้ว
+        res_filename = f"res_{filename}"
+        res_filepath = os.path.join(UPLOAD_FOLDER, res_filename)
+
+        # เซฟภาพที่วาดเส้นแล้วลงในโฟลเดอร์ uploads
+        cv2.imwrite(res_filepath, cv2.cvtColor(img_visual, cv2.COLOR_RGB2BGR))
 
         return jsonify(
             {
                 "status": "success",
                 "ai_result": ai_res,
                 "image_path": f"uploads/{filename}",
+                "visual_path": f"uploads/{res_filename}",
                 "detect_label": AI_RESULT_TH.get(ai_res, ai_res),
                 "confidence": round(avg_conf * 100, 2),
                 "processing_time": round(time.time() - start_time, 2),
@@ -492,6 +534,7 @@ def analyze_image():
 @jwt_required()
 def analyze_risk():
     current_user_id = get_jwt_identity()
+    print(f"DEBUG: Current User ID is {current_user_id}")
     start_time = time.time()
     data = request.form
     ai_res = data.get("ai_result")
