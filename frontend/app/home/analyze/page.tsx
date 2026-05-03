@@ -14,7 +14,7 @@ const STEPS = [
     color: '#f06292',
     colorLight: 'rgba(240,98,146,0.12)',
     colorBorder: 'rgba(240,98,146,0.25)',
-    title: 'ถ่ายและส่ง',
+    title: 'อัปโหลดและส่ง',
     desc: 'เข้าเมนู "วิเคราะห์ลิ่มเลือด" แล้วอัปโหลดรูปภาพประจำเดือนของคุณให้ AI ประมวลผล',
     tag: 'เริ่มต้นง่ายมาก',
     detail: 'รองรับ JPG, PNG · ถ่ายในที่สว่าง วางบนพื้นขาว',
@@ -48,7 +48,7 @@ const STEPS = [
 const TRUST = [
   { icon: <Shield size={16} color="#c2185b" />, label: 'ข้อมูลปลอดภัย', sub: 'ไม่บันทึกภาพส่วนตัว' },
   { icon: <Zap size={16} color="#c2185b" />, label: 'รวดเร็ว', sub: 'ผลภายใน 30 วินาที' },
-  { icon: <Activity size={16} color="#c2185b" />, label: 'แม่นยำ 94%', sub: 'ทดสอบทางคลินิก' },
+  { icon: <Activity size={16} color="#c2185b" />, label: 'มีความแม่นยำ', sub: 'ทดสอบทางคลินิก' },
 ]
 
 function Particle({ style }: { style: React.CSSProperties }) {
@@ -430,7 +430,7 @@ export default function IntroPage() {
             <p className="ih-desc">
               ช่วยคุณดูแลสุขภาพเชิงลึกผ่านประจำเดือน ด้วยระบบ AI ที่วิเคราะห์ได้ทั้ง
               <strong>ลิ่มเลือดและเนื้อเยื่อ</strong> เพียงอัปโหลดรูปและระบุอาการเบื้องต้น
-              ระบบจะช่วยประเมินความเสี่ยงให้คุณ<em>ดูแลตัวเองได้อย่างมั่นใจ</em>
+              ระบบจะช่วยประเมินความเสี่ยงให้คุณดูแลตัวเองได้อย่างมั่นใจ
               และเตรียมพร้อมปรึกษาแพทย์ได้อย่างตรงจุด
             </p>
             <div className="ih-actions">
@@ -586,7 +586,7 @@ export default function IntroPage() {
                 เริ่มวิเคราะห์สุขภาพ<br />
                 ประจำเดือนของคุณ
               </h2>
-              <p className="bcta-desc">ใช้เวลาไม่ถึง 2 นาที · ฟรี · ไม่ต้องลงทะเบียนเพิ่มเติม</p>
+              <p className="bcta-desc">ใช้เวลาไม่ถึง 2 นาที · ฟรี · ผลลัพธ์แม่นยำด้วย AI</p>
             </div>
             <div className="bcta-right">
               <button className="btn-cta" onClick={goToAnalyze}>
@@ -600,7 +600,6 @@ export default function IntroPage() {
         {/* ══════════ FOOTER ══════════ */}
         <footer className="intro-footer">
           <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
-          <span>นโยบายความเป็นส่วนตัว · ติดต่อเรา</span>
         </footer>
         <LoginToast show={showLoginToast} onClose={() => setShowLoginToast(false)} />
       </div>
