@@ -27,8 +27,8 @@ CONF_THRESHOLD = 0.3
 RED_RATIO_LIMIT = 0.02
 
 # brightness thresholds for dynamic std
-BRIGHTNESS_HIGH = 180
-BRIGHTNESS_LOW = 60
+BRIGHTNESS_HIGH = 150
+BRIGHTNESS_LOW = 130
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -144,7 +144,10 @@ RISK_TABLE = {
         "ฉุกเฉิน",
         "ท้องนอกมดลูก / แท้ง",
     ),
-    ("ลิ่มเลือด", "ปวดรุนแรง", "1-7 วัน", True, "ใหญ่กว่าเหรียญสิบ"): ("ฉุกเฉิน", "ท้องนอกมดลูกแตก"),
+    ("ลิ่มเลือด", "ปวดรุนแรง", "1-7 วัน", True, "ใหญ่กว่าเหรียญสิบ"): (
+        "ฉุกเฉิน",
+        "ท้องนอกมดลูกแตก",
+    ),
     ("ลิ่มเลือด", "ปวดรุนแรง", "มากกว่า 7 วัน", False, "เล็กกว่าเหรียญสิบ"): (
         "เสี่ยงสูง",
         "อุ้งเชิงกรานอักเสบ",
@@ -166,14 +169,23 @@ RISK_TABLE = {
         "เสี่ยงสูง",
         "เยื่อบุโพรงมดลูกหลุดลอก",
     ),
-    ("เนื้อเยื่อ", "ปกติ/ปวดเล็กน้อย", "1-7 วัน", True, None): ("ฉุกเฉิน", "ภาวะแท้งคุกคาม"),
+    ("เนื้อเยื่อ", "ปกติ/ปวดเล็กน้อย", "1-7 วัน", True, None): (
+        "ฉุกเฉิน",
+        "ภาวะแท้งคุกคาม",
+    ),
     ("เนื้อเยื่อ", "ปกติ/ปวดเล็กน้อย", "มากกว่า 7 วัน", False, None): (
         "เสี่ยงสูง",
         "ฮอร์โมนผิดปกติ / ผนังมดลูกหนาตัว",
     ),
-    ("เนื้อเยื่อ", "ปกติ/ปวดเล็กน้อย", "มากกว่า 7 วัน", True, None): ("ฉุกเฉิน", "ภาวะแท้งไม่ครบ"),
+    ("เนื้อเยื่อ", "ปกติ/ปวดเล็กน้อย", "มากกว่า 7 วัน", True, None): (
+        "ฉุกเฉิน",
+        "ภาวะแท้งไม่ครบ",
+    ),
     # ── เนื้อเยื่อ + ปวดปานกลาง ──────────────────────────────────────────
-    ("เนื้อเยื่อ", "ปวดปานกลาง", "1-7 วัน", False, None): ("เสี่ยงสูง", "มดลูกอักเสบเรื้อรัง"),
+    ("เนื้อเยื่อ", "ปวดปานกลาง", "1-7 วัน", False, None): (
+        "เสี่ยงสูง",
+        "มดลูกอักเสบเรื้อรัง",
+    ),
     ("เนื้อเยื่อ", "ปวดปานกลาง", "1-7 วัน", True, None): (
         "ฉุกเฉิน",
         "ภาวะแท้งบุตร / ท้องนอกมดลูก",
@@ -187,7 +199,10 @@ RISK_TABLE = {
         "ท้องนอกมดลูก /แท้งติดเชื้อ",
     ),
     # ── เนื้อเยื่อ + ปวดรุนแรง ───────────────────────────────────────────
-    ("เนื้อเยื่อ", "ปวดรุนแรง", "1-7 วัน", False, None): ("เสี่ยงสูง", "เนื้อเยื่อหลุดทั้งแผ่น"),
+    ("เนื้อเยื่อ", "ปวดรุนแรง", "1-7 วัน", False, None): (
+        "เสี่ยงสูง",
+        "เนื้อเยื่อหลุดทั้งแผ่น",
+    ),
     ("เนื้อเยื่อ", "ปวดรุนแรง", "1-7 วัน", True, None): ("ฉุกเฉิน", "ท้องนอกมดลูกแตก"),
     ("เนื้อเยื่อ", "ปวดรุนแรง", "มากกว่า 7 วัน", False, None): (
         "เสี่ยงสูง",
@@ -292,9 +307,9 @@ def calculate_dynamic_std(img_rgb):
     img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
     brightness = np.mean(img_gray)
     tolerance = (
-        1.30
+        2.0
         if brightness > BRIGHTNESS_HIGH
-        else (1.20 if brightness < BRIGHTNESS_LOW else 1.10)
+        else (1.20 if brightness < BRIGHTNESS_LOW else 1.50)
     )
     return STD_BASE_THRESHOLD * tolerance
 
@@ -335,15 +350,20 @@ def calculate_scores(mask, conf, img, std_limit):
             m_temp = np.zeros(img.shape[:2], np.uint8)
             cv2.drawContours(m_temp, [cnt], -1, 255, -1)
 
+            # คำนวณค่า STD จริงของก้อนนั้น
             std_val = np.std(img[m_temp > 0])
-            current_limit = max(std_limit, 55.0) if area > LARGE_OBJECT else std_limit
 
-            if (cls_id == 1 and std_val <= current_limit) or (
-                cls_id == 2 and (std_val > current_limit or area > LARGE_TISSUE)
-            ):
-                scores[cls_id] += 2
-                if area > SMALL_OBJECT:
-                    scores[cls_id] += 1
+            # --- แก้จุดนี้: ใช้ std_limit เพียวๆ ไม่ต้องสนขนาดก้อนเพื่อดันค่า 55 ---
+            if cls_id == 1 and std_val <= std_limit:
+                scores[1] += 2  # ให้คะแนนพื้นฐานถ้าผ่านเกณฑ์ STD
+            elif cls_id == 2 and std_val > std_limit:
+                scores[2] += 2
+
+            # ให้โบนัสตามขนาดเพื่อให้คะแนนถึงเกณฑ์สรุปผลง่ายขึ้น
+            if area > SMALL_OBJECT:
+                scores[cls_id] += 1
+            if area > LARGE_OBJECT:
+                scores[cls_id] += 1
 
     return scores
 
@@ -360,7 +380,6 @@ def evaluate_medical_risk(ai_result, user_input):
     # FIX 3: แปลง ai_result → ภาษาไทย ก่อนใช้เป็น key lookup
     detect_th = AI_RESULT_TH.get(ai_result, ai_result)
 
-    # FIX 4: detect2 แยกตาม ai_result จริง ไม่ใช้ detect2_map ที่ key ไม่ตรง
     if ai_result == "clot":
         detect2 = f"ลิ่มเลือด{user_size}" if user_size else "ลิ่มเลือด"
     elif ai_result == "tissue":
@@ -409,21 +428,10 @@ def analyze_image():
             ),
             400,
         )
-
     file_content = file.read()
-
-    # ===== SAVE IMAGE =====
-    timestamp = int(time.time())
-    filename = f"user_{current_user_id}_{timestamp}.jpg"
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-
-    with open(filepath, "wb") as f:
-        f.write(file_content)
 
     # ===== A2: file size =====
     if len(file_content) > MAX_FILE_SIZE:
-        if os.path.exists(filepath):
-            os.remove(filepath)
         return (
             jsonify(
                 {
@@ -434,6 +442,13 @@ def analyze_image():
             ),
             400,
         )
+    # ===== SAVE IMAGE =====
+    timestamp = int(time.time())
+    filename = f"user_{current_user_id}_{timestamp}.jpg"
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+    with open(filepath, "wb") as f:
+        f.write(file_content)
 
     try:
         img_bgr = cv2.imdecode(np.frombuffer(file_content, np.uint8), cv2.IMREAD_COLOR)
@@ -445,34 +460,35 @@ def analyze_image():
 
         # ===== A4: not menstrual image =====
         hsv = cv2.cvtColor(img_resized, cv2.COLOR_RGB2HSV)
+
         mask_red = cv2.inRange(
-            hsv, np.array([0, 75, 30]), np.array([10, 255, 255])
-        ) | cv2.inRange(hsv, np.array([170, 75, 30]), np.array([180, 255, 255]))
+            hsv, np.array([0, 58, 16]), np.array([14, 255, 214])
+        ) | cv2.inRange(hsv, np.array([161, 58, 16]), np.array([179, 255, 214]))
 
         if (np.sum(mask_red > 0) / mask_red.size) < RED_RATIO_LIMIT:
             if os.path.exists(filepath):
                 os.remove(filepath)
-                return (
-                    jsonify(
-                        {
-                            "status": "error",
-                            "error_code": "A4",
-                            "msg": "ไม่พบลักษณะเลือดประจำเดือนในภาพ",
-                        }
-                    ),
-                    400,
-                )
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A4",
+                        "msg": "ไม่พบลักษณะเลือดประจำเดือนในภาพ",
+                    }
+                ),
+                400,
+            )
 
         # ===== AI =====
         std_limit = calculate_dynamic_std(img_resized)
         mask, conf, avg_conf = run_inference(img_resized)
         scores = calculate_scores(mask, conf, img_resized, std_limit)
-
-        if scores[1] >= 3 and scores[2] >= 3:
+        THRESHOLD_SCORE = 2
+        if scores[1] >= THRESHOLD_SCORE and scores[2] >= THRESHOLD_SCORE:
             ai_res = "mixed"
-        elif scores[1] >= 3:
+        elif scores[1] >= THRESHOLD_SCORE:
             ai_res = "clot"
-        elif scores[2] >= 3:
+        elif scores[2] >= THRESHOLD_SCORE:
             ai_res = "tissue"
         else:
             ai_res = "none"
@@ -496,6 +512,8 @@ def analyze_image():
 
                     # ใส่ชื่อคลาสกำกับ
                     x, y, w, h = cv2.boundingRect(c)
+                    label_y = (y - 10) if cls_id == 2 else (y + h + 20)
+                    label_y = max(label_y, 15)
                     cv2.putText(
                         img_visual,
                         info["name"],
@@ -573,7 +591,11 @@ def analyze_risk():
     if ai_res == "clot" and not size_val:
         return (
             jsonify(
-                {"status": "error", "error_code": "A3", "msg": "กรุณาระบุขนาดของลิ่มเลือด"}
+                {
+                    "status": "error",
+                    "error_code": "A3",
+                    "msg": "กรุณาระบุขนาดของลิ่มเลือด",
+                }
             ),
             400,
         )
