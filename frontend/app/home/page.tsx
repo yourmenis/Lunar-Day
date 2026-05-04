@@ -716,7 +716,6 @@ export default function HomePage() {
               textAlign: 'center',
             }}>
               🩸 ผลวิเคราะห์พร้อมแล้ว<br />
-              <span style={{ fontSize: 11, opacity: 0.7 }}>ความแม่นยำ 94%</span>
             </div>
           </div>
         </div>
@@ -724,7 +723,6 @@ export default function HomePage() {
         {/* ── Footer ── */}
         <footer className="home-footer">
           <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
-          <span>นโยบายความเป็นส่วนตัว · ติดต่อเรา</span>
         </footer>
       </div>
       <LoginToast show={showLoginToast} onClose={() => setShowLoginToast(false)} />

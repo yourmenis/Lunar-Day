@@ -630,7 +630,6 @@ export default function ContactPage() {
         {/* ── Footer ── */}
         <footer className="contact-footer">
           <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
-          <span>นโยบายความเป็นส่วนตัว · ติดต่อเรา</span>
         </footer>
       </div>
     </>
