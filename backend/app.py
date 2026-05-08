@@ -15,7 +15,7 @@ from routes.profile import profile_bp
 from routes.history import history_bp
 from flask import send_from_directory
 
-# โหลดค่าจากไฟล์ .env (พวก DB_PASSWORD, JWT_SECRET_KEY)
+# โหลดค่าจากไฟล์ .env
 load_dotenv()
 
 app = Flask(__name__)
