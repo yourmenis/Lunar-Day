@@ -7,20 +7,21 @@ from config.database import get_db_connection
 
 profile_bp = Blueprint("profile", __name__)
 
-# ตั้งค่าโฟลเดอร์เก็บรูปโปรไฟล์แยกจากรูปวิเคราะห์เลือด
-PROFILE_UPLOAD_FOLDER = os.path.join(os.getcwd(), "static/uploads/profiles")
+# กำหนดโฟลเดอร์สำหรับเก็บไฟล์รูปโปรไฟล์
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROFILE_UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads", "profiles")
 os.makedirs(PROFILE_UPLOAD_FOLDER, exist_ok=True)
 
 
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png"}
 
 # 2. กำหนดขนาดไฟล์สูงสุด 10MB ตามสเปค UC-06
-MAX_FILE_SIZE = 10 * 1024 * 1024 
+MAX_FILE_SIZE = 10 * 1024 * 1024
+
 
 def allowed_file(filename):
     # .lower() จะเปลี่ยน "MyPic.JPEG" -> "jpeg" แล้วมาเช็คในเซตข้างบน
-    return "." in filename and \
-           filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 # ---------------------------------------------------------
@@ -83,7 +84,11 @@ def update_profile():
         if cursor.fetchone():
             return (
                 jsonify(
-                    {"status": "error", "error_code": "A1", "msg": "ชื่อผู้ใช้งานนี้มีผู้ใช้แล้ว"}
+                    {
+                        "status": "error",
+                        "error_code": "A1",
+                        "msg": "ชื่อผู้ใช้งานนี้มีผู้ใช้แล้ว",
+                    }
                 ),
                 400,
             )
@@ -120,9 +125,17 @@ def update_profile():
 
             # บันทึกไฟล์รูป
             file.seek(0)
-            filename = secure_filename(file.filename)
-            profile_img_name = f"profile_{user_id}_{int(time.time())}_{filename}"
-            file.save(os.path.join(PROFILE_UPLOAD_FOLDER, profile_img_name))
+            original_filename = secure_filename(file.filename)
+            file_ext = (
+                original_filename.rsplit(".", 1)[1].lower()
+                if "." in original_filename
+                else "png"
+            )
+            profile_img_name = f"profile_{user_id}_{int(time.time())}.{file_ext}"
+
+            # บันทึกไฟล์ลงโฟลเดอร์
+            save_path = os.path.join(PROFILE_UPLOAD_FOLDER, profile_img_name)
+            file.save(save_path)
 
         # อัปเดตข้อมูลใน DB
         if profile_img_name:
