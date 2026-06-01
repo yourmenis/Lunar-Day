@@ -645,20 +645,24 @@ def analyze_risk():
             db_saved = True
         except Exception as e:
             db.rollback()
-            logger.error(e)
+            logger.error(f"Database Insert Error: {e}")
+            return jsonify({"status": "error", "msg": "ไม่สามารถบันทึกข้อมูลได้"}), 500
         finally:
             db.close()
 
-    return jsonify(
-        {
-            "status": "success",
-            "Detect1": AI_RESULT_TH.get(ai_res, ai_res),
-            "Detect2": det2,
-            "Risk_Level": risk,
-            "Potential_Disease": disease,
-            "Confidence": confidence,
-            "Recommendation": adv,
-            "processing_time": round(time.time() - start_time, 2),
-            "saved": db_saved,
-        }
+    return (
+        jsonify(
+            {
+                "status": "success",
+                "Detect1": AI_RESULT_TH.get(ai_res, ai_res),
+                "Detect2": det2,
+                "Risk_Level": risk,
+                "Potential_Disease": disease,
+                "Confidence": confidence,
+                "Recommendation": adv,
+                "processing_time": round(time.time() - start_time, 2),
+                "saved": db_saved,
+            }
+        ),
+        200,
     )
