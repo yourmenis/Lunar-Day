@@ -117,7 +117,6 @@ def search_articles():
         cursor.execute(sql, (f"%{query}%", f"%{query}%"))
         results = cursor.fetchall()
 
-        # ไม่เจอ → ส่ง empty list (frontend ใช้ง่ายกว่า)
         if not results:
             return jsonify({"msg": "ไม่พบข้อมูลที่ท่านค้นหา"}), 404
 

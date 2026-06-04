@@ -20,7 +20,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
 def allowed_file(filename):
-    # .lower() จะเปลี่ยน "MyPic.JPEG" -> "jpeg" แล้วมาเช็คในเซตข้างบน
+    # ตรวจสอบว่าไฟล์มีนามสกุลที่อนุญาตหรือไม่
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
