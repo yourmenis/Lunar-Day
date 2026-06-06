@@ -327,14 +327,24 @@ def run_inference(img):
 
     mask_np = mask[0].cpu().numpy()
     conf_np = conf[0].cpu().numpy()
-    detected = mask_np > 0
-    avg_conf = np.mean(conf_np[detected]) if np.any(detected) else 0.0
+    # คำนวณค่าเฉลี่ย confidence ของพื้นที่ที่ตรวจพบ (mask > 0) และมี confidence > threshold
+    detected = (mask_np > 0) & (conf_np > CONF_THRESHOLD)
+    if np.any(detected):
+        # ถ้าเจอลิ่มเลือด/เนื้อเยื่อ ให้เฉลี่ยความมั่นใจของก้อนนั้น
+        avg_conf = np.mean(conf_np[detected])
+    else:
+        # ถ้าไม่เจออะไรเลย ให้เฉลี่ยความมั่นใจของ "พื้นหลัง" แทน
+        background_pixels = mask_np == 0
+        avg_conf = (
+            np.mean(conf_np[background_pixels]) if np.any(background_pixels) else 0.99
+        )
 
     return mask_np, conf_np, float(avg_conf)
 
 
-def calculate_scores(mask, conf, img, std_limit):
-    scores = {1: 0, 2: 0}
+def validate_ai_findings(mask, conf, img, std_limit):
+    found_clot = False
+    found_tissue = False
 
     for cls_id in [1, 2]:
         binary = ((mask == cls_id) & (conf > CONF_THRESHOLD)).astype(np.uint8)
@@ -349,23 +359,24 @@ def calculate_scores(mask, conf, img, std_limit):
 
             m_temp = np.zeros(img.shape[:2], np.uint8)
             cv2.drawContours(m_temp, [cnt], -1, 255, -1)
-
-            # คำนวณค่า STD จริงของก้อนนั้น
             std_val = np.std(img[m_temp > 0])
 
-            # --- แก้จุดนี้: ใช้ std_limit เพียวๆ ไม่ต้องสนขนาดก้อนเพื่อดันค่า 55 ---
             if cls_id == 1 and std_val <= std_limit:
-                scores[1] += 2  # ให้คะแนนพื้นฐานถ้าผ่านเกณฑ์ STD
-            elif cls_id == 2 and std_val > std_limit:
-                scores[2] += 2
+                found_clot = True
+            elif cls_id == 2:
+                # ให้ผ่านถ้า STD ใกล้เคียงเกณฑ์ (80%) หรือก้อนใหญ่มากจนเชื่อถือ AI ได้เลย
+                if std_val > (std_limit * 0.8) or area > LARGE_TISSUE:
+                    found_tissue = True
+            # ==============================
 
-            # ให้โบนัสตามขนาดเพื่อให้คะแนนถึงเกณฑ์สรุปผลง่ายขึ้น
-            if area > SMALL_OBJECT:
-                scores[cls_id] += 1
-            if area > LARGE_OBJECT:
-                scores[cls_id] += 1
-
-    return scores
+    if found_clot and found_tissue:
+        return "mixed"
+    elif found_clot:
+        return "clot"
+    elif found_tissue:
+        return "tissue"
+    else:
+        return "none"
 
 
 # ==============================
@@ -480,18 +491,13 @@ def analyze_image():
             )
 
         # ===== AI =====
+        # ===== AI =====
         std_limit = calculate_dynamic_std(img_resized)
         mask, conf, avg_conf = run_inference(img_resized)
-        scores = calculate_scores(mask, conf, img_resized, std_limit)
-        THRESHOLD_SCORE = 2
-        if scores[1] >= THRESHOLD_SCORE and scores[2] >= THRESHOLD_SCORE:
-            ai_res = "mixed"
-        elif scores[1] >= THRESHOLD_SCORE:
-            ai_res = "clot"
-        elif scores[2] >= THRESHOLD_SCORE:
-            ai_res = "tissue"
-        else:
-            ai_res = "none"
+
+        # เรียกใช้ฟังก์ชันใหม่ที่คืนค่าสถานะเป็นชื่อคลาสเลย
+        ai_res = validate_ai_findings(mask, conf, img_resized, std_limit)
+
         img_visual = img_resized.copy()
 
         # กำหนดสี (OpenCV ใช้ BGR): ลิ่มเลือด(ม่วง), เนื้อเยื่อ(แดง)
