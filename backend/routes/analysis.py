@@ -388,7 +388,6 @@ def evaluate_medical_risk(ai_result, user_input):
     is_preg = user_input.get("is_pregnant")
     user_size = user_input.get("size")
 
-    # FIX 3: แปลง ai_result → ภาษาไทย ก่อนใช้เป็น key lookup
     detect_th = AI_RESULT_TH.get(ai_result, ai_result)
 
     if ai_result == "clot":
