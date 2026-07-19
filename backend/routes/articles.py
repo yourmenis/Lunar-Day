@@ -118,7 +118,7 @@ def search_articles():
         results = cursor.fetchall()
 
         if not results:
-            return jsonify({"msg": "ไม่พบข้อมูลที่ท่านค้นหา"}), 404
+            return jsonify({"msg": "ไม่พบข้อมูลที่ค้นหา"}), 404
 
         results = [format_image_url(a) for a in results]
 
