@@ -230,17 +230,60 @@ def forgot_password():
 
 
 # ==========================================
-# 🛡️ ส่วนที่ 4: ตั้งรหัสผ่านใหม่ (Reset Password + Confirm)
+# 🛡️ ส่วนที่ 4: verify otp
 # ==========================================
+@auth_bp.route("/verify-otp", methods=["POST"])
+def verify_otp():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip()
+    otp = (data.get("otp") or "").strip()
+
+    if not email or not otp:
+        return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
+
+    db = get_db_connection()
+    cursor = db.cursor(dictionary=True, buffered=True)
+
+    try:
+        # เช็คว่า OTP ตรงไหม
+        cursor.execute(
+            """
+            SELECT UserID, OTPExpireTime 
+            FROM User 
+            WHERE Email = %s AND ResetOTP = %s
+            """,
+            (email, otp),
+        )
+        user = cursor.fetchone()
+
+        if not user:
+            return jsonify({"msg": "รหัส OTP ไม่ถูกต้อง"}), 400
+
+        # เช็ควันหมดอายุ
+        if user["OTPExpireTime"] is None or datetime.now() > user["OTPExpireTime"]:
+            return jsonify({"msg": "รหัส OTP หมดอายุแล้ว โปรดขอรหัสใหม่"}), 400
+
+        return jsonify({"msg": "รหัส OTP ถูกต้อง"}), 200
+
+    except Exception as e:
+        return jsonify({"msg": f"เกิดข้อผิดพลาดทางเทคนิค: {str(e)}"}), 500
+
+    finally:
+        cursor.close()
+        db.close()
 
 
+# ==========================================
+# 🛡️ ส่วนที่ 5: ตั้งรหัสผ่านใหม่ (Reset Password + Confirm)
+# ==========================================
 @auth_bp.route("/reset-password", methods=["POST"])
 def reset_password():
-    data = request.json
-    email = data.get("Email")
-    otp = data.get("OTP")
-    new_password = data.get("NewPassword")
-    confirm_password = data.get("ConfirmPassword")
+    data = request.get_json(silent=True) or {}
+    # อ่าน key แบบตัวเล็ก — frontend (เมนิส) ต้องส่งเป็นตัวเล็กให้ตรงกัน (ดู FRONTEND_NOTES.md)
+    email = (data.get("email") or "").strip()
+    otp = (data.get("otp") or "").strip()
+    new_password = data.get("newPassword") or ""
+    confirm_password = data.get("confirmPassword") or ""
 
     # 1️⃣ เช็คค่าว่าง
     if not all([email, otp, new_password, confirm_password]):
@@ -258,7 +301,7 @@ def reset_password():
     cursor = db.cursor(dictionary=True, buffered=True)
 
     try:
-        # 4️⃣ ดึง OTP + เวลา expire มาตรวจสอบ
+        # 4️⃣ ดึง OTP + เวลา expire มาตรวจสอบเพื่อความชัวร์อีกรอบ
         cursor.execute(
             """
             SELECT UserID, OTPExpireTime 
@@ -272,13 +315,14 @@ def reset_password():
         if not user:
             return jsonify({"msg": "รหัส OTP ไม่ถูกต้อง"}), 400
 
-        # 5️⃣ เช็ควันหมดอายุ
+        # 5️⃣ เช็ควันหมดอายุซ้ำ
         if user["OTPExpireTime"] is None or datetime.now() > user["OTPExpireTime"]:
             return jsonify({"msg": "รหัส OTP หมดอายุแล้ว โปรดขอรหัสใหม่"}), 400
 
         # 6️⃣ แฮชรหัสผ่านใหม่
         hashed_pw = bcrypt.generate_password_hash(new_password).decode("utf-8")
 
+        # 7️⃣ อัปเดตรหัสผ่าน และเคลียร์ค่า OTP ทิ้งเพื่อไม่ให้เอามาใช้ซ้ำได้อีก
         cursor.execute(
             """
             UPDATE User 
