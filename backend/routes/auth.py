@@ -279,11 +279,10 @@ def verify_otp():
 @auth_bp.route("/reset-password", methods=["POST"])
 def reset_password():
     data = request.get_json(silent=True) or {}
-    # อ่าน key แบบตัวเล็ก — frontend (เมนิส) ต้องส่งเป็นตัวเล็กให้ตรงกัน (ดู FRONTEND_NOTES.md)
-    email = (data.get("email") or "").strip()
-    otp = (data.get("otp") or "").strip()
-    new_password = data.get("newPassword") or ""
-    confirm_password = data.get("confirmPassword") or ""
+    email = (data.get("Email") or "").strip()
+    otp = (data.get("OTP") or "").strip()
+    new_password = data.get("NewPassword") or ""
+    confirm_password = data.get("ConfirmPassword") or ""
 
     # 1️⃣ เช็คค่าว่าง
     if not all([email, otp, new_password, confirm_password]):
