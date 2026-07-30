@@ -8,7 +8,7 @@ from threading import Lock
 from flask import Blueprint, app, request, jsonify, send_from_directory
 import segmentation_models_pytorch as smp
 from flask_jwt_extended import jwt_required, get_jwt_identity
-
+import mysql.connector
 from config.database import get_db_connection
 
 # ==============================
@@ -37,19 +37,13 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png"}
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
-# INPUT VALIDATION
-VALID_PAIN = ["ปกติ/ปวดเล็กน้อย", "ปวดปานกลาง", "ปวดรุนแรง"]
-VALID_DURATION = ["1-7 วัน", "มากกว่า 7 วัน"]
-VALID_PREG = ["true", "false"]
-VALID_SIZE = ["เล็กกว่าเหรียญสิบ", "ใหญ่กว่าเหรียญสิบ"]
-
 # AREA CONFIG
 MIN_AREA = 20
 SMALL_OBJECT = 100
 LARGE_OBJECT = 1000
 LARGE_TISSUE = 5000
 
-# FIX 1: แปลง ai_res (EN) → ภาษาไทย สำหรับใช้เป็น key ใน RISK_TABLE และแสดงผล
+# แปลงผล AI (EN) → ภาษาไทย สำหรับแสดงผล
 AI_RESULT_TH = {
     "clot": "ลิ่มเลือด",
     "tissue": "เนื้อเยื่อ",
@@ -60,216 +54,6 @@ AI_RESULT_TH = {
 model = None
 model_lock = Lock()
 
-
-# ==============================
-# MEDICAL LOOKUP TABLE
-# ==============================
-RISK_TABLE = {
-    # ── ลิ่มเลือด + ปกติ/ปวดเล็กน้อย ────────────────────────────────────
-    ("ลิ่มเลือด", "ปกติ/ปวดเล็กน้อย", "1-7 วัน", False, "เล็กกว่าเหรียญสิบ"): (
-        "เสี่ยงปานกลาง",
-        "ประจำเดือนปกติที่มีลิ่มเลือดปน",
-    ),
-    ("ลิ่มเลือด", "ปกติ/ปวดเล็กน้อย", "1-7 วัน", False, "ใหญ่กว่าเหรียญสิบ"): (
-        "เสี่ยงสูง",
-        "ติ่งเนื้อ/เลือดออกมาก",
-    ),
-    ("ลิ่มเลือด", "ปกติ/ปวดเล็กน้อย", "1-7 วัน", True, "เล็กกว่าเหรียญสิบ"): (
-        "ฉุกเฉิน",
-        "เลือดล้างหน้าเด็ก/แท้งคุกคาม",
-    ),
-    ("ลิ่มเลือด", "ปกติ/ปวดเล็กน้อย", "1-7 วัน", True, "ใหญ่กว่าเหรียญสิบ"): (
-        "ฉุกเฉิน",
-        "ภาวะแท้งบุตร",
-    ),
-    ("ลิ่มเลือด", "ปกติ/ปวดเล็กน้อย", "มากกว่า 7 วัน", False, "เล็กกว่าเหรียญสิบ"): (
-        "เสี่ยงปานกลาง",
-        "ฮอร์โมนไม่ปกติ/ภาวะไข่ไม่ตก",
-    ),
-    ("ลิ่มเลือด", "ปกติ/ปวดเล็กน้อย", "มากกว่า 7 วัน", False, "ใหญ่กว่าเหรียญสิบ"): (
-        "เสี่ยงสูง",
-        "เยื่อบุโพรงมดลูกหนาตัว",
-    ),
-    ("ลิ่มเลือด", "ปกติ/ปวดเล็กน้อย", "มากกว่า 7 วัน", True, "เล็กกว่าเหรียญสิบ"): (
-        "ฉุกเฉิน",
-        "ท้องนอกมดลูก",
-    ),
-    ("ลิ่มเลือด", "ปกติ/ปวดเล็กน้อย", "มากกว่า 7 วัน", True, "ใหญ่กว่าเหรียญสิบ"): (
-        "ฉุกเฉิน",
-        "ภาวะแท้งไม่ครบ",
-    ),
-    # ── ลิ่มเลือด + ปวดปานกลาง ───────────────────────────────────────────
-    ("ลิ่มเลือด", "ปวดปานกลาง", "1-7 วัน", False, "เล็กกว่าเหรียญสิบ"): (
-        "เสี่ยงปานกลาง",
-        "ปวดประจำเดือนทั่วไป",
-    ),
-    ("ลิ่มเลือด", "ปวดปานกลาง", "1-7 วัน", False, "ใหญ่กว่าเหรียญสิบ"): (
-        "เสี่ยงสูง",
-        "มดลูกอักเสบเรื้อรัง",
-    ),
-    ("ลิ่มเลือด", "ปวดปานกลาง", "1-7 วัน", True, "เล็กกว่าเหรียญสิบ"): (
-        "ฉุกเฉิน",
-        "ภาวะแท้ง / ท้องนอกมดลูก",
-    ),
-    ("ลิ่มเลือด", "ปวดปานกลาง", "1-7 วัน", True, "ใหญ่กว่าเหรียญสิบ"): (
-        "ฉุกเฉิน",
-        "แท้งรุนแรง / ภาวะแทรกซ้อน",
-    ),
-    ("ลิ่มเลือด", "ปวดปานกลาง", "มากกว่า 7 วัน", False, "เล็กกว่าเหรียญสิบ"): (
-        "เสี่ยงปานกลาง",
-        "ปากมดลูกอักเสบ / ฮอร์โมนผิดปกติ",
-    ),
-    ("ลิ่มเลือด", "ปวดปานกลาง", "มากกว่า 7 วัน", False, "ใหญ่กว่าเหรียญสิบ"): (
-        "เสี่ยงสูง",
-        "เนื้องอกมดลูก",
-    ),
-    ("ลิ่มเลือด", "ปวดปานกลาง", "มากกว่า 7 วัน", True, "เล็กกว่าเหรียญสิบ"): (
-        "ฉุกเฉิน",
-        "ท้องนอกมดลูก",
-    ),
-    ("ลิ่มเลือด", "ปวดปานกลาง", "มากกว่า 7 วัน", True, "ใหญ่กว่าเหรียญสิบ"): (
-        "ฉุกเฉิน",
-        "แท้งไม่ครบ / ภาวะวิกฤต",
-    ),
-    # ── ลิ่มเลือด + ปวดรุนแรง ────────────────────────────────────────────
-    ("ลิ่มเลือด", "ปวดรุนแรง", "1-7 วัน", False, "เล็กกว่าเหรียญสิบ"): (
-        "เสี่ยงสูง",
-        "เยื่อบุโพรงมดลูกเจริญผิดที่",
-    ),
-    ("ลิ่มเลือด", "ปวดรุนแรง", "1-7 วัน", False, "ใหญ่กว่าเหรียญสิบ"): (
-        "เสี่ยงสูง",
-        "เนื้องอกมดลูก / เยื่อบุเจริญผิดที่รุนแรง",
-    ),
-    ("ลิ่มเลือด", "ปวดรุนแรง", "1-7 วัน", True, "เล็กกว่าเหรียญสิบ"): (
-        "ฉุกเฉิน",
-        "ท้องนอกมดลูก / แท้ง",
-    ),
-    ("ลิ่มเลือด", "ปวดรุนแรง", "1-7 วัน", True, "ใหญ่กว่าเหรียญสิบ"): (
-        "ฉุกเฉิน",
-        "ท้องนอกมดลูกแตก",
-    ),
-    ("ลิ่มเลือด", "ปวดรุนแรง", "มากกว่า 7 วัน", False, "เล็กกว่าเหรียญสิบ"): (
-        "เสี่ยงสูง",
-        "อุ้งเชิงกรานอักเสบ",
-    ),
-    ("ลิ่มเลือด", "ปวดรุนแรง", "มากกว่า 7 วัน", False, "ใหญ่กว่าเหรียญสิบ"): (
-        "เสี่ยงสูง",
-        "เนื้องงอกมดลูกขนาดใหญ่ / พังผืด",
-    ),
-    ("ลิ่มเลือด", "ปวดรุนแรง", "มากกว่า 7 วัน", True, "เล็กกว่าเหรียญสิบ"): (
-        "ฉุกเฉิน",
-        "ท้องนอกมดลูก / แท้งไม่ครบ",
-    ),
-    ("ลิ่มเลือด", "ปวดรุนแรง", "มากกว่า 7 วัน", True, "ใหญ่กว่าเหรียญสิบ"): (
-        "ฉุกเฉิน",
-        "ภาวะแทรกซ้อนรุนแรงจากการตั้งครรภ์",
-    ),
-    # ── เนื้อเยื่อ + ปกติ/ปวดเล็กน้อย ───────────────────────────────────
-    ("เนื้อเยื่อ", "ปกติ/ปวดเล็กน้อย", "1-7 วัน", False, None): (
-        "เสี่ยงสูง",
-        "เยื่อบุโพรงมดลูกหลุดลอก",
-    ),
-    ("เนื้อเยื่อ", "ปกติ/ปวดเล็กน้อย", "1-7 วัน", True, None): (
-        "ฉุกเฉิน",
-        "ภาวะแท้งคุกคาม",
-    ),
-    ("เนื้อเยื่อ", "ปกติ/ปวดเล็กน้อย", "มากกว่า 7 วัน", False, None): (
-        "เสี่ยงสูง",
-        "ฮอร์โมนผิดปกติ / ผนังมดลูกหนาตัว",
-    ),
-    ("เนื้อเยื่อ", "ปกติ/ปวดเล็กน้อย", "มากกว่า 7 วัน", True, None): (
-        "ฉุกเฉิน",
-        "ภาวะแท้งไม่ครบ",
-    ),
-    # ── เนื้อเยื่อ + ปวดปานกลาง ──────────────────────────────────────────
-    ("เนื้อเยื่อ", "ปวดปานกลาง", "1-7 วัน", False, None): (
-        "เสี่ยงสูง",
-        "มดลูกอักเสบเรื้อรัง",
-    ),
-    ("เนื้อเยื่อ", "ปวดปานกลาง", "1-7 วัน", True, None): (
-        "ฉุกเฉิน",
-        "ภาวะแท้งบุตร / ท้องนอกมดลูก",
-    ),
-    ("เนื้อเยื่อ", "ปวดปานกลาง", "มากกว่า 7 วัน", False, None): (
-        "เสี่ยงสูง",
-        "ติ่งเนื้อ / เนื้องอกมดลูก",
-    ),
-    ("เนื้อเยื่อ", "ปวดปานกลาง", "มากกว่า 7 วัน", True, None): (
-        "ฉุกเฉิน",
-        "ท้องนอกมดลูก /แท้งติดเชื้อ",
-    ),
-    # ── เนื้อเยื่อ + ปวดรุนแรง ───────────────────────────────────────────
-    ("เนื้อเยื่อ", "ปวดรุนแรง", "1-7 วัน", False, None): (
-        "เสี่ยงสูง",
-        "เนื้อเยื่อหลุดทั้งแผ่น",
-    ),
-    ("เนื้อเยื่อ", "ปวดรุนแรง", "1-7 วัน", True, None): ("ฉุกเฉิน", "ท้องนอกมดลูกแตก"),
-    ("เนื้อเยื่อ", "ปวดรุนแรง", "มากกว่า 7 วัน", False, None): (
-        "เสี่ยงสูง",
-        "เยื่อบุโพรงมดลูกเจริญผิดที่ / อุ้งเชิงกรานอักเสบ",
-    ),
-    ("เนื้อเยื่อ", "ปวดรุนแรง", "มากกว่า 7 วัน", True, None): (
-        "ฉุกเฉิน",
-        "ภาวะช็อกจากการเสียเลือด / แท้งรุนแรง",
-    ),
-    # ── ไม่พบลิ่มเลือดและเนื้อเยื่อ + ปกติ/ปวดเล็กน้อย ─────────────────
-    ("ไม่พบลิ่มเลือดและเนื้อเยื่อ", "ปกติ/ปวดเล็กน้อย", "1-7 วัน", False, None): (
-        "ปกติ",
-        "ประจำเดือนมาตามปกติ",
-    ),
-    ("ไม่พบลิ่มเลือดและเนื้อเยื่อ", "ปกติ/ปวดเล็กน้อย", "1-7 วัน", True, None): (
-        "เสี่ยงปานกลาง",
-        "เลือดล้างหน้าเด็ก / แท้งคุกคามระยะแรก",
-    ),
-    ("ไม่พบลิ่มเลือดและเนื้อเยื่อ", "ปกติ/ปวดเล็กน้อย", "มากกว่า 7 วัน", False, None): (
-        "เสี่ยงปานกลาง",
-        "ภาวะไข่ไม่ตก",
-    ),
-    ("ไม่พบลิ่มเลือดและเนื้อเยื่อ", "ปกติ/ปวดเล็กน้อย", "มากกว่า 7 วัน", True, None): (
-        "เสี่ยงปานกลาง",
-        "ภาวะแทรกซ้อนจากการตั้งครรภ์",
-    ),
-    # ── ไม่พบลิ่มเลือดและเนื้อเยื่อ + ปวดปานกลาง ────────────────────────
-    ("ไม่พบลิ่มเลือดและเนื้อเยื่อ", "ปวดปานกลาง", "1-7 วัน", False, None): (
-        "ปกติ",
-        "ปวดประจำเดือนทั่วไป",
-    ),
-    ("ไม่พบลิ่มเลือดและเนื้อเยื่อ", "ปวดปานกลาง", "1-7 วัน", True, None): (
-        "เสี่ยงสูง",
-        "ภาวะแท้งบุตร / ท้องนอกมดลูก",
-    ),
-    ("ไม่พบลิ่มเลือดและเนื้อเยื่อ", "ปวดปานกลาง", "มากกว่า 7 วัน", False, None): (
-        "เสี่ยงปานกลาง",
-        "ฮอร์โมนผิดปกติ / ปากมดลูกอักเสบ",
-    ),
-    ("ไม่พบลิ่มเลือดและเนื้อเยื่อ", "ปวดปานกลาง", "มากกว่า 7 วัน", True, None): (
-        "ฉุกเฉิน",
-        "ท้องนอกมดลูก",
-    ),
-    # ── ไม่พบลิ่มเลือดและเนื้อเยื่อ + ปวดรุนแรง ─────────────────────────
-    ("ไม่พบลิ่มเลือดและเนื้อเยื่อ", "ปวดรุนแรง", "1-7 วัน", False, None): (
-        "เสี่ยงปานกลาง",
-        "ปวดประจำเดือนรุนแรง",
-    ),
-    ("ไม่พบลิ่มเลือดและเนื้อเยื่อ", "ปวดรุนแรง", "1-7 วัน", True, None): (
-        "เสี่ยงสูง",
-        "ภาวะแท้งบุตร / ท้องนอกมดลูก",
-    ),
-    ("ไม่พบลิ่มเลือดและเนื้อเยื่อ", "ปวดรุนแรง", "มากกว่า 7 วัน", False, None): (
-        "เสี่ยงสูง",
-        "อุ้งเชิงกรานอักเสบ",
-    ),
-    ("ไม่พบลิ่มเลือดและเนื้อเยื่อ", "ปวดรุนแรง", "มากกว่า 7 วัน", True, None): (
-        "ฉุกเฉิน",
-        "ท้องนอกมดลูก / ภาวะวิกฤต",
-    ),
-}
-
-# FIX 2: copy เนื้อเยื่อ → พบลิ่มเลือดและเนื้อเยื่อ (mixed)
-# แก้จาก if _r == "tissue" เป็น if _r == "เนื้อเยื่อ" ให้ตรงกับ key จริงใน table
-for (_r, _p, _d, _preg, _s), _v in list(RISK_TABLE.items()):
-    if _r == "เนื้อเยื่อ":
-        RISK_TABLE[("พบลิ่มเลือดและเนื้อเยื่อ", _p, _d, _preg, _s)] = _v
 
 DB_ADVICE = {
     "ฉุกเฉิน": "แนะนำให้เข้ารับการตรวจประเมินจากแพทย์โดยเร็วที่สุดเนื่องจากอาการเลือดออกหรือปวดท้องร่วมกับความเสี่ยงตั้งครรภ์อาจสัมพันธ์กับภาวะแทรกซ้อนที่จำเป็นต้องได้รับการดูแลทางการแพทย์อย่างใกล้ชิด",
@@ -382,29 +166,237 @@ def validate_ai_findings(mask, conf, img, std_limit):
 # ==============================
 # MEDICAL LOGIC
 # ==============================
-def evaluate_medical_risk(ai_result, user_input):
-    pain = user_input.get("pain_level")
-    duration = user_input.get("duration")
-    is_preg = user_input.get("is_pregnant")
-    user_size = user_input.get("size")
+# ข้อมูลโรค + เกณฑ์อาการ (ระบบคัดกรองแบบให้คะแนน %)
+# กลุ่มโรค: 1 = สรีระปกติ, 2 = นรีเวช, 3 = ตั้งครรภ์
+# criteria = {qX: เซตคำตอบที่ยอมรับ} ใส่เฉพาะข้อที่เป็นเกณฑ์จริง
+# (ข้อที่เป็น N/A ไม่ต้องใส่ → จะไม่ถูกนับในตัวหาร)
+DISEASES = [
+    {
+        "name": "ประจำเดือนปกติ",
+        "risk": "ปกติ",
+        "group": 1,
+        "criteria": {
+            "q1": {"normal"},
+            "q2": {"mid"},
+            "q3": {"mid"},
+            "q4": {"none"},
+            "q5": {"none", "mild"},
+            "q6": {"none", "mild"},
+            "q10": {"small"},
+        },
+    },
+    {
+        "name": "ติ่งเนื้อเยื่อบุโพรงมดลูก",
+        "risk": "เสี่ยงปานกลาง",
+        "group": 2,
+        "criteria": {
+            "q1": {"high"},
+            "q2": {"long"},
+            "q3": {"short", "long"},
+            "q4": {"spotting", "postcoital"},
+            "q5": {"severe"},
+            "q6": {"none", "mild", "severe"},
+            "q7": {"discharge"},
+            "q10": {"large"},
+        },
+    },
+    {
+        "name": "เยื่อบุโพรงมดลูกหนาตัว",
+        "risk": "เสี่ยงปานกลาง",
+        "group": 2,
+        "criteria": {
+            "q1": {"high"},
+            "q2": {"long"},
+            "q3": {"short", "long"},
+            "q4": {"spotting"},
+            "q5": {"severe"},
+            "q6": {"severe"},
+            "q10": {"large"},
+        },
+    },
+    {
+        "name": "เนื้องอกมดลูก",
+        "risk": "เสี่ยงปานกลาง",
+        "group": 2,
+        "criteria": {
+            "q1": {"high"},
+            "q2": {"long"},
+            "q3": {"short", "long"},
+            "q4": {"spotting"},
+            "q5": {"severe"},
+            "q6": {"mild", "severe"},
+            "q7": {"urine", "bowel"},
+            "q10": {"large"},
+        },
+    },
+    {
+        "name": "ฮอร์โมนไม่สมดุล",
+        "risk": "เสี่ยงปานกลาง",
+        "group": 2,
+        "criteria": {
+            "q1": {"high"},
+            "q2": {"long"},
+            "q3": {"long"},
+            "q4": {"spotting"},
+            "q5": {"severe"},
+            "q6": {"mild", "severe"},
+            "q10": {"large"},
+        },
+    },
+    {
+        "name": "เยื่อบุโพรงมดลูกเจริญผิดที่",
+        "risk": "เสี่ยงปานกลาง",
+        "group": 2,
+        "criteria": {
+            "q1": {"high"},
+            "q2": {"long"},
+            "q3": {"long"},
+            "q4": {"spotting"},
+            "q5": {"severe"},
+            "q6": {"severe"},
+            "q7": {"bowel", "nausea"},
+            "q10": {"large"},
+        },
+    },
+    {
+        "name": "อุ้งเชิงกรานอักเสบ",
+        "risk": "เสี่ยงสูง",
+        "group": 2,
+        "criteria": {
+            "q1": {"high"},
+            "q2": {"long"},
+            "q3": {"long"},
+            "q4": {"spotting"},
+            "q5": {"severe"},
+            "q6": {"mild", "severe"},
+            "q7": {"urine", "fever", "discharge", "nausea"},
+        },
+    },
+    {
+        "name": "แท้งคุกคาม",
+        "risk": "ฉุกเฉิน",
+        "group": 3,
+        "criteria": {
+            "q4": {"spotting"},
+            "q6": {"severe"},
+            "q10": {"small"},
+        },
+    },
+    {
+        "name": "ท้องนอกมดลูก",
+        "risk": "ฉุกเฉิน",
+        "group": 3,
+        "criteria": {
+            "q4": {"spotting"},
+            "q6": {"mild", "severe"},
+            "q7": {"palpitation", "breast", "nausea"},
+            "q10": {"small", "large"},
+        },
+    },
+    {
+        "name": "ภาวะแท้งไม่สมบูรณ์",
+        "risk": "ฉุกเฉิน",
+        "group": 3,
+        "criteria": {
+            "q4": {"spotting"},
+            "q6": {"severe"},
+            "q7": {"fever", "discharge", "nausea"},
+            "q10": {"large"},
+        },
+    },
+]
 
-    detect_th = AI_RESULT_TH.get(ai_result, ai_result)
+# ลำดับความรุนแรง (ใช้หา "ระดับเสี่ยงสูงสุด" ตอนเจอหลายโรค)
+RISK_ORDER = {"ปกติ": 0, "เสี่ยงปานกลาง": 1, "เสี่ยงสูง": 2, "ฉุกเฉิน": 3}
 
+
+def _eligible_groups(q8, q9):
+    """ด่านกรองกลุ่มโรคจากคำถามเรื่องเพศสัมพันธ์ (Q8) / การตั้งครรภ์ (Q9)"""
+    if q8 == "no_sex":
+        return {1, 2}
+    if q9 == "pregnant":
+        return {3}
+    if q9 == "unsure":
+        return {1, 2, 3}
+    # มีเพศสัมพันธ์ + ไม่ตั้งครรภ์ (หรือไม่ระบุ)
+    return {1, 2}
+
+
+def screen_symptoms(ai_result, answers):
+    """
+    คัดกรองโรคจากคำตอบ Q1-Q10 แบบให้คะแนน %
+    answers: dict เช่น {"q1":"normal","q4":"spotting","q7":["nausea"],"q8":"no_sex",...}
+             q7 = list (เลือกได้หลายข้อ) · ข้ออื่น = string
+    คืน (results, risk_level, recommendation)
+      results = [{"disease","risk_level","match_percent"}, ...] เรียง % มาก→น้อย
+    """
+    q8 = answers.get("q8")
+    q9 = answers.get("q9")
+    q7_ans = set(answers.get("q7") or [])
+
+    # ข้อที่ถูกถามจริง (Q7 นับเมื่อผู้ใช้เลือกอาการ ≥1 · Q9 เมื่อมีเพศสัมพันธ์ · Q10 เฉพาะเคส clot)
+    asked = {"q1", "q2", "q3", "q4", "q5", "q6"}
+    if q7_ans:  # Q7 ไม่บังคับ → เข้าตัวหารเฉพาะเมื่อเลือกอาการอย่างน้อย 1
+        asked.add("q7")
+    if q8 != "no_sex":
+        asked.add("q9")
     if ai_result == "clot":
-        detect2 = f"ลิ่มเลือด{user_size}" if user_size else "ลิ่มเลือด"
-    elif ai_result == "tissue":
-        detect2 = "เนื้อเยื่อ"
-    elif ai_result == "mixed":
-        detect2 = "พบลิ่มเลือดและเนื้อเยื่อ"
-    else:
-        detect2 = "ไม่พบลิ่มเลือดและเนื้อเยื่อ"
+        asked.add("q10")
 
-    size_key = user_size if ai_result == "clot" else None
-    key = (detect_th, pain, duration, is_preg, size_key)
-    risk, disease = RISK_TABLE.get(key, ("ปกติ", "ประจำเดือนมาตามปกติ"))
-    adv = DB_ADVICE.get(risk, DB_ADVICE["ปกติ"])
+    eligible = _eligible_groups(q8, q9)
 
-    return risk, disease, detect2, adv
+    results = []
+    for d in DISEASES:
+        if d["group"] not in eligible:
+            continue
+        total = 0
+        matched = 0
+        for q, allowed in d["criteria"].items():
+            if q not in asked:
+                continue  # ข้อที่ไม่ได้ถาม / N/A → ตัดออกจากตัวหาร
+            total += 1
+            if q == "q7":
+                if q7_ans & allowed:  # ตรงอย่างน้อย 1 อย่าง = ผ่าน
+                    matched += 1
+            elif answers.get(q) in allowed:
+                matched += 1
+        # เข้าข่ายเมื่อ >= 2/3 (67% ตามที่ตกลง เช่น 2 จาก 3)
+        if total and matched * 3 >= total * 2:
+            results.append(
+                {
+                    "disease": d["name"],
+                    "risk_level": d["risk"],
+                    "match_percent": round(matched / total * 100, 1),
+                }
+            )
+
+    results.sort(key=lambda r: r["match_percent"], reverse=True)
+    if not results:
+        return [], None, None
+
+    top_risk = max(
+        (r["risk_level"] for r in results), key=lambda lv: RISK_ORDER.get(lv, 0)
+    )
+    recommendation = DB_ADVICE.get(top_risk, DB_ADVICE["ปกติ"])
+    return results, top_risk, recommendation
+
+
+def build_detect2(ai_res, q10):
+    """
+    Detect2 = ผล AI + ขนาดลิ่มเลือด (คงความหมายเดิม)
+    เคสลิ่มเลือด → ต่อขนาดจาก Q10 เช่น "ลิ่มเลือดขนาดใหญ่" / "ลิ่มเลือดขนาดเล็ก"
+    เคสอื่น (เนื้อเยื่อ/ทั้งคู่/ไม่พบ) → เท่ากับ Detect1
+    """
+    if ai_res == "clot":
+        size = {"small": "ขนาดเล็ก", "large": "ขนาดใหญ่"}.get(q10, "")
+        return f"ลิ่มเลือด{size}"
+    return AI_RESULT_TH.get(ai_res, ai_res)
+
+
+def _clean(v):
+    """ตัดช่องว่างหน้า-หลังของค่าที่รับมา (กันค่าเพี้ยนจากการ copy/พิมพ์ เช่น 'high ')
+    ถ้าไม่ใช่ string (None) ก็คืนค่าเดิม"""
+    return v.strip() if isinstance(v, str) else v
 
 
 @analysis_bp.route("/image", methods=["POST"])
@@ -557,116 +549,140 @@ def analyze_image():
 @jwt_required()
 def analyze_risk():
     current_user_id = get_jwt_identity()
-    print(f"DEBUG: Current User ID is {current_user_id}")
     start_time = time.time()
     data = request.form
-    ai_res = data.get("ai_result")
-    pain_level = data.get("pain_level")
-    duration = data.get("duration")
-    is_pregnant = (data.get("is_pregnant") or "").lower()
-    size_val = data.get("size")
-    confidence = data.get("confidence")
+
+    ai_res = _clean(data.get("ai_result"))
+    if not ai_res:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "error_code": "A3",
+                    "msg": "กรุณาระบุผลการวิเคราะห์ภาพ (ai_result)",
+                }
+            ),
+            400,
+        )
+
+    # ข้อมูลจาก step 1 (/analysis/image) ที่หน้าบ้านส่งต่อมา (ใช้บันทึกลง DB)
     image_path = data.get("image_path")
+    confidence_raw = data.get("confidence")
+    try:
+        confidence = float(confidence_raw) if confidence_raw not in (None, "") else None
+    except (TypeError, ValueError):
+        confidence = None
 
-    # ===== A3: required fields =====
-    if not ai_res or not pain_level or not duration or not is_pregnant:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A3",
-                    "msg": "กรุณากรอกข้อมูลอาการให้ครบถ้วน",
-                }
-            ),
-            400,
-        )
-
-    # ===== validate values =====
-    if (
-        pain_level not in VALID_PAIN
-        or duration not in VALID_DURATION
-        or is_pregnant not in VALID_PREG
-    ):
-        return (
-            jsonify({"status": "error", "error_code": "A3", "msg": "ข้อมูลไม่ถูกต้อง"}),
-            400,
-        )
-
-    # ===== case-specific validation =====
-    if ai_res == "clot" and not size_val:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A3",
-                    "msg": "กรุณาระบุขนาดของลิ่มเลือด",
-                }
-            ),
-            400,
-        )
-
-    is_preg_bool = is_pregnant == "true"
-
-    user_input = {
-        "pain_level": pain_level,
-        "duration": duration,
-        "is_pregnant": is_preg_bool,
-        "size": size_val if ai_res == "clot" else None,
+    # รวบรวมคำตอบ Q1-Q10 (q7 เลือกได้หลายข้อ → getlist)
+    # _clean = ตัดช่องว่างหน้า-หลัง กันค่าเพี้ยนจากการพิมพ์/copy
+    answers = {
+        "q1": _clean(data.get("q1")),
+        "q2": _clean(data.get("q2")),
+        "q3": _clean(data.get("q3")),
+        "q4": _clean(data.get("q4")),
+        "q5": _clean(data.get("q5")),
+        "q6": _clean(data.get("q6")),
+        "q7": [_clean(x) for x in data.getlist("q7")],
+        "q8": _clean(data.get("q8")),
+        "q9": _clean(data.get("q9")),
+        "q10": _clean(data.get("q10")),
     }
 
-    # ===== medical evaluation =====
-    risk, disease, det2, adv = evaluate_medical_risk(ai_res, user_input)
+    # ผลตรวจภาพ (แสดง/บันทึกทั้งกรณีเจอและไม่เจอโรค)
+    detect1 = AI_RESULT_TH.get(ai_res, ai_res)
+    detect2 = build_detect2(ai_res, answers["q10"])
 
-    # ===== SAVE DB =====
-    db_saved = False
-    db = get_db_connection()
-    if db:
-        try:
-            cursor = db.cursor()
-            cursor.execute(
-                """
-                INSERT INTO Risk_Assessment
-                (UserID, Detect1, Detect2, Confidence, Pain_Level,
-                 Duration, Is_Pregnant, Size, Risk_Level,
-                 Potential_Disease, Recommendation,Image_Path)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                """,
-                (
-                    current_user_id,
-                    AI_RESULT_TH.get(ai_res, ai_res),
-                    det2,
-                    confidence,
-                    pain_level,
-                    duration,
-                    1 if is_preg_bool else 0,
-                    size_val,
-                    risk,
-                    disease,
-                    adv,
-                    image_path,
-                ),
-            )
-            db.commit()
-            db_saved = True
-        except Exception as e:
+    # คัดกรองด้วยระบบให้คะแนนอาการ
+    results, risk_level, recommendation = screen_symptoms(ai_res, answers)
+
+    # ไม่มีโรคใดถึงเกณฑ์ → ไม่บันทึก DB ตอบเฉพาะข้อความ
+    if not results:
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "results": [],
+                    "Detect1": detect1,
+                    "Detect2": detect2,
+                    "Confidence": confidence,
+                    "Risk_Level": None,
+                    "Potential_Disease": "ไม่มีโรคที่เกี่ยวข้องในระบบ",
+                    "Recommendation": None,
+                    "msg": "ไม่มีโรคที่เกี่ยวข้องในระบบ",
+                    "processing_time": round(time.time() - start_time, 2),
+                }
+            ),
+            200,
+        )
+
+    # รวมชื่อโรคที่พบเป็น string เดียว (จำกัดความยาวตามคอลัมน์ varchar 255)
+    potential_disease = ", ".join(r["disease"] for r in results)[:255]
+    q7_joined = ",".join(answers["q7"])
+
+    # บันทึกผลลง Risk_Assessment (เฉพาะเคสที่เจอโรค)
+    db = None
+    cursor = None
+    assessment_id = None
+    try:
+        db = get_db_connection()
+        cursor = db.cursor()
+        cursor.execute(
+            """
+            INSERT INTO Risk_Assessment
+                (UserID, Detect1, Detect2, Confidence,
+                 Q1_Flow_Volume, Q2_Duration, Q3_Cycle_Frequency,
+                 Q4_Bleeding_Characteristics, Q5_Menstrual_Pain, Q6_Pelvic_Pain,
+                 Q7_Associated_Symptoms, Q8_Sexual_History, Q9_Pregnancy_Test,
+                 Q10_Clot_Size, Potential_Disease, Risk_Level, Recommendation, Image_Path)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                current_user_id,
+                detect1,
+                detect2,
+                confidence,
+                answers["q1"],
+                answers["q2"],
+                answers["q3"],
+                answers["q4"],
+                answers["q5"],
+                answers["q6"],
+                q7_joined,
+                answers["q8"],
+                answers["q9"],
+                answers["q10"],
+                potential_disease,
+                risk_level,
+                recommendation,
+                image_path,
+            ),
+        )
+        db.commit()
+        assessment_id = cursor.lastrowid
+    except mysql.connector.Error as err:
+        if db is not None:
             db.rollback()
-            logger.error(f"Database Insert Error: {e}")
-            return jsonify({"status": "error", "msg": "ไม่สามารถบันทึกข้อมูลได้"}), 500
-        finally:
+        logger.error(f"บันทึกผลวิเคราะห์ล้มเหลว: {err}")
+        return jsonify({"status": "error", "msg": "บันทึกผลวิเคราะห์ไม่สำเร็จ"}), 500
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if db is not None:
             db.close()
 
     return (
         jsonify(
             {
                 "status": "success",
-                "Detect1": AI_RESULT_TH.get(ai_res, ai_res),
-                "Detect2": det2,
-                "Risk_Level": risk,
-                "Potential_Disease": disease,
+                "assessment_id": assessment_id,
+                "Detect1": detect1,
+                "Detect2": detect2,
                 "Confidence": confidence,
-                "Recommendation": adv,
+                "Risk_Level": risk_level,
+                "Potential_Disease": potential_disease,
+                "Recommendation": recommendation,
+                "results": results,
                 "processing_time": round(time.time() - start_time, 2),
-                "saved": db_saved,
             }
         ),
         200,
