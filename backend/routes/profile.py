@@ -4,6 +4,8 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from config.database import get_db_connection
+from extensions import bcrypt
+import mysql.connector
 
 profile_bp = Blueprint("profile", __name__)
 
@@ -154,4 +156,64 @@ def update_profile():
         db.rollback()
         return jsonify({"msg": str(e)}), 500
     finally:
+        db.close()
+
+
+# ---------------------------------------------------------
+# 3. DELETE: ลบบัญชีผู้ใช้ (ต้องยืนยันด้วยรหัสผ่าน)
+# ---------------------------------------------------------
+@profile_bp.route("/delete", methods=["DELETE"])
+@jwt_required()
+def delete_account():
+    user_id = get_jwt_identity()
+
+    # รับรหัสผ่านยืนยันจาก body
+    data = request.get_json(silent=True) or {}
+    password = (data.get("password") or "").strip()
+
+    if not password:
+        return (
+            jsonify({"status": "error", "msg": "กรุณากรอกรหัสผ่านเพื่อยืนยัน"}),
+            400,
+        )
+
+    db = get_db_connection()
+    cursor = db.cursor(dictionary=True)
+
+    try:
+        # ดึงรหัสผ่าน (hash) + ชื่อไฟล์รูปโปรไฟล์ของผู้ใช้
+        cursor.execute(
+            "SELECT Password, Profile_Image FROM User WHERE UserID = %s",
+            (user_id,),
+        )
+        user = cursor.fetchone()
+
+        if not user:
+            return jsonify({"status": "error", "msg": "ไม่พบข้อมูลผู้ใช้"}), 404
+
+        # ยืนยันรหัสผ่าน (เหมือนตอน login)
+        if not bcrypt.check_password_hash(user["Password"], password):
+            return jsonify({"status": "error", "msg": "รหัสผ่านไม่ถูกต้อง"}), 401
+
+        # ลบข้อมูล: ลบผลวิเคราะห์ของผู้ใช้ก่อน (กัน FK ของ Risk_Assessment.UserID) แล้วค่อยลบ User
+        cursor.execute("DELETE FROM Risk_Assessment WHERE UserID = %s", (user_id,))
+        cursor.execute("DELETE FROM User WHERE UserID = %s", (user_id,))
+        db.commit()
+
+        # ลบไฟล์รูปโปรไฟล์ทิ้ง (ถ้ามี) — ครอบ try/except กันลบไม่ได้แล้วล้มทั้ง request
+        if user["Profile_Image"]:
+            try:
+                img_path = os.path.join(PROFILE_UPLOAD_FOLDER, user["Profile_Image"])
+                if os.path.exists(img_path):
+                    os.remove(img_path)
+            except OSError:
+                pass
+
+        return jsonify({"status": "success", "msg": "ลบบัญชีเรียบร้อยแล้ว"}), 200
+
+    except mysql.connector.Error as err:
+        db.rollback()
+        return jsonify({"status": "error", "msg": f"ลบบัญชีไม่สำเร็จ: {err}"}), 500
+    finally:
+        cursor.close()
         db.close()
