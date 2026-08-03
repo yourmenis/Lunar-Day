@@ -200,19 +200,28 @@ def forgot_password():
         db.commit()
 
         # ---------------- ส่งอีเมล ----------------
-        subject = "รหัสยืนยันการเปลี่ยนรหัสผ่าน - Luna Day Project"
+        subject = "Luna Day - Password Reset Verification Code"
         body = f"""
-เราได้รับคำขอให้รีเซ็ตรหัสผ่านสำหรับบัญชีของคุณ
+เรียน ผู้ใช้งาน Luna Day
+มีการร้องขอให้รีเซ็ตรหัสผ่านสำหรับบัญชีของคุณ
 
-รหัส OTP ของคุณคือ: {otp}
+รหัส OTP สำหรับยืนยันตัวตนคือ
+รหัส OTP ของคุณคือ: 
+{otp}
 
-*รหัสนี้มีอายุ 5 นาที*
-*โปรดอย่าเปิดเผยให้ผู้อื่นทราบ*
+    • รหัสนี้มีอายุการใช้งาน 5 นาที
+    • โปรดใช้รหัสนี้เพื่อดำเนินการเปลี่ยนรหัสผ่าน
+    • ห้ามเปิดเผยรหัส OTP แก่บุคคลอื่น
+
+หากคุณไม่ได้เป็นผู้ร้องขอ โปรดละเว้นอีเมลฉบับนี้ บัญชีของคุณจะไม่ได้รับผลกระทบหากไม่มีการยืนยันรหัส OTP
+
+ขอแสดงความนับถือ
+Luna Day Team
 """
 
         msg = MIMEText(body, _charset="utf-8")
         msg["Subject"] = subject
-        msg["From"] = GMAIL_USER
+        msg["From"] = f"Luna Day Team <{GMAIL_USER}>"
         msg["To"] = email
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
