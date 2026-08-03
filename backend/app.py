@@ -1,6 +1,5 @@
 from datetime import timedelta
-
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_bcrypt import Bcrypt
@@ -13,7 +12,7 @@ from routes.articles import articles_bp
 from routes.analysis import UPLOAD_FOLDER, analysis_bp
 from routes.profile import profile_bp
 from routes.history import history_bp
-from flask import send_from_directory
+from config.database import get_db_connection
 
 # โหลดค่าจากไฟล์ .env
 load_dotenv()
@@ -21,6 +20,7 @@ load_dotenv()
 app = Flask(__name__)
 
 
+# Route สำหรับดึงรูปภาพที่อัปโหลดไว้
 @app.route("/uploads/<filename>", methods=["GET"])
 def get_uploaded_image(filename):
     try:
@@ -29,7 +29,7 @@ def get_uploaded_image(filename):
         return {"error": "File not found"}, 404
 
 
-# --- 1. ตั้งค่า CORS
+# --- 1. ตั้งค่า CORS ---
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 # --- 2. ตั้งค่าระบบความปลอดภัย (JWT) ---
@@ -38,6 +38,23 @@ app.config["JWT_SECRET_KEY"] = os.environ.get(
 )
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)
 jwt = JWTManager(app)
+
+
+# ดักจับ Token ที่ถูกแบน (Logout)
+@jwt.token_in_blocklist_loader
+def check_if_token_revoked(jwt_header, jwt_payload):
+    jti = jwt_payload["jti"]
+
+    db = get_db_connection()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT TokenID FROM TokenBlacklist WHERE JTI = %s", (jti,))
+        token = cursor.fetchone()
+        return token is not None
+    finally:
+        cursor.close()
+        db.close()
+
 
 # --- 3. ตั้งค่า Bcrypt ---
 # ใช้สำหรับแฮชรหัสผ่านในระบบ

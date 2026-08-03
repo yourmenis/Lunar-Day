@@ -1,7 +1,7 @@
 import os
 import time
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import get_jwt, jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from config.database import get_db_connection
 from extensions import bcrypt
@@ -214,6 +214,37 @@ def delete_account():
     except mysql.connector.Error as err:
         db.rollback()
         return jsonify({"status": "error", "msg": f"ลบบัญชีไม่สำเร็จ: {err}"}), 500
+    finally:
+        cursor.close()
+        db.close()
+
+
+# ---------------------------------------------------------
+# 4. logout: ออกจากระบบ
+# ---------------------------------------------------------
+@profile_bp.route("/logout", methods=["POST"])
+@jwt_required()
+def logout():
+    claims = get_jwt()
+    jti = claims["jti"]
+    exp_timestamp = claims["exp"]  # เวลาหมดอายุของ token
+    user_id = get_jwt_identity()
+
+    db = get_db_connection()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO TokenBlacklist (JTI, UserID, ExpiresAt_TK) VALUES (%s, %s, FROM_UNIXTIME(%s))",
+            (jti, user_id, exp_timestamp),
+        )
+        db.commit()
+        return jsonify({"status": "success", "msg": "ออกจากระบบเรียบร้อยแล้ว"}), 200
+    except mysql.connector.Error as err:
+        db.rollback()
+        return (
+            jsonify({"status": "error", "msg": f"ไม่สามารถออกจากระบบได้: {err}"}),
+            500,
+        )
     finally:
         cursor.close()
         db.close()
