@@ -237,6 +237,8 @@ def logout():
             "INSERT INTO TokenBlacklist (JTI, UserID, ExpiresAt_TK) VALUES (%s, %s, FROM_UNIXTIME(%s))",
             (jti, user_id, exp_timestamp),
         )
+        # ล้าง token ที่หมดอายุแล้วทิ้ง (กันตาราง blacklist บวม)
+        cursor.execute("DELETE FROM TokenBlacklist WHERE ExpiresAt_TK < NOW()")
         db.commit()
         return jsonify({"status": "success", "msg": "ออกจากระบบเรียบร้อยแล้ว"}), 200
     except mysql.connector.Error as err:
