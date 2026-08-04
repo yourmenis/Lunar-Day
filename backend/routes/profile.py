@@ -78,22 +78,23 @@ def update_profile():
     file = request.files.get("profile_img")
 
     try:
-        # [A1] เช็ค Username ซ้ำ (ถ้ามีการเปลี่ยน Username)
-        cursor.execute(
-            "SELECT UserID FROM User WHERE Username = %s AND UserID != %s",
-            (username, user_id),
-        )
-        if cursor.fetchone():
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "error_code": "A1",
-                        "msg": "ชื่อผู้ใช้งานนี้มีผู้ใช้แล้ว",
-                    }
-                ),
-                400,
+        # [A1] เช็ค Username ซ้ำ (เฉพาะเมื่อมีการส่ง username มาแก้)
+        if username is not None:
+            cursor.execute(
+                "SELECT UserID FROM User WHERE Username = %s AND UserID != %s",
+                (username, user_id),
             )
+            if cursor.fetchone():
+                return (
+                    jsonify(
+                        {
+                            "status": "error",
+                            "error_code": "A1",
+                            "msg": "ชื่อผู้ใช้งานนี้มีผู้ใช้แล้ว",
+                        }
+                    ),
+                    400,
+                )
 
         # [A3] เช็คไฟล์รูปภาพ
         profile_img_name = None
@@ -104,13 +105,13 @@ def update_profile():
                         {
                             "status": "error",
                             "error_code": "A3",
-                            "msg": "รูปแบบไฟล์ไม่ถูกต้อง",
+                            "msg": "รูปแบบไฟล์ไม่รองรับ กรุณาอัปโหลดไฟล์นามสกุล .jpg, .jpeg หรือ .png",
                         }
                     ),
                     400,
                 )
 
-            # เช็คขนาดไฟล์ (A3)
+            # เช็คขนาดไฟล์ (A4)
             file.seek(0, os.SEEK_END)
             file_length = file.tell()
             if file_length > MAX_FILE_SIZE:
@@ -118,8 +119,8 @@ def update_profile():
                     jsonify(
                         {
                             "status": "error",
-                            "error_code": "A3",
-                            "msg": "ขนาดไฟล์ใหญ่เกิน 10MB",
+                            "error_code": "A4",
+                            "msg": "ไฟล์มีขนาดใหญ่เกินไป กรุณาแนบไฟล์ขนาดสูงสุดไม่เกิน 10 MB",
                         }
                     ),
                     400,
@@ -139,14 +140,31 @@ def update_profile():
             save_path = os.path.join(PROFILE_UPLOAD_FOLDER, profile_img_name)
             file.save(save_path)
 
-        # อัปเดตข้อมูลใน DB
+        # อัปเดตเฉพาะ field ที่ส่งมา (partial update — ไม่ต้องส่งครบทุกช่อง)
+        updates = []
+        params = []
+        if username is not None:
+            updates.append("Username=%s")
+            params.append(username)
+        if name is not None:
+            updates.append("Name=%s")
+            params.append(name)
+        if lastname is not None:
+            updates.append("LastName=%s")
+            params.append(lastname)
+        if birthday is not None:
+            updates.append("Birthday=%s")
+            params.append(birthday)
         if profile_img_name:
-            sql = "UPDATE User SET Username=%s, Name=%s, LastName=%s, Birthday=%s, Profile_Image=%s WHERE UserID=%s"
-            params = (username, name, lastname, birthday, profile_img_name, user_id)
-        else:
-            sql = "UPDATE User SET Username=%s, Name=%s, LastName=%s, Birthday=%s WHERE UserID=%s"
-            params = (username, name, lastname, birthday, user_id)
+            updates.append("Profile_Image=%s")
+            params.append(profile_img_name)
 
+        # ไม่มี field ไหนส่งมาเลย → ไม่มีอะไรให้อัปเดต
+        if not updates:
+            return jsonify({"status": "error", "msg": "ไม่มีข้อมูลที่จะอัปเดต"}), 400
+
+        params.append(user_id)
+        sql = f"UPDATE User SET {', '.join(updates)} WHERE UserID=%s"
         cursor.execute(sql, params)
         db.commit()
 
