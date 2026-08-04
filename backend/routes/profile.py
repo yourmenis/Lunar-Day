@@ -213,8 +213,9 @@ def delete_account():
         if not bcrypt.check_password_hash(user["Password"], password):
             return jsonify({"status": "error", "msg": "รหัสผ่านไม่ถูกต้อง"}), 401
 
-        # ลบข้อมูล: ลบผลวิเคราะห์ของผู้ใช้ก่อน (กัน FK ของ Risk_Assessment.UserID) แล้วค่อยลบ User
+        # ลบข้อมูลที่เกี่ยวข้องกับผู้ใช้ก่อน (กัน FK) แล้วค่อยลบ User
         cursor.execute("DELETE FROM Risk_Assessment WHERE UserID = %s", (user_id,))
+        cursor.execute("DELETE FROM TokenBlacklist WHERE UserID = %s", (user_id,))
         cursor.execute("DELETE FROM User WHERE UserID = %s", (user_id,))
         db.commit()
 
