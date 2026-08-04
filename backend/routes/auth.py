@@ -266,7 +266,7 @@ def verify_otp():
         user = cursor.fetchone()
 
         if not user:
-            return jsonify({"msg": "รหัส OTP ไม่ถูกต้อง"}), 400
+            return jsonify({"msg": "รหัส OTP ไม่ถูกต้อง โปรดตรวจสอบอีกครั้ง"}), 400
 
         # เช็ควันหมดอายุ
         if user["OTPExpireTime"] is None or datetime.now() > user["OTPExpireTime"]:
@@ -299,11 +299,11 @@ def reset_password():
 
     # 2️⃣ เช็ครหัสผ่านตรงกัน
     if new_password != confirm_password:
-        return jsonify({"msg": "รหัสผ่านใหม่ไม่ตรงกัน"}), 400
+        return jsonify({"msg": "รหัสผ่านไม่ตรงกัน"}), 400
 
     # 3️⃣ เช็คความยาว
     if len(new_password) < 8:
-        return jsonify({"msg": "รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 8 ตัวอักษร"}), 400
+        return jsonify({"msg": "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร"}), 400
 
     db = get_db_connection()
     cursor = db.cursor(dictionary=True, buffered=True)
@@ -321,7 +321,7 @@ def reset_password():
         user = cursor.fetchone()
 
         if not user:
-            return jsonify({"msg": "รหัส OTP ไม่ถูกต้อง"}), 400
+            return jsonify({"msg": "รหัส OTP ไม่ถูกต้อง โปรดตรวจสอบอีกครั้ง"}), 400
 
         # 5️⃣ เช็ควันหมดอายุซ้ำ
         if user["OTPExpireTime"] is None or datetime.now() > user["OTPExpireTime"]:
