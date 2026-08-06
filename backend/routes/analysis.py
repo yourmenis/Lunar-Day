@@ -1,3 +1,4 @@
+from email import errors
 import numpy as np
 import torch
 import cv2
@@ -48,7 +49,7 @@ AI_RESULT_TH = {
     "clot": "ลิ่มเลือด",
     "tissue": "เนื้อเยื่อ",
     "mixed": "พบลิ่มเลือดและเนื้อเยื่อ",
-    "none": "ไม่พบลิ่มเลือดและเนื้อเยื่อ",
+    "negative space": "ไม่พบลิ่มเลือดและเนื้อเยื่อ",
 }
 
 model = None
@@ -60,6 +61,29 @@ DB_ADVICE = {
     "เสี่ยงสูง": "ควรปรึกษาสูตินรีแพทย์เพื่อการวินิจฉัยเพิ่มเติมเนื่องจากลักษณะเลือดออกหรืออาการปวดที่พบ อาจสัมพันธ์กับความผิดปกติของมดลูกหรือภาวะเลือดออกมากที่ควรได้รับการตรวจหาสาเหตุ",
     "เสี่ยงปานกลาง": "แนะนำให้ติดตามอาการและจดบันทึกรอบเดือนต่อเนื่องควรสังเกตความเปลี่ยนแปลงใน 1-2 รอบเดือนถัดไป หากอาการยังคงอยู่ ไม่สม่ำเสมอ หรือรบกวนการใช้ชีวิตประจำวัน แนะนำให้ปรึกษาแพทย์เมื่อสะดวก",
     "ปกติ": "ผลการวิเคราะห์เบื้องต้นอยู่ในเกณฑ์ทั่วไปยังไม่พบข้อบ่งชี้ความเสี่ยงที่น่ากังวลในขณะนี้แนะนำให้ดูแลสุขภาพ จดบันทึกประจำเดือนสม่ำเสมอ และเข้ารับการตรวจคัดกรองสุขภาพประจำปีตามปกติ",
+}
+
+
+ALLOWED_VALUES = {
+    "q1": {"low", "normal", "high"},
+    "q2": {"short", "mid", "long"},
+    "q3": {"short", "mid", "long"},
+    "q4": {"spotting", "postcoital", "none"},
+    "q5": {"none", "mild", "severe"},
+    "q6": {"none", "mild", "severe"},
+    "q7": {
+        "palpitation",
+        "nausea",
+        "fever",
+        "breast",
+        "urine",
+        "bowel",
+        "discharge",
+        "none",
+    },
+    "q8": {"no_sex", "protected", "unprotected", "both", "failure"},
+    "q9": {"pregnant", "not_pregnant", "unsure"},
+    "q10": {"small", "large"},
 }
 
 
@@ -160,7 +184,42 @@ def validate_ai_findings(mask, conf, img, std_limit):
     elif found_tissue:
         return "tissue"
     else:
-        return "none"
+        return "negative space"
+
+
+def validate_answers(answers, ai_res, q8):
+    errors = []
+
+    for q in ["q1", "q2", "q3", "q4", "q5", "q6", "q8"]:
+        val = answers.get(q)
+        if not val:
+            errors.append(f"{q} กรุณากรอกข้อมูลอาการให้ครบถ้วน")
+        elif val not in ALLOWED_VALUES[q]:
+            errors.append(f"{q} ค่าไม่ถูกต้อง")
+
+    if answers.get("q7"):
+        for v in answers.get("q7"):
+            if v not in ALLOWED_VALUES["q7"]:
+                errors.append(f"q7 ค่า '{v}' ไม่ถูกต้อง")
+
+    # ตรวจ Q9 เมื่อมีเพศสัมพันธ์
+    if q8 != "no_sex":
+        if not answers.get("q9"):
+            errors.append("กรุณากรอกข้อมูลอาการให้ครบถ้วน")
+
+    # ตรวจ Q10 เมื่อ ai_result = clot
+    if ai_res == "clot":
+        if not answers.get("q10"):
+            errors.append("กรุณากรอกข้อมูลอาการให้ครบถ้วน")
+    if ai_res != "clot":
+        answers["q10"] = None
+
+    # ตรวจ Q7 allowed values
+    for v in answers.get("q7", []):
+        if v not in ALLOWED_VALUES["q7"]:
+            errors.append(f"q7 ค่า '{v}' ไม่ถูกต้อง")
+
+    return errors
 
 
 # ==============================
@@ -444,6 +503,7 @@ def analyze_image():
             ),
             400,
         )
+
     # ===== SAVE IMAGE =====
     timestamp = int(time.time())
     filename = f"user_{current_user_id}_{timestamp}.jpg"
@@ -481,7 +541,6 @@ def analyze_image():
                 400,
             )
 
-        # ===== AI =====
         # ===== AI =====
         std_limit = calculate_dynamic_std(img_resized)
         mask, conf, avg_conf = run_inference(img_resized)
@@ -549,7 +608,6 @@ def analyze_image():
 @jwt_required()
 def analyze_risk():
     current_user_id = get_jwt_identity()
-    start_time = time.time()
     data = request.form
 
     ai_res = _clean(data.get("ai_result"))
@@ -565,7 +623,6 @@ def analyze_risk():
             400,
         )
 
-    # ข้อมูลจาก step 1 (/analysis/image) ที่หน้าบ้านส่งต่อมา (ใช้บันทึกลง DB)
     image_path = data.get("image_path")
     confidence_raw = data.get("confidence")
     try:
@@ -573,8 +630,6 @@ def analyze_risk():
     except (TypeError, ValueError):
         confidence = None
 
-    # รวบรวมคำตอบ Q1-Q10 (q7 เลือกได้หลายข้อ → getlist)
-    # _clean = ตัดช่องว่างหน้า-หลัง กันค่าเพี้ยนจากการพิมพ์/copy
     answers = {
         "q1": _clean(data.get("q1")),
         "q2": _clean(data.get("q2")),
@@ -588,38 +643,35 @@ def analyze_risk():
         "q10": _clean(data.get("q10")),
     }
 
-    # ผลตรวจภาพ (แสดง/บันทึกทั้งกรณีเจอและไม่เจอโรค)
-    detect1 = AI_RESULT_TH.get(ai_res, ai_res)
-    detect2 = build_detect2(ai_res, answers["q10"])
-
-    # คัดกรองด้วยระบบให้คะแนนอาการ
-    results, risk_level, recommendation = screen_symptoms(ai_res, answers)
-
-    # ไม่มีโรคใดถึงเกณฑ์ → ไม่บันทึก DB ตอบเฉพาะข้อความ
-    if not results:
+    errors = validate_answers(answers, ai_res, answers["q8"])
+    if errors:
         return (
             jsonify(
                 {
-                    "status": "success",
-                    "results": [],
-                    "Detect1": detect1,
-                    "Detect2": detect2,
-                    "Confidence": confidence,
-                    "Risk_Level": None,
-                    "Potential_Disease": "ไม่มีโรคที่เกี่ยวข้องในระบบ",
-                    "Recommendation": None,
-                    "msg": "ไม่มีโรคที่เกี่ยวข้องในระบบ",
-                    "processing_time": round(time.time() - start_time, 2),
+                    "status": "error",
+                    "error_code": "A5",
+                    "msg": "กรุณากรอกข้อมูลให้ครบถ้วน",
+                    "errors": errors,
                 }
             ),
-            200,
+            400,
         )
 
-    # รวมชื่อโรคที่พบเป็น string เดียว (จำกัดความยาวตามคอลัมน์ varchar 255)
-    potential_disease = ", ".join(r["disease"] for r in results)[:255]
+    detect1 = AI_RESULT_TH.get(ai_res, ai_res)
+    detect2 = build_detect2(ai_res, answers["q10"])
+
+    results, risk_level, recommendation = screen_symptoms(ai_res, answers)
+
+    # ปรับปรุง: ถ้าไม่พบความเสี่ยง ให้เตรียมข้อความแบบ "ปกติ" เพื่อบันทึกลง DB ด้วย
+    if not results:
+        potential_disease = "ไม่มีโรคที่เกี่ยวข้องในระบบ"
+        risk_level = "ปกติ"
+        recommendation = DB_ADVICE.get("ปกติ")
+    else:
+        potential_disease = ", ".join(r["disease"] for r in results)[:255]
+
     q7_joined = ",".join(answers["q7"])
 
-    # บันทึกผลลง Risk_Assessment (เฉพาะเคสที่เจอโรค)
     db = None
     cursor = None
     assessment_id = None
@@ -675,15 +727,56 @@ def analyze_risk():
             {
                 "status": "success",
                 "assessment_id": assessment_id,
-                "Detect1": detect1,
-                "Detect2": detect2,
-                "Confidence": confidence,
-                "Risk_Level": risk_level,
-                "Potential_Disease": potential_disease,
-                "Recommendation": recommendation,
-                "results": results,
-                "processing_time": round(time.time() - start_time, 2),
+                "msg": "บันทึกข้อมูลเรียบร้อยแล้ว",
             }
         ),
-        200,
+        201,
     )
+
+
+@analysis_bp.route("/result/<int:assessment_id>", methods=["GET"])
+@jwt_required()
+def get_assessment_result(assessment_id):
+    current_user_id = get_jwt_identity()
+    db = None
+    cursor = None
+
+    try:
+        db = get_db_connection()
+        cursor = db.cursor(dictionary=True)
+
+        cursor.execute(
+            """
+            SELECT AssessmentID, Detect1, Detect2, Confidence, 
+                   Potential_Disease, Risk_Level, Recommendation, Image_Path
+            FROM Risk_Assessment
+            WHERE AssessmentID = %s AND UserID = %s
+            """,
+            (assessment_id, current_user_id),
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "msg": "ไม่พบข้อมูลการประเมินนี้ หรือคุณไม่มีสิทธิ์เข้าถึง",
+                    }
+                ),
+                404,
+            )
+
+        return jsonify({"status": "success", "data": row}), 200
+
+    except mysql.connector.Error as err:
+        logger.error(f"ดึงข้อมูลประวัติล้มเหลว: {err}")
+        return (
+            jsonify({"status": "error", "msg": "ระบบไม่สามารถดึงข้อมูลประวัติได้"}),
+            500,
+        )
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if db is not None:
+            db.close()
