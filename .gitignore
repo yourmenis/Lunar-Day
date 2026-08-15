@@ -31,3 +31,10 @@ backend/static/uploads/
 backend/*.pth"node_modules/" 
 "node_modules/" 
 node_modules/
+
+
+backend/hurl/
+bacjkend/hurl/*.hurl
+
+backend/report/
+ิbackend/test/
