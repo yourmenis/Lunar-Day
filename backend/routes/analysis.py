@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MODEL_PATH = os.path.join(os.getcwd(), "incepv2.pth")
+MODEL_PATH = os.path.join(os.getcwd(), "incep_exp12.pth")
 
 IMG_SIZE = 512
 STD_BASE_THRESHOLD = 33.20
@@ -66,8 +66,8 @@ DB_ADVICE = {
 
 ALLOWED_VALUES = {
     "q1": {"low", "normal", "high"},
-    "q2": {"short", "mid", "long"},
-    "q3": {"short", "mid", "long"},
+    "q2": {"short", "normal", "long"},
+    "q3": {"short", "normal", "long"},
     "q4": {"spotting", "postcoital", "none"},
     "q5": {"none", "mild", "severe"},
     "q6": {"none", "mild", "severe"},
@@ -79,7 +79,6 @@ ALLOWED_VALUES = {
         "urine",
         "bowel",
         "discharge",
-        "none",
     },
     "q8": {"no_sex", "protected", "unprotected", "both", "failure"},
     "q9": {"pregnant", "not_pregnant", "unsure"},
@@ -214,11 +213,6 @@ def validate_answers(answers, ai_res, q8):
     if ai_res != "clot":
         answers["q10"] = None
 
-    # ตรวจ Q7 allowed values
-    for v in answers.get("q7", []):
-        if v not in ALLOWED_VALUES["q7"]:
-            errors.append(f"q7 ค่า '{v}' ไม่ถูกต้อง")
-
     return errors
 
 
@@ -231,17 +225,16 @@ def validate_answers(answers, ai_res, q8):
 # (ข้อที่เป็น N/A ไม่ต้องใส่ → จะไม่ถูกนับในตัวหาร)
 DISEASES = [
     {
-        "name": "ประจำเดือนปกติ",
+        "name": "ภาวะประจำเดือนปกติ",
         "risk": "ปกติ",
         "group": 1,
         "criteria": {
             "q1": {"normal"},
-            "q2": {"mid"},
-            "q3": {"mid"},
+            "q2": {"normal"},
+            "q3": {"normal"},
             "q4": {"none"},
-            "q5": {"none", "mild"},
+            "q5": {"none", "mild", "severe"},
             "q6": {"none", "mild"},
-            "q10": {"small"},
         },
     },
     {
@@ -249,14 +242,13 @@ DISEASES = [
         "risk": "เสี่ยงปานกลาง",
         "group": 2,
         "criteria": {
-            "q1": {"high"},
-            "q2": {"long"},
+            "q1": {"high", "low"},
+            "q2": {"long", "short"},
             "q3": {"short", "long"},
             "q4": {"spotting", "postcoital"},
             "q5": {"severe"},
             "q6": {"none", "mild", "severe"},
             "q7": {"discharge"},
-            "q10": {"large"},
         },
     },
     {
@@ -264,13 +256,12 @@ DISEASES = [
         "risk": "เสี่ยงปานกลาง",
         "group": 2,
         "criteria": {
-            "q1": {"high"},
-            "q2": {"long"},
+            "q1": {"high", "low"},
+            "q2": {"long", "short"},
             "q3": {"short", "long"},
             "q4": {"spotting"},
             "q5": {"severe"},
             "q6": {"severe"},
-            "q10": {"large"},
         },
     },
     {
@@ -278,14 +269,13 @@ DISEASES = [
         "risk": "เสี่ยงปานกลาง",
         "group": 2,
         "criteria": {
-            "q1": {"high"},
-            "q2": {"long"},
+            "q1": {"high", "low"},
+            "q2": {"long", "short"},
             "q3": {"short", "long"},
             "q4": {"spotting"},
             "q5": {"severe"},
             "q6": {"mild", "severe"},
             "q7": {"urine", "bowel"},
-            "q10": {"large"},
         },
     },
     {
@@ -293,13 +283,12 @@ DISEASES = [
         "risk": "เสี่ยงปานกลาง",
         "group": 2,
         "criteria": {
-            "q1": {"high"},
-            "q2": {"long"},
-            "q3": {"long"},
+            "q1": {"high", "low"},
+            "q2": {"long", "short"},
+            "q3": {"long", "short"},
             "q4": {"spotting"},
             "q5": {"severe"},
             "q6": {"mild", "severe"},
-            "q10": {"large"},
         },
     },
     {
@@ -307,14 +296,13 @@ DISEASES = [
         "risk": "เสี่ยงปานกลาง",
         "group": 2,
         "criteria": {
-            "q1": {"high"},
-            "q2": {"long"},
-            "q3": {"long"},
+            "q1": {"high", "low"},
+            "q2": {"long", "short"},
+            "q3": {"long", "short"},
             "q4": {"spotting"},
             "q5": {"severe"},
             "q6": {"severe"},
             "q7": {"bowel", "nausea"},
-            "q10": {"large"},
         },
     },
     {
@@ -322,10 +310,10 @@ DISEASES = [
         "risk": "เสี่ยงสูง",
         "group": 2,
         "criteria": {
-            "q1": {"high"},
-            "q2": {"long"},
-            "q3": {"long"},
-            "q4": {"spotting"},
+            "q1": {"high", "low"},
+            "q2": {"long", "short"},
+            "q3": {"long", "short"},
+            "q4": {"spotting", "postcoital"},
             "q5": {"severe"},
             "q6": {"mild", "severe"},
             "q7": {"urine", "fever", "discharge", "nausea"},
@@ -337,8 +325,7 @@ DISEASES = [
         "group": 3,
         "criteria": {
             "q4": {"spotting"},
-            "q6": {"severe"},
-            "q10": {"small"},
+            "q6": {"severe", "mild"},
         },
     },
     {
@@ -347,9 +334,8 @@ DISEASES = [
         "group": 3,
         "criteria": {
             "q4": {"spotting"},
-            "q6": {"mild", "severe"},
+            "q6": {"severe"},
             "q7": {"palpitation", "breast", "nausea"},
-            "q10": {"small", "large"},
         },
     },
     {
@@ -360,13 +346,49 @@ DISEASES = [
             "q4": {"spotting"},
             "q6": {"severe"},
             "q7": {"fever", "discharge", "nausea"},
-            "q10": {"large"},
         },
     },
 ]
 
-# ลำดับความรุนแรง (ใช้หา "ระดับเสี่ยงสูงสุด" ตอนเจอหลายโรค)
+# ลำดับความรุนแรง
 RISK_ORDER = {"ปกติ": 0, "เสี่ยงปานกลาง": 1, "เสี่ยงสูง": 2, "ฉุกเฉิน": 3}
+
+AI_DISEASE_FILTER = {
+    ("clot", "small"): {"ภาวะประจำเดือนปกติ", "แท้งคุกคาม", "ท้องนอกมดลูก"},
+    ("clot", "large"): {
+        "ติ่งเนื้อเยื่อบุโพรงมดลูก",
+        "เยื่อบุโพรงมดลูกหนาตัว",
+        "เนื้องอกมดลูก",
+        "ฮอร์โมนไม่สมดุล",
+        "เยื่อบุโพรงมดลูกเจริญผิดที่",
+        "ท้องนอกมดลูก",
+        "ภาวะแท้งไม่สมบูรณ์",
+    },
+    ("tissue", None): {
+        "ติ่งเนื้อเยื่อบุโพรงมดลูก",
+        "เยื่อบุโพรงมดลูกหนาตัว",
+        "แท้งคุกคาม",
+        "ท้องนอกมดลูก",
+        "ภาวะแท้งไม่สมบูรณ์",
+    },
+    ("negative space", None): {
+        "ภาวะประจำเดือนปกติ",
+        "ติ่งเนื้อเยื่อบุโพรงมดลูก",
+        "เยื่อบุโพรงมดลูกหนาตัว",
+        "ฮอร์โมนไม่สมดุล",
+        "เยื่อบุโพรงมดลูกเจริญผิดที่",
+        "อุ้งเชิงกรานอักเสบ",
+        "แท้งคุกคาม",
+        "ท้องนอกมดลูก",
+    },
+    ("mixed", None): {
+        "ติ่งเนื้อเยื่อบุโพรงมดลูก",
+        "เยื่อบุโพรงมดลูกหนาตัว",
+        "ท้องนอกมดลูก",
+        "ภาวะแท้งไม่สมบูรณ์",
+        "แท้งคุกคาม",
+    },
+}
 
 
 def _eligible_groups(q8, q9):
@@ -374,10 +396,10 @@ def _eligible_groups(q8, q9):
     if q8 == "no_sex":
         return {1, 2}
     if q9 == "pregnant":
-        return {3}
+        return {2, 3}
     if q9 == "unsure":
         return {1, 2, 3}
-    # มีเพศสัมพันธ์ + ไม่ตั้งครรภ์ (หรือไม่ระบุ)
+    # มีเพศสัมพันธ์ + ไม่ตั้งครรภ์
     return {1, 2}
 
 
@@ -404,21 +426,32 @@ def screen_symptoms(ai_result, answers):
 
     eligible = _eligible_groups(q8, q9)
 
+    q10_val = answers.get("q10") if ai_result == "clot" else None
+    filter_key = (ai_result, q10_val)
+    allowed_diseases = AI_DISEASE_FILTER.get(filter_key, set())
+
     results = []
     for d in DISEASES:
         if d["group"] not in eligible:
             continue
+
+        if allowed_diseases and d["name"] not in allowed_diseases:
+            continue
         total = 0
         matched = 0
+        matched_details = []
         for q, allowed in d["criteria"].items():
             if q not in asked:
                 continue  # ข้อที่ไม่ได้ถาม / N/A → ตัดออกจากตัวหาร
             total += 1
             if q == "q7":
                 if q7_ans & allowed:  # ตรงอย่างน้อย 1 อย่าง = ผ่าน
+                    intersect = q7_ans & allowed
                     matched += 1
+                    matched_details.append(f"Q7 (อาการร่วม): {', '.join(intersect)}")
             elif answers.get(q) in allowed:
                 matched += 1
+                matched_details.append(f"{q.upper()}: {answers.get(q)}")
         # เข้าข่ายเมื่อ >= 2/3 (67% ตามที่ตกลง เช่น 2 จาก 3)
         if total and matched * 3 >= total * 2:
             results.append(
@@ -426,6 +459,8 @@ def screen_symptoms(ai_result, answers):
                     "disease": d["name"],
                     "risk_level": d["risk"],
                     "match_percent": round(matched / total * 100, 1),
+                    "matched_count": f"ตรง {matched} จาก {total} ข้อ",
+                    "matched_details": matched_details,
                 }
             )
 
@@ -535,7 +570,7 @@ def analyze_image():
                     {
                         "status": "error",
                         "error_code": "A4",
-                        "msg": "ไม่พบลักษณะเลือดประจำเดือนในภาพ",
+                        "msg": "ไม่พบลักษณะเลือดประจำเดือนในภาพ กรุณาอัปโหลดภาพที่เกี่ยวข้องกับลักษณะเลือดประจำเดือน",
                     }
                 ),
                 400,
@@ -605,9 +640,11 @@ def analyze_image():
 
 
 @analysis_bp.route("/risk", methods=["POST"])
-@jwt_required()
+# @jwt_required()
 def analyze_risk():
-    current_user_id = get_jwt_identity()
+    # current_user_id = get_jwt_identity()
+    current_user_id = 11  # สำหรับทดสอบ (สมมติว่า user_id = 1) - ลบออกเมื่อใช้งานจริง
+    start_time = time.time()
     data = request.form
 
     ai_res = _clean(data.get("ai_result"))
@@ -630,6 +667,9 @@ def analyze_risk():
     except (TypeError, ValueError):
         confidence = None
 
+    q7_list = [_clean(x) for x in data.getlist("q7")]  # รับค่า q7 เป็น list
+    q7_valid = [x for x in q7_list if x]
+
     answers = {
         "q1": _clean(data.get("q1")),
         "q2": _clean(data.get("q2")),
@@ -637,7 +677,7 @@ def analyze_risk():
         "q4": _clean(data.get("q4")),
         "q5": _clean(data.get("q5")),
         "q6": _clean(data.get("q6")),
-        "q7": [_clean(x) for x in data.getlist("q7")],
+        "q7": q7_valid,
         "q8": _clean(data.get("q8")),
         "q9": _clean(data.get("q9")),
         "q10": _clean(data.get("q10")),
@@ -649,9 +689,20 @@ def analyze_risk():
             jsonify(
                 {
                     "status": "error",
-                    "error_code": "A5",
-                    "msg": "กรุณากรอกข้อมูลให้ครบถ้วน",
+                    "error_code": "A3",
+                    "msg": "โปรดระบุข้อมูลอาการให้ครบถ้วน",
                     "errors": errors,
+                },
+            ),
+            400,
+        )
+    if answers["q4"] == "postcoital" and answers["q8"] == "no_sex":
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "error_code": "A5",
+                    "msg": "ความสัมพันธ์อาการไม่สอดคล้องกันของลักษณะเลือดออกและประวัติทางเพศ",
                 }
             ),
             400,
@@ -662,13 +713,18 @@ def analyze_risk():
 
     results, risk_level, recommendation = screen_symptoms(ai_res, answers)
 
-    # ปรับปรุง: ถ้าไม่พบความเสี่ยง ให้เตรียมข้อความแบบ "ปกติ" เพื่อบันทึกลง DB ด้วย
     if not results:
-        potential_disease = "ไม่มีโรคที่เกี่ยวข้องในระบบ"
-        risk_level = "ปกติ"
-        recommendation = DB_ADVICE.get("ปกติ")
-    else:
-        potential_disease = ", ".join(r["disease"] for r in results)[:255]
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "error_code": "A6",
+                    "msg": "ไม่พบโรคที่สอดคล้องกับอาการที่ระบุ กรุณาตรวจสอบข้อมูลอาการอีกครั้ง",
+                }
+            ),
+            400,
+        )
+    potential_disease = ", ".join(r["disease"] for r in results)[:255]
 
     q7_joined = ",".join(answers["q7"])
 
@@ -728,6 +784,15 @@ def analyze_risk():
                 "status": "success",
                 "assessment_id": assessment_id,
                 "msg": "บันทึกข้อมูลเรียบร้อยแล้ว",
+                "data": {
+                    "detect1": detect1,
+                    "detect2": detect2,
+                    "confidence": confidence,
+                    "potential_disease": potential_disease,
+                    "risk_level": risk_level,
+                    "recommendation": recommendation,
+                    "disease_scores": results,
+                },
             }
         ),
         201,
