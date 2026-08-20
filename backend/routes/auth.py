@@ -29,6 +29,11 @@ def register():
     lastname = data.get("lastName", "").strip()
     birthday = data.get("birthDate", "").strip()
     email = data.get("email", "").strip()
+    consent = data.get("isConsent")
+    
+
+    if not consent:
+        return jsonify({"msg": "กรุณากดยอมรับเงื่อนไขและนโยบายความเป็นส่วนตัวก่อนดำเนินการต่อ"}), 400
 
     # --- ด่านที่ 1: เช็คข้อมูลว่าง (A2) ---
     if not all([username, password, confirm_pw, name, lastname, birthday, email]):
@@ -40,16 +45,15 @@ def register():
 
     # --- ด่านที่ 3: เช็ครหัสผ่านไม่ตรงกัน (A3) ---
     if password != confirm_pw:
-        return jsonify({"msg": "รหัสผ่านไม่ตรงกัน"}), 400
+        return jsonify({"msg": "โปรดระบุรหัสผ่านทั้งสองช่องให้ตรงกัน"}), 400
 
     # --- ด่านที่ 4: format email ---
     email_pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
     if not re.match(email_pattern, email):
-
         return jsonify({"msg": "รูปแบบอีเมลไม่ถูกต้อง"}), 400
+        
     # --- ด่านที่ 4: เช็คอายุต้อง >= 13 ปี (A4) ---
     try:
-
         birthday = datetime.strptime(birthday, "%Y-%m-%d").date()
         if birthday.year > 2400:
             birthday = birthday.replace(year=birthday.year - 543)
@@ -63,7 +67,7 @@ def register():
         )
 
         if age < 13:
-            return jsonify({"msg": "ขออภัย คุณต้องมีอายุตั้งแต่ 13 ปีขึ้นไป"}), 400
+            return jsonify({"msg": "ผู้สมัครต้องมีอายุตั้งแต่ 13 ปีขึ้นไปจึงจะใช้งานได้"}), 400
 
     except ValueError:
         return jsonify({"msg": "รูปแบบวันที่ไม่ถูกต้อง"}), 400
@@ -77,31 +81,32 @@ def register():
         check_sql = "SELECT Username FROM User WHERE Username = %s"
         cursor.execute(check_sql, (username,))
         if cursor.fetchone():
-            return jsonify({"msg": "ชื่อผู้ใช้ซ้ำ: Username นี้ถูกใช้งานแล้ว"}), 400
+            return jsonify({"msg": "ชื่อผู้ใช้นี้ถูกใช้งานแล้ว"}), 400
 
         # check email ซ้ำ
         check_sql = "SELECT Email FROM User WHERE Email = %s"
         cursor.execute(check_sql, (email,))
         if cursor.fetchone():
-            return jsonify({"msg": "อีเมลนี้ถูกใช้งานแล้ว"}), 400
+            return jsonify({"msg": "อีเมลนี้ถูกใช้แล้ว กรุณาระบุอีเมลใหม่"}), 400
 
         # ถ้าผ่านทุกด่านแล้ว ค่อยแฮชรหัสผ่าน
         hashed_pw = bcrypt.generate_password_hash(password).decode("utf-8")
 
+        consent_value = 1 if consent else 0
+
         # บันทึกข้อมูล
-        sql = "INSERT INTO User (Username, Password, Name, LastName, Birthday,Email) VALUES (%s, %s, %s, %s, %s, %s)"
-        values = (username, hashed_pw, name, lastname, birthday, email)
+        sql = "INSERT INTO User (Username, Password, Name, LastName, Birthday,Email,Is_Consent) VALUES (%s, %s, %s, %s, %s, %s,%s)"
+        values = (username, hashed_pw, name, lastname, birthday, email, consent_value)
 
         cursor.execute(sql, values)
         db.commit()  # ยืนยันการบันทึกลง Hard Drive
-        return jsonify({"msg": "สมัครสมาชิกสำเร็จ!"}), 201
+        return jsonify({"msg": "สมัครสมาชิกสำเร็จ"}), 201
 
     except mysql.connector.Error as err:
         return jsonify({"msg": f"เกิดข้อผิดพลาดทางเทคนิค: {err}"}), 500
     finally:
         cursor.close()
         db.close()
-
 
 # ==========================================
 # ✅ ส่วนที่ 2: login
