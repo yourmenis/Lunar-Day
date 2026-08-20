@@ -36,5 +36,7 @@ node_modules/
 backend/hurl/
 bacjkend/hurl/*.hurl
 
+# --- Test, Reports & Hurl ---
+backend/hurl/
 backend/report/
-ิbackend/test/
+backend/test/
