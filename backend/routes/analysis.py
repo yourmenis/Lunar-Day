@@ -640,10 +640,10 @@ def analyze_image():
 
 
 @analysis_bp.route("/risk", methods=["POST"])
-# @jwt_required()
+@jwt_required()
 def analyze_risk():
-    # current_user_id = get_jwt_identity()
-    current_user_id = 11  # สำหรับทดสอบ (สมมติว่า user_id = 1) - ลบออกเมื่อใช้งานจริง
+    current_user_id = get_jwt_identity()
+
     start_time = time.time()
     data = request.form
 

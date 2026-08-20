@@ -16,23 +16,41 @@ disease_map = {
     "D10": "ภาวะแท้งไม่สมบูรณ์",
 }
 
-
 with open(csv_file, mode="r", encoding="utf-8") as f_in, open(
     hurl_file, mode="w", encoding="utf-8"
 ) as f_out:
     reader = csv.DictReader(f_in)
 
+    # 1. เพิ่มบล็อก Login ไว้บนสุดของไฟล์ Hurl
+    login_block = """# ==========================================
+# 0. LOGIN เพื่อดึง Token มาใช้กับทุก Test Cases ด้านล่าง
+# ==========================================
+POST http://localhost:5000/auth/login
+Content-Type: application/json
+{
+  "username": "lunardaytest1",
+  "password": "test12345"
+}
+HTTP 200
+[Captures]
+my_token: jsonpath "$.access_token"
+
+"""
+    f_out.write(login_block)
+
+    # 2. วนลูปสร้าง Test Case ทั้ง 300 เคส
     for row in reader:
-        # 1. สร้างส่วน Header และ ai_result (ที่บังคับส่งเสมอ)
+        if not row.get('test_id') or row['test_id'].strip() == "":
+            continue
+
         hurl_content = f"""# ------------------------------------------
 # {row['test_id']}
 # ------------------------------------------
 POST http://localhost:5000/analysis/risk
+Authorization: Bearer {{{{my_token}}}}
 [FormParams]
 ai_result: {row['ai_result']}
 """
-
-        # 2. เช็คตัวแปร q1 ถึง q10 ถ้ามีค่า (ไม่ว่าง และไม่ใช่ -) ค่อยส่งไป
         params = ["q10", "q8", "q9", "q1", "q2", "q3", "q4", "q5", "q6", "q7"]
         for p in params:
             val = row[p].strip()
@@ -41,7 +59,6 @@ ai_result: {row['ai_result']}
 
         hurl_content += "\n"
 
-        # 3. ส่วนของการเช็คผลลัพธ์ (Asserts)
         if row["expected_http"] == "201":
             hurl_content += f"""HTTP 201
 [Asserts]
@@ -52,7 +69,6 @@ jsonpath "$.data.risk_level" == "{row['expected_risk_level']}"
             for d in diseases:
                 code = d.strip()
                 thai_name = disease_map.get(code, code)
-
                 hurl_content += (
                     f'jsonpath "$.data.potential_disease" contains "{thai_name}"\n'
                 )
@@ -60,9 +76,7 @@ jsonpath "$.data.risk_level" == "{row['expected_risk_level']}"
             hurl_content += "\n"
 
         elif row["expected_http"] == "400":
-            # อ่านค่า A5 หรือ A6 จากคอลัมน์สุดท้าย
             err_code = row["expected_disease"].strip()
-
             if err_code == "A5":
                 hurl_content += """HTTP 400
 [Asserts]
