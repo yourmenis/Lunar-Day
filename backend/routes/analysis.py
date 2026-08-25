@@ -392,7 +392,6 @@ AI_DISEASE_FILTER = {
 
 
 def _eligible_groups(q8, q9):
-    """ด่านกรองกลุ่มโรคจากคำถามเรื่องเพศสัมพันธ์ (Q8) / การตั้งครรภ์ (Q9)"""
     if q8 == "no_sex":
         return {1, 2}
     if q9 == "pregnant":
@@ -404,20 +403,12 @@ def _eligible_groups(q8, q9):
 
 
 def screen_symptoms(ai_result, answers):
-    """
-    คัดกรองโรคจากคำตอบ Q1-Q10 แบบให้คะแนน %
-    answers: dict เช่น {"q1":"normal","q4":"spotting","q7":["nausea"],"q8":"no_sex",...}
-             q7 = list (เลือกได้หลายข้อ) · ข้ออื่น = string
-    คืน (results, risk_level, recommendation)
-      results = [{"disease","risk_level","match_percent"}, ...] เรียง % มาก→น้อย
-    """
     q8 = answers.get("q8")
     q9 = answers.get("q9")
     q7_ans = set(answers.get("q7") or [])
 
-    # ข้อที่ถูกถามจริง (Q7 นับเมื่อผู้ใช้เลือกอาการ ≥1 · Q9 เมื่อมีเพศสัมพันธ์ · Q10 เฉพาะเคส clot)
     asked = {"q1", "q2", "q3", "q4", "q5", "q6"}
-    if q7_ans:  # Q7 ไม่บังคับ → เข้าตัวหารเฉพาะเมื่อเลือกอาการอย่างน้อย 1
+    if q7_ans:  
         asked.add("q7")
     if q8 != "no_sex":
         asked.add("q9")
@@ -442,7 +433,7 @@ def screen_symptoms(ai_result, answers):
         matched_details = []
         for q, allowed in d["criteria"].items():
             if q not in asked:
-                continue  # ข้อที่ไม่ได้ถาม / N/A → ตัดออกจากตัวหาร
+                continue  
             total += 1
             if q == "q7":
                 if q7_ans & allowed:  # ตรงอย่างน้อย 1 อย่าง = ผ่าน
@@ -476,11 +467,6 @@ def screen_symptoms(ai_result, answers):
 
 
 def build_detect2(ai_res, q10):
-    """
-    Detect2 = ผล AI + ขนาดลิ่มเลือด (คงความหมายเดิม)
-    เคสลิ่มเลือด → ต่อขนาดจาก Q10 เช่น "ลิ่มเลือดขนาดใหญ่" / "ลิ่มเลือดขนาดเล็ก"
-    เคสอื่น (เนื้อเยื่อ/ทั้งคู่/ไม่พบ) → เท่ากับ Detect1
-    """
     if ai_res == "clot":
         size = {"small": "ขนาดเล็ก", "large": "ขนาดใหญ่"}.get(q10, "")
         return f"ลิ่มเลือด{size}"
@@ -488,9 +474,9 @@ def build_detect2(ai_res, q10):
 
 
 def _clean(v):
-    """ตัดช่องว่างหน้า-หลังของค่าที่รับมา (กันค่าเพี้ยนจากการ copy/พิมพ์ เช่น 'high ')
-    ถ้าไม่ใช่ string (None) ก็คืนค่าเดิม"""
-    return v.strip() if isinstance(v, str) else v
+    if isinstance(v, str):
+        return v.strip('"').strip("'").strip()
+    return v
 
 
 @analysis_bp.route("/image", methods=["POST"])
@@ -500,45 +486,48 @@ def analyze_image():
     start_time = time.time()
     file = request.files.get("image")
 
-    # ===== A1: file type =====
+
+   # ===== ด่านที่ 1  เช็คว่าไม่ได้อัปโหลดรูปภาพมา =====
     if not file or file.filename == "":
         return (
             jsonify(
                 {
                     "status": "error",
                     "error_code": "A1",
-                    "msg": "ไม่พบไฟล์ภาพ กรุณาอัปโหลดรูปภาพของคุณในรูปแบบ JPG, JPEG หรือ PNG",
+                    "msg": "กรุณาอัปโหลดรูปภาพก่อนทำการวิเคราะห์",
                 }
             ),
             400,
         )
 
+    # ===== ด่านที่ 2 : เช็คว่านามสกุลไฟล์ถูกต้องไหม =====
     if not allowed_file(file.filename):
         return (
             jsonify(
                 {
                     "status": "error",
-                    "error_code": "A1",
-                    "msg": "รูปแบบไฟล์ไม่ถูกต้อง กรุณาอัปโหลดรูปภาพของคุณในรูปแบบ JPG, JPEG หรือ PNG",
+                    "error_code": "A2",
+                    "msg": "รูปแบบไฟล์ไม่รองรับ กรุณาอัปโหลดไฟล์นามสกุล .jpg, .jpeg หรือ .png",
                 }
             ),
             400,
         )
+
+    # อ่านเนื้อหาไฟล์
     file_content = file.read()
 
-    # ===== A2: file size =====
+    # ===== ด่านที่ 3 (TC4.7): เช็คว่าขนาดไฟล์เกินไหม =====
     if len(file_content) > MAX_FILE_SIZE:
         return (
             jsonify(
                 {
                     "status": "error",
-                    "error_code": "A2",
-                    "msg": "ขนาดไฟล์เกินกำหนด กรุณาอัปโหลดรูปภาพของคุณที่มีขนาดไม่เกิน 10MB",
+                    "error_code": "A3",
+                    "msg": "ขนาดไฟล์เกินขีดจำกัด กรุณาอัปโหลดไฟล์ขนาดไม่เกิน 10 MB",
                 }
             ),
             400,
         )
-
     # ===== SAVE IMAGE =====
     timestamp = int(time.time())
     filename = f"user_{current_user_id}_{timestamp}.jpg"
@@ -569,7 +558,7 @@ def analyze_image():
                 jsonify(
                     {
                         "status": "error",
-                        "error_code": "A4",
+                        "error_code": "A5",
                         "msg": "ไม่พบลักษณะเลือดประจำเดือนในภาพ กรุณาอัปโหลดภาพที่เกี่ยวข้องกับลักษณะเลือดประจำเดือน",
                     }
                 ),
@@ -648,18 +637,6 @@ def analyze_risk():
     data = request.form
 
     ai_res = _clean(data.get("ai_result"))
-    if not ai_res:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A3",
-                    "msg": "กรุณาระบุผลการวิเคราะห์ภาพ (ai_result)",
-                }
-            ),
-            400,
-        )
-
     image_path = data.get("image_path")
     confidence_raw = data.get("confidence")
     try:
@@ -689,8 +666,8 @@ def analyze_risk():
             jsonify(
                 {
                     "status": "error",
-                    "error_code": "A3",
-                    "msg": "โปรดระบุข้อมูลอาการให้ครบถ้วน",
+                    "error_code": "A4",
+                    "msg": "กรุณากรอกข้อมูลอาการให้ครบถ้วน",
                     "errors": errors,
                 },
             ),
@@ -701,7 +678,7 @@ def analyze_risk():
             jsonify(
                 {
                     "status": "error",
-                    "error_code": "A5",
+                    "error_code": "A6",
                     "msg": "ความสัมพันธ์อาการไม่สอดคล้องกันของลักษณะเลือดออกและประวัติทางเพศ",
                 }
             ),
@@ -718,7 +695,7 @@ def analyze_risk():
             jsonify(
                 {
                     "status": "error",
-                    "error_code": "A6",
+                    "error_code": "A7",
                     "msg": "ไม่พบโรคที่สอดคล้องกับอาการที่ระบุ กรุณาตรวจสอบข้อมูลอาการอีกครั้ง",
                 }
             ),
