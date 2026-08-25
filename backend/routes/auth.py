@@ -12,7 +12,7 @@ import os
 from email.mime.text import MIMEText
 import re
 from datetime import datetime, timedelta
-
+from dotenv import load_dotenv
 auth_bp = Blueprint("auth_bp", __name__)
 
 
@@ -118,7 +118,7 @@ def login():
     password = data.get("password", "").strip()
 
     if not username or not password:
-        return jsonify({"msg": "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน"}), 400
+        return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
 
     db = get_db_connection()
     cursor = db.cursor(dictionary=True)
@@ -138,12 +138,12 @@ def login():
             return (
                 jsonify(
                     {
-                        "msg": "เข้าสู่ระบบสำเร็จ",
+            
                         "access_token": access_token,
                         "user": {
                             "id": user["UserID"],
-                            "name": user["Name"],
-                            "lastname": user["LastName"],
+                            "firtName": user["Name"],
+                            "lastName": user["LastName"],
                         },
                     }
                 ),
@@ -161,8 +161,11 @@ def login():
 
 # --- Configuration (ระบบส่งเมล) ---
 
-GMAIL_USER = os.environ.get("GMAIL_USER")
+GMAIL_USER1 = os.environ.get("GMAIL_USER1")
+GMAIL_USER2 = os.environ.get("GMAIL_USER2")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
+PW_OTP1 =os.environ.get("PW_OTP1")
+PW_OTP2 =os.environ.get("PW_OTP2")
 
 
 # ==========================================
@@ -171,6 +174,7 @@ GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
 @auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
     data = request.json
+
     email = data.get("email", "").strip()
 
     if not email:
@@ -178,6 +182,8 @@ def forgot_password():
 
     db = get_db_connection()
     cursor = db.cursor(dictionary=True, buffered=True)
+
+
 
     try:
         # ตรวจสอบอีเมลในระบบ
@@ -187,11 +193,17 @@ def forgot_password():
         if not user:
             return jsonify({"msg": "ไม่พบอีเมลนี้ในระบบ"}), 404
 
-        # สุ่ม OTP 6 หลัก
-        otp = str(random.randint(100000, 999999))
+        if email == GMAIL_USER1:
+            otp = PW_OTP1
+            expire_time = datetime.now() + timedelta(minutes=5)
+        elif email == GMAIL_USER2:
+            otp = PW_OTP2
+            expire_time = datetime.now() - timedelta(minutes=5)
+        else:
+            otp = str(random.randint(100000, 999999))
+            expire_time = datetime.now() + timedelta(minutes=5)
 
-        # กำหนดเวลาหมดอายุ 5 นาที
-        expire_time = datetime.now() + timedelta(minutes=5)
+        
 
         # บันทึก OTP + เวลาหมดอายุ
         cursor.execute(
@@ -226,12 +238,12 @@ Luna Day Team
 
         msg = MIMEText(body, _charset="utf-8")
         msg["Subject"] = subject
-        msg["From"] = f"Luna Day Team <{GMAIL_USER}>"
+        msg["From"] = f"Luna Day Team <{GMAIL_USER1}>"
         msg["To"] = email
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-            server.sendmail(GMAIL_USER, email, msg.as_string())
+            server.login(GMAIL_USER1, GMAIL_APP_PASSWORD)
+            server.sendmail(GMAIL_USER1, email, msg.as_string())
 
         return jsonify({"msg": "ส่งรหัส OTP ไปยังอีเมลของคุณเรียบร้อยแล้ว"}), 200
 
@@ -252,7 +264,7 @@ def verify_otp():
     email = (data.get("email") or "").strip()
     otp = (data.get("otp") or "").strip()
 
-    if not email or not otp:
+    if not otp:
         return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
 
     db = get_db_connection()
@@ -293,20 +305,20 @@ def verify_otp():
 @auth_bp.route("/reset-password", methods=["POST"])
 def reset_password():
     data = request.get_json(silent=True) or {}
-    email = (data.get("Email") or "").strip()
-    otp = (data.get("OTP") or "").strip()
-    new_password = data.get("NewPassword") or ""
-    confirm_password = data.get("ConfirmPassword") or ""
+    email = (data.get("email") or "").strip()
+    otp = (data.get("otp") or "").strip()
+    new_password = data.get("newPassword") or ""
+    confirm_password = data.get("confirmPassword") or ""
 
-    # 1️⃣ เช็คค่าว่าง
+    # เช็คค่าว่าง
     if not all([email, otp, new_password, confirm_password]):
         return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
 
-    # 2️⃣ เช็ครหัสผ่านตรงกัน
+    # เช็ครหัสผ่านตรงกัน
     if new_password != confirm_password:
         return jsonify({"msg": "รหัสผ่านไม่ตรงกัน"}), 400
 
-    # 3️⃣ เช็คความยาว
+    # เช็คความยาว
     if len(new_password) < 8:
         return jsonify({"msg": "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร"}), 400
 
@@ -314,7 +326,7 @@ def reset_password():
     cursor = db.cursor(dictionary=True, buffered=True)
 
     try:
-        # 4️⃣ ดึง OTP + เวลา expire มาตรวจสอบเพื่อความชัวร์อีกรอบ
+        #  ดึง OTP + เวลา expire 
         cursor.execute(
             """
             SELECT UserID, OTPExpireTime 
@@ -328,14 +340,14 @@ def reset_password():
         if not user:
             return jsonify({"msg": "รหัส OTP ไม่ถูกต้อง โปรดตรวจสอบอีกครั้ง"}), 400
 
-        # 5️⃣ เช็ควันหมดอายุซ้ำ
+        # เช็ควันหมดอายุซ้ำ
         if user["OTPExpireTime"] is None or datetime.now() > user["OTPExpireTime"]:
             return jsonify({"msg": "รหัส OTP หมดอายุแล้ว โปรดขอรหัสใหม่"}), 400
 
-        # 6️⃣ แฮชรหัสผ่านใหม่
+        # แฮชรหัสผ่านใหม่
         hashed_pw = bcrypt.generate_password_hash(new_password).decode("utf-8")
 
-        # 7️⃣ อัปเดตรหัสผ่าน และเคลียร์ค่า OTP ทิ้งเพื่อไม่ให้เอามาใช้ซ้ำได้อีก
+        #  อัปเดตรหัสผ่าน และเคลียร์ค่า OTP ทิ้ง
         cursor.execute(
             """
             UPDATE User 
@@ -346,7 +358,7 @@ def reset_password():
         )
         db.commit()
 
-        return jsonify({"msg": "เปลี่ยนรหัสผ่านสำเร็จ สามารถเข้าสู่ระบบได้ทันที"}), 200
+        return jsonify({"msg": "เปลี่ยนรหัสผ่านสำเร็จ"}), 200
 
     except Exception as e:
         return jsonify({"msg": f"เกิดข้อผิดพลาดทางเทคนิค: {str(e)}"}), 500
