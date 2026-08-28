@@ -39,10 +39,8 @@ ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png"}
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
 # AREA CONFIG
-MIN_AREA = 20
-SMALL_OBJECT = 100
-LARGE_OBJECT = 1000
-LARGE_TISSUE = 5000
+MIN_AREA = 500
+
 
 # แปลงผล AI (EN) → ภาษาไทย สำหรับแสดงผล
 AI_RESULT_TH = {
@@ -163,18 +161,14 @@ def validate_ai_findings(mask, conf, img, std_limit):
             area = cv2.contourArea(cnt)
             if area < MIN_AREA:
                 continue
-
             m_temp = np.zeros(img.shape[:2], np.uint8)
             cv2.drawContours(m_temp, [cnt], -1, 255, -1)
             std_val = np.std(img[m_temp > 0])
-
+            print(f"🔍 [DEBUG] คลาส: {cls_id} | Area: {area:.1f} | STD: {std_val:.2f} | STD Limit: {std_limit:.2f}")
             if cls_id == 1 and std_val <= std_limit:
-                found_clot = True
+                    found_clot = True
             elif cls_id == 2:
-                # ให้ผ่านถ้า STD ใกล้เคียงเกณฑ์ (80%) หรือก้อนใหญ่มากจนเชื่อถือ AI ได้เลย
-                if std_val > (std_limit * 0.8) or area > LARGE_TISSUE:
                     found_tissue = True
-            # ==============================
 
     if found_clot and found_tissue:
         return "mixed"
@@ -219,10 +213,6 @@ def validate_answers(answers, ai_res, q8):
 # ==============================
 # MEDICAL LOGIC
 # ==============================
-# ข้อมูลโรค + เกณฑ์อาการ (ระบบคัดกรองแบบให้คะแนน %)
-# กลุ่มโรค: 1 = สรีระปกติ, 2 = นรีเวช, 3 = ตั้งครรภ์
-# criteria = {qX: เซตคำตอบที่ยอมรับ} ใส่เฉพาะข้อที่เป็นเกณฑ์จริง
-# (ข้อที่เป็น N/A ไม่ต้องใส่ → จะไม่ถูกนับในตัวหาร)
 DISEASES = [
     {
         "name": "ภาวะประจำเดือนปกติ",
@@ -436,14 +426,13 @@ def screen_symptoms(ai_result, answers):
                 continue  
             total += 1
             if q == "q7":
-                if q7_ans & allowed:  # ตรงอย่างน้อย 1 อย่าง = ผ่าน
+                if q7_ans & allowed:  
                     intersect = q7_ans & allowed
                     matched += 1
                     matched_details.append(f"Q7 (อาการร่วม): {', '.join(intersect)}")
             elif answers.get(q) in allowed:
                 matched += 1
                 matched_details.append(f"{q.upper()}: {answers.get(q)}")
-        # เข้าข่ายเมื่อ >= 2/3 (67% ตามที่ตกลง เช่น 2 จาก 3)
         if total and matched * 3 >= total * 2:
             results.append(
                 {
@@ -516,7 +505,7 @@ def analyze_image():
     # อ่านเนื้อหาไฟล์
     file_content = file.read()
 
-    # ===== ด่านที่ 3 (TC4.7): เช็คว่าขนาดไฟล์เกินไหม =====
+    # ===== ด่านที่ 3 เช็คขนาดไฟล์เกิน =====
     if len(file_content) > MAX_FILE_SIZE:
         return (
             jsonify(
@@ -581,28 +570,40 @@ def analyze_image():
         }
 
         for cls_id, info in class_info.items():
-            # สร้าง Binary Mask จากผลลัพธ์ AI และ Confidence
             m = ((mask == cls_id) & (conf > CONF_THRESHOLD)).astype(np.uint8)
             cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
             for c in cnts:
-                if cv2.contourArea(c) > MIN_AREA:
-                    # วาดเส้นขอบลงบนภาพ
-                    cv2.drawContours(img_visual, [c], -1, info["color"], 3)
+                area = cv2.contourArea(c)
+                if area > MIN_AREA:
+                    # 1. จำลองหน้ากากเพื่อหาค่า STD ก่อนวาด!
+                    m_temp = np.zeros(img_resized.shape[:2], np.uint8)
+                    cv2.drawContours(m_temp, [c], -1, 255, -1)
+                    std_val = np.std(img_resized[m_temp > 0])
 
-                    # ใส่ชื่อคลาสกำกับ
-                    x, y, w, h = cv2.boundingRect(c)
-                    label_y = (y - 10) if cls_id == 2 else (y + h + 20)
-                    label_y = max(label_y, 15)
-                    cv2.putText(
-                        img_visual,
-                        info["name"],
-                        (x, y - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,  # ขนาดตัวอักษร
-                        info["color"],
-                        2,  # ความหนาของตัวอักษร
-                    )
+                    # 2. สร้างเงื่อนไข "ต้องสอบผ่านด่าน STD" ถึงจะให้วาดกรอบ
+                    is_valid = False
+                    if cls_id == 1 and std_val <= std_limit:
+                        is_valid = True
+                    elif cls_id == 2 and (std_val > (std_limit * 0.8) or area > LARGE_TISSUE):
+                        is_valid = True
+
+                    if is_valid:
+                        cv2.drawContours(img_visual, [c], -1, info["color"], 3)
+
+                        # ใส่ชื่อคลาสกำกับ
+                        x, y, w, h = cv2.boundingRect(c)
+                        label_y = (y - 10) if cls_id == 2 else (y + h + 20)
+                        label_y = max(label_y, 15)
+                        cv2.putText(
+                            img_visual,
+                            info["name"],
+                            (x, y - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.7,
+                            info["color"],
+                            2,
+                        )
 
         # ตั้งชื่อไฟล์ใหม่สำหรับภาพที่วาดผลแล้ว
         res_filename = f"res_{filename}"
@@ -636,8 +637,8 @@ def analyze_risk():
     start_time = time.time()
     data = request.form
 
-    ai_res = _clean(data.get("ai_result"))
-    image_path = data.get("image_path")
+    ai_res = _clean(data.get("aiResult"))
+    image_path = data.get("imagePath")
     confidence_raw = data.get("confidence")
     try:
         confidence = float(confidence_raw) if confidence_raw not in (None, "") else None
