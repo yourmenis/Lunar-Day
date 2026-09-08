@@ -164,7 +164,7 @@ def validate_ai_findings(mask, conf, img, std_limit):
             m_temp = np.zeros(img.shape[:2], np.uint8)
             cv2.drawContours(m_temp, [cnt], -1, 255, -1)
             std_val = np.std(img[m_temp > 0])
-            print(f"🔍 [DEBUG] คลาส: {cls_id} | Area: {area:.1f} | STD: {std_val:.2f} | STD Limit: {std_limit:.2f}")
+           
             if cls_id == 1 and std_val <= std_limit:
                     found_clot = True
             elif cls_id == 2:
