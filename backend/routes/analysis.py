@@ -131,18 +131,17 @@ def run_inference(img):
         conf, mask = torch.max(prob, dim=1)
 
     mask_np = mask[0].cpu().numpy()
+
     conf_np = conf[0].cpu().numpy()
-    # คำนวณค่าเฉลี่ย confidence ของพื้นที่ที่ตรวจพบ (mask > 0) และมี confidence > threshold
     detected = (mask_np > 0) & (conf_np > CONF_THRESHOLD)
     if np.any(detected):
-        # ถ้าเจอลิ่มเลือด/เนื้อเยื่อ ให้เฉลี่ยความมั่นใจของก้อนนั้น
         avg_conf = np.mean(conf_np[detected])
     else:
-        # ถ้าไม่เจออะไรเลย ให้เฉลี่ยความมั่นใจของ "พื้นหลัง" แทน
-        background_pixels = mask_np == 0
-        avg_conf = (
-            np.mean(conf_np[background_pixels]) if np.any(background_pixels) else 0.99
-        )
+       background_pixels = mask_np == 0
+        if np.any(background_pixels):
+            avg_conf = np.mean(conf_np[background_pixels])
+        else:
+           avg_conf = np.mean(conf_np)
 
     return mask_np, conf_np, float(avg_conf)
 
