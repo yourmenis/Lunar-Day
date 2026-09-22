@@ -584,7 +584,7 @@ def analyze_image():
                     is_valid = False
                     if cls_id == 1 and std_val <= std_limit:
                         is_valid = True
-                    elif cls_id == 2 and (std_val > (std_limit * 0.8) or area > LARGE_TISSUE):
+                    elif cls_id == 2 :
                         is_valid = True
 
                     if is_valid:
