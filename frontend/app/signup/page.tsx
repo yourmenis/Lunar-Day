@@ -209,6 +209,7 @@ export default function SignUpPage() {
           username: form.username,
           password: form.password,
           confirmPassword: form.confirmPassword,
+          isConsent: agreed,
         }),
       })
       const data = await res.json()
