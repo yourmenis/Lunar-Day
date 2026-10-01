@@ -664,10 +664,10 @@ export default function ProfilePage() {
     const token = localStorage.getItem('access_token')
     const form = new FormData()
     form.append('username', editForm.username)
-    form.append('name', editForm.name)
-    form.append('lastname', editForm.lastname)
-    form.append('birthday', editForm.birthday || profile?.Birthday || '')
-    if (editForm.avatarFile) form.append('profile_img', editForm.avatarFile)
+    form.append('firstName', editForm.name)
+    form.append('lastName', editForm.lastname)
+    form.append('birthDate', editForm.birthday || profile?.Birthday || '')
+    if (editForm.avatarFile) {form.append('profileImg', editForm.avatarFile)}
 
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/update`, {
