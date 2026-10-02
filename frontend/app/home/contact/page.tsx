@@ -23,18 +23,29 @@ export default function ContactPage() {
           font-family: 'Sarabun', sans-serif;
           background: #faf7f5;
           overflow-x: hidden;
+          display: flex;
+          flex-direction: column;
+        }
+
+        /* ── Shared container (เหมือนหน้าบทความ) ── */
+        .contact-container {
+          width: 100%;
+          max-width: 1320px;
+          margin: 0 auto;
+          padding-left: clamp(16px, 3vw, 40px);
+          padding-right: clamp(16px, 3vw, 40px);
         }
 
         /* ── Hero Banner ── */
         .contact-hero {
           position: relative;
-          min-height: 320px;
+          min-height: 280px;
           display: flex;
           align-items: center;
           justify-content: center;
           overflow: hidden;
           background: linear-gradient(135deg, #1a0a14 0%, #3d1a2e 50%, #6b2646 100%);
-          padding: 60px 40px;
+          padding: 56px clamp(16px, 3vw, 40px) 72px;
           text-align: center;
         }
         .contact-hero-bg {
@@ -45,15 +56,15 @@ export default function ContactPage() {
         }
         .contact-hero-circle-1 {
           position: absolute;
-          width: 420px; height: 420px;
-          top: -160px; right: -80px;
+          width: 520px; height: 520px;
+          top: -200px; right: -100px;
           border-radius: 50%;
           background: radial-gradient(circle, rgba(244,143,177,0.2), transparent 60%);
         }
         .contact-hero-circle-2 {
           position: absolute;
-          width: 280px; height: 280px;
-          bottom: -100px; left: 10%;
+          width: 340px; height: 340px;
+          bottom: -120px; left: 8%;
           border-radius: 50%;
           background: radial-gradient(circle, rgba(206,147,216,0.15), transparent 60%);
         }
@@ -70,13 +81,13 @@ export default function ContactPage() {
           pointer-events: none;
         }
         .orb-1 {
-          width: 200px; height: 200px;
+          width: 220px; height: 220px;
           top: 20%; left: 5%;
           background: rgba(240,98,146,0.15);
           animation: floatOrb 7s ease-in-out infinite;
         }
         .orb-2 {
-          width: 140px; height: 140px;
+          width: 160px; height: 160px;
           bottom: 10%; right: 15%;
           background: rgba(206,147,216,0.12);
           animation: floatOrb 9s ease-in-out infinite reverse;
@@ -88,6 +99,7 @@ export default function ContactPage() {
         .contact-hero-content {
           position: relative;
           z-index: 2;
+          max-width: 760px;
           opacity: 0;
           transform: translateY(24px);
           transition: opacity 0.8s ease, transform 0.8s ease;
@@ -123,7 +135,7 @@ export default function ContactPage() {
         .contact-hero-title {
           font-family: 'Mitr', sans-serif;
           font-weight: 600;
-          font-size: clamp(28px, 4vw, 42px);
+          font-size: clamp(28px, 4vw, 46px);
           color: #fff;
           line-height: 1.3;
           margin-bottom: 14px;
@@ -135,10 +147,10 @@ export default function ContactPage() {
           background-clip: text;
         }
         .contact-hero-sub {
-          font-size: 15px;
-          color: rgba(255,255,255,0.55);
+          font-size: 16px;
+          color: rgba(255,255,255,0.6);
           line-height: 1.7;
-          max-width: 420px;
+          max-width: 560px;
           margin: 0 auto;
         }
         .hero-arc {
@@ -151,22 +163,22 @@ export default function ContactPage() {
 
         /* ── Main Content ── */
         .contact-body {
-          max-width: 900px;
-          margin: 0 auto;
-          padding: 60px 40px 80px;
+          flex: 1;
+          padding-top: 40px;
+          padding-bottom: 64px;
         }
         .section-label {
           display: flex;
           align-items: center;
           gap: 10px;
-          margin-bottom: 40px;
+          margin-bottom: 32px;
           justify-content: center;
         }
         .label-line {
           flex: 1;
           height: 1px;
           background: linear-gradient(to right, transparent, #f5c6d8);
-          max-width: 120px;
+          max-width: 160px;
         }
         .label-line.right {
           background: linear-gradient(to left, transparent, #f5c6d8);
@@ -179,21 +191,30 @@ export default function ContactPage() {
           text-transform: uppercase;
         }
 
-        /* ── Cards Grid ── */
-        .cards-grid {
+        /* ── Layout: การ์ดซ้าย + แผนที่ขวา ── */
+        .contact-layout {
           display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 24px;
-          margin-bottom: 24px;
+          grid-template-columns: minmax(360px, 440px) 1fr;
+          gap: clamp(16px, 1.8vw, 24px);
+          align-items: stretch;
+          margin-bottom: clamp(16px, 1.8vw, 24px);
         }
+        .cards-col {
+          display: flex;
+          flex-direction: column;
+          gap: clamp(16px, 1.8vw, 24px);
+        }
+
+        /* ── Contact Card ── */
         .contact-card {
           background: #fff;
           border-radius: 24px;
           border: 1px solid #f5e6ec;
           box-shadow: 0 4px 24px rgba(194,24,91,0.07);
-          padding: 36px 32px;
+          padding: 28px 28px 30px;
           position: relative;
           overflow: hidden;
+          flex: 1;
           opacity: 0;
           transform: translateY(20px);
           transition: opacity 0.6s ease, transform 0.6s ease, box-shadow 0.25s ease;
@@ -217,18 +238,24 @@ export default function ContactPage() {
         .card-corner-glow {
           position: absolute;
           top: -40px; right: -40px;
-          width: 120px; height: 120px;
+          width: 140px; height: 140px;
           border-radius: 50%;
           background: radial-gradient(circle, rgba(240,98,146,0.1), transparent 70%);
           pointer-events: none;
+        }
+        .card-head {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          margin-bottom: 18px;
         }
         .card-icon-wrap {
           width: 52px; height: 52px;
           border-radius: 16px;
           background: linear-gradient(135deg, #fce4ec, #f8bbd0);
           display: flex; align-items: center; justify-content: center;
-          margin-bottom: 20px;
           box-shadow: 0 4px 16px rgba(194,24,91,0.15);
+          flex-shrink: 0;
         }
         .card-type {
           font-family: 'Mitr', sans-serif;
@@ -237,14 +264,13 @@ export default function ContactPage() {
           color: #c2185b;
           letter-spacing: 1.5px;
           text-transform: uppercase;
-          margin-bottom: 8px;
+          margin-bottom: 2px;
         }
         .card-title {
           font-family: 'Mitr', sans-serif;
           font-weight: 600;
           font-size: 18px;
           color: #1a0a14;
-          margin-bottom: 16px;
         }
         .card-divider {
           height: 1px;
@@ -252,7 +278,7 @@ export default function ContactPage() {
           margin-bottom: 16px;
         }
         .card-content {
-          font-size: 14px;
+          font-size: 14.5px;
           color: #7a5a6a;
           line-height: 1.8;
         }
@@ -265,6 +291,10 @@ export default function ContactPage() {
           flex-shrink: 0;
           margin-top: 2px;
         }
+        .address-line strong {
+          color: #3d1a2e;
+          font-weight: 600;
+        }
         .email-list {
           display: flex;
           flex-direction: column;
@@ -274,13 +304,14 @@ export default function ContactPage() {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 10px 14px;
+          padding: 12px 14px;
           border-radius: 12px;
           background: #faf7f5;
           border: 1px solid #f5e6ec;
           transition: background 0.18s, border-color 0.18s;
           cursor: pointer;
           text-decoration: none;
+          min-width: 0;
         }
         .email-chip:hover {
           background: #fce4ec;
@@ -294,14 +325,17 @@ export default function ContactPage() {
         }
         .email-chip-text {
           font-family: 'Sarabun', sans-serif;
-          font-size: 13.5px;
+          font-size: 14px;
           color: #3d1a2e;
           flex: 1;
+          min-width: 0;
+          overflow-wrap: anywhere;
         }
         .email-chip-icon {
           color: #c2185b;
           opacity: 0.5;
           transition: opacity 0.18s;
+          flex-shrink: 0;
         }
         .email-chip:hover .email-chip-icon {
           opacity: 1;
@@ -314,10 +348,12 @@ export default function ContactPage() {
           border: 1px solid #f5e6ec;
           box-shadow: 0 4px 24px rgba(194,24,91,0.07);
           overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          min-height: 520px;
           opacity: 0;
           transform: translateY(20px);
           transition: opacity 0.6s ease 0.3s, transform 0.6s ease 0.3s;
-          margin-bottom: 24px;
         }
         .map-card.visible {
           opacity: 1;
@@ -328,10 +364,11 @@ export default function ContactPage() {
           display: flex;
           align-items: center;
           justify-content: space-between;
+          gap: 12px;
         }
         .map-title {
           font-family: 'Mitr', sans-serif;
-          font-size: 15px;
+          font-size: 16px;
           font-weight: 600;
           color: #1a0a14;
         }
@@ -345,14 +382,18 @@ export default function ContactPage() {
           font-size: 11.5px;
           color: #c2185b;
           font-family: 'Mitr', sans-serif;
+          white-space: nowrap;
         }
         .map-frame {
           margin: 16px 0 0;
-          height: 260px;
+          flex: 1;
+          min-height: 320px;
           position: relative;
           overflow: hidden;
         }
         .map-frame iframe {
+          position: absolute;
+          inset: 0;
           width: 100%;
           height: 100%;
           border: none;
@@ -362,10 +403,11 @@ export default function ContactPage() {
           display: flex;
           align-items: center;
           justify-content: space-between;
+          gap: 16px;
           border-top: 1px solid #f5e6ec;
         }
         .map-address-short {
-          font-size: 12.5px;
+          font-size: 13px;
           color: #9e7a8a;
           line-height: 1.5;
         }
@@ -373,12 +415,12 @@ export default function ContactPage() {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          padding: 8px 16px;
+          padding: 9px 18px;
           border-radius: 10px;
           border: 1.5px solid rgba(194,24,91,0.2);
           background: transparent;
           font-family: 'Mitr', sans-serif;
-          font-size: 12px;
+          font-size: 12.5px;
           color: #c2185b;
           cursor: pointer;
           transition: background 0.18s;
@@ -389,9 +431,9 @@ export default function ContactPage() {
 
         /* ── Bottom CTA ── */
         .contact-cta {
-          border-radius: 20px;
-          background: linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%);
-          padding: 36px 40px;
+          border-radius: 24px;
+          background: linear-gradient(135deg, #1a0a14 0%, #3d1a2e 60%, #6b2646 100%);
+          padding: clamp(28px, 3vw, 44px) clamp(24px, 4vw, 56px);
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -409,16 +451,24 @@ export default function ContactPage() {
         .contact-cta::before {
           content: '';
           position: absolute;
-          top: -50px; right: -50px;
-          width: 200px; height: 200px;
+          top: -80px; right: 10%;
+          width: 280px; height: 280px;
           border-radius: 50%;
-          background: radial-gradient(circle, rgba(240,98,146,0.2), transparent 60%);
+          background: radial-gradient(circle, rgba(240,98,146,0.22), transparent 60%);
+          pointer-events: none;
+        }
+        .contact-cta::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background-image: radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px);
+          background-size: 24px 24px;
           pointer-events: none;
         }
         .cta-left { position: relative; z-index: 1; }
         .cta-tag {
           font-size: 11px;
-          color: rgba(240,98,146,0.7);
+          color: rgba(240,98,146,0.75);
           font-family: 'Mitr', sans-serif;
           letter-spacing: 2px;
           text-transform: uppercase;
@@ -427,7 +477,7 @@ export default function ContactPage() {
         .cta-text {
           font-family: 'Mitr', sans-serif;
           font-weight: 500;
-          font-size: 18px;
+          font-size: clamp(18px, 2vw, 24px);
           color: #fff;
           line-height: 1.4;
         }
@@ -437,13 +487,13 @@ export default function ContactPage() {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          padding: 13px 28px;
+          padding: 14px 32px;
           border-radius: 14px;
           border: none;
           background: linear-gradient(135deg, #f06292, #c2185b);
           color: #fff;
           font-family: 'Mitr', sans-serif;
-          font-size: 14px;
+          font-size: 15px;
           font-weight: 500;
           cursor: pointer;
           box-shadow: 0 6px 24px rgba(194,24,91,0.45);
@@ -459,21 +509,34 @@ export default function ContactPage() {
         .contact-footer {
           background: #fff;
           border-top: 1px solid #f5e6ec;
-          padding: 28px 40px;
+        }
+        .contact-footer-inner {
+          padding-top: 24px;
+          padding-bottom: 24px;
           display: flex;
           align-items: center;
           justify-content: space-between;
+          gap: 8px;
           font-size: 12.5px;
           color: #b09aa8;
         }
 
         /* ── Responsive ── */
-        @media (max-width: 768px) {
-          .contact-hero { padding: 48px 20px; }
-          .contact-body { padding: 40px 20px 60px; }
-          .cards-grid { grid-template-columns: 1fr; }
+        @media (max-width: 1024px) {
+          .contact-layout { grid-template-columns: 1fr; }
+          .cards-col { flex-direction: row; }
+          .map-card { min-height: 420px; }
+        }
+        @media (max-width: 720px) {
+          .contact-hero { padding-top: 44px; padding-bottom: 64px; }
+          .contact-body { padding-top: 28px; padding-bottom: 48px; }
+          .cards-col { flex-direction: column; }
+          .contact-card { padding: 24px 20px; }
+          .map-card { min-height: 380px; }
+          .map-header, .map-footer { padding-left: 20px; padding-right: 20px; }
+          .map-footer { flex-direction: column; align-items: flex-start; }
           .contact-cta { flex-direction: column; text-align: center; }
-          .contact-footer { flex-direction: column; gap: 8px; text-align: center; }
+          .contact-footer-inner { flex-direction: column; text-align: center; }
         }
       `}</style>
 
@@ -496,8 +559,7 @@ export default function ContactPage() {
               ติดต่อสอบถาม
             </div>
             <h1 className="contact-hero-title">
-              พร้อมให้<span>ความช่วยเหลือ</span><br />
-              ทุกคำถาม
+              พร้อมให้<span>ความช่วยเหลือ</span>ทุกคำถาม
             </h1>
             <p className="contact-hero-sub">
               ทีมงานของเรายินดีตอบทุกข้อสงสัยเกี่ยวกับสุขภาพสตรีและการใช้งานระบบ
@@ -508,7 +570,7 @@ export default function ContactPage() {
         </section>
 
         {/* ── Body ── */}
-        <div className="contact-body">
+        <main className="contact-body contact-container">
 
           <div className="section-label">
             <div className="label-line" />
@@ -516,97 +578,100 @@ export default function ContactPage() {
             <div className="label-line right" />
           </div>
 
-          {/* Cards Grid */}
-          <div className="cards-grid">
+          <div className="contact-layout">
+            {/* Cards Column */}
+            <div className="cards-col">
 
-            {/* Address Card */}
-            <div
-              className={`contact-card ${mounted ? 'visible' : ''}`}
-              style={{ transitionDelay: '0.1s' }}
-            >
-              <div className="card-corner-glow" />
-              <div className="card-icon-wrap">
-                <MapPin size={22} color="#c2185b" />
-              </div>
-              <div className="card-type">ที่อยู่</div>
-              <div className="card-title">สถานที่ตั้ง</div>
-              <div className="card-divider" />
-              <div className="card-content">
-                <div className="address-line">
-                  <span>📍</span>
-                  <div>
-                    <p>คณะวิทยาศาสตร์และเทคโนโลยี</p>
-                    <p>สาขาวิทยาการคอมพิวเตอร์</p>
-                    <p>มหาวิทยาลัยธรรมศาสตร์ ศูนย์รังสิต</p>
-                    <p>เลขที่ 99 หมู่ 18 ถนนพหลโยธิน</p>
-                    <p>ต.คลองหนึ่ง อ.คลองหลวง</p>
-                    <p>ปทุมธานี 12120</p>
+              {/* Address Card */}
+              <div
+                className={`contact-card ${mounted ? 'visible' : ''}`}
+                style={{ transitionDelay: '0.1s' }}
+              >
+                <div className="card-corner-glow" />
+                <div className="card-head">
+                  <div className="card-icon-wrap">
+                    <MapPin size={22} color="#c2185b" />
                   </div>
+                  <div>
+                    <div className="card-type">ที่อยู่</div>
+                    <div className="card-title">สถานที่ตั้ง</div>
+                  </div>
+                </div>
+                <div className="card-divider" />
+                <div className="card-content">
+                  <div className="address-line">
+                    <span>📍</span>
+                    <div>
+                      <p><strong>คณะวิทยาศาสตร์และเทคโนโลยี</strong></p>
+                      <p>สาขาวิทยาการคอมพิวเตอร์</p>
+                      <p>มหาวิทยาลัยธรรมศาสตร์ ศูนย์รังสิต</p>
+                      <p>เลขที่ 99 หมู่ 18 ถนนพหลโยธิน</p>
+                      <p>ต.คลองหนึ่ง อ.คลองหลวง ปทุมธานี 12120</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Email Card */}
+              <div
+                className={`contact-card ${mounted ? 'visible' : ''}`}
+                style={{ transitionDelay: '0.2s' }}
+              >
+                <div className="card-corner-glow" />
+                <div className="card-head">
+                  <div className="card-icon-wrap">
+                    <Mail size={22} color="#c2185b" />
+                  </div>
+                  <div>
+                    <div className="card-type">อีเมล</div>
+                    <div className="card-title">ส่งอีเมลหาเรา</div>
+                  </div>
+                </div>
+                <div className="card-divider" />
+                <div className="email-list">
+                  <a href="mailto:achiraya.choo@dome.tu.ac.th" className="email-chip">
+                    <span className="email-chip-dot" />
+                    <span className="email-chip-text">achiraya.choo@dome.tu.ac.th</span>
+                    <ExternalLink size={13} className="email-chip-icon" />
+                  </a>
+                  <a href="mailto:aumboon.rap@dome.tu.ac.th" className="email-chip">
+                    <span className="email-chip-dot" />
+                    <span className="email-chip-text">aumboon.rap@dome.tu.ac.th</span>
+                    <ExternalLink size={13} className="email-chip-icon" />
+                  </a>
                 </div>
               </div>
             </div>
 
-            {/* Email Card */}
-            <div
-              className={`contact-card ${mounted ? 'visible' : ''}`}
-              style={{ transitionDelay: '0.2s' }}
-            >
-              <div className="card-corner-glow" />
-              <div className="card-icon-wrap">
-                <Mail size={22} color="#c2185b" />
+            {/* Map Card */}
+            <div className={`map-card ${mounted ? 'visible' : ''}`}>
+              <div className="map-header">
+                <span className="map-title">แผนที่</span>
+                <span className="map-badge">📍 คณะวิทย์ฯ มธ. รังสิต</span>
               </div>
-              <div className="card-type">อีเมล</div>
-              <div className="card-title">ส่งอีเมลหาเรา</div>
-              <div className="card-divider" />
-              <div className="email-list">
+              <div className="map-frame">
+                <iframe
+                  src="https://maps.google.com/maps?q=Faculty%20of%20Science%20and%20Technology%2C%20Thammasat%20University%20Rangsit%20Campus&hl=th&z=17&output=embed"
+                  allowFullScreen
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  title="คณะวิทยาศาสตร์และเทคโนโลยี มธ. รังสิต"
+                />
+              </div>
+              <div className="map-footer">
+                <div className="map-address-short">
+                  คณะวิทยาศาสตร์และเทคโนโลยี สาขาวิทยาการคอมพิวเตอร์<br />
+                  มหาวิทยาลัยธรรมศาสตร์ ศูนย์รังสิต ปทุมธานี
+                </div>
                 <a
-                  href="mailto:achiraya.choo@dome.tu.ac.th"
-                  className="email-chip"
+                  href="https://www.google.com/maps/search/?api=1&query=Faculty%20of%20Science%20and%20Technology%2C%20Thammasat%20University%20Rangsit%20Campus"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="map-open-btn"
                 >
-                  <span className="email-chip-dot" />
-                  <span className="email-chip-text">achiraya.choo@dome.tu.ac.th</span>
-                  <ExternalLink size={13} className="email-chip-icon" />
-                </a>
-                <a
-                  href="mailto:aumboon.rap@dome.tu.ac.th"
-                  className="email-chip"
-                >
-                  <span className="email-chip-dot" />
-                  <span className="email-chip-text">aumboon.rap@dome.tu.ac.th</span>
-                  <ExternalLink size={13} className="email-chip-icon" />
+                  <ExternalLink size={13} /> เปิดใน Maps
                 </a>
               </div>
-            </div>
-          </div>
-
-          {/* Map Card */}
-          <div className={`map-card ${mounted ? 'visible' : ''}`}>
-            <div className="map-header">
-              <span className="map-title">แผนที่</span>
-              <span className="map-badge">📍 มธ. รังสิต</span>
-            </div>
-            <div className="map-frame">
-              <iframe
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3874.3!2d100.6167!3d14.0706!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x311d60a5bad66a35%3A0x29c71e9e6e45bdf!2sThammasat%20University%2C%20Rangsit%20Campus!5e0!3m2!1sth!2sth!4v1700000000000!5m2!1sth!2sth"
-                allowFullScreen
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                title="Thammasat University Rangsit"
-              />
-            </div>
-            <div className="map-footer">
-              <div className="map-address-short">
-                มหาวิทยาลัยธรรมศาสตร์ ศูนย์รังสิต<br />
-                ต.คลองหนึ่ง อ.คลองหลวง ปทุมธานี
-              </div>
-              <a
-                href="https://maps.google.com/?q=Thammasat+University+Rangsit+Campus"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="map-open-btn"
-              >
-                <ExternalLink size={13} /> เปิดใน Maps
-              </a>
             </div>
           </div>
 
@@ -615,8 +680,7 @@ export default function ContactPage() {
             <div className="cta-left">
               <p className="cta-tag">✦ Lunar Day</p>
               <p className="cta-text">
-                ลองใช้งานระบบวิเคราะห์<br />
-                <span>สุขภาพสตรี</span>
+                เริ่มวิเคราะห์<span>สุขภาพประจำเดือน</span>ของคุณ
               </p>
             </div>
             <div className="cta-right">
@@ -625,11 +689,13 @@ export default function ContactPage() {
               </a>
             </div>
           </div>
-        </div>
+        </main>
 
         {/* ── Footer ── */}
         <footer className="contact-footer">
-          <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
+          <div className="contact-footer-inner contact-container">
+            <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
+          </div>
         </footer>
       </div>
     </>

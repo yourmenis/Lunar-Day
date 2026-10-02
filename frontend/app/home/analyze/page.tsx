@@ -643,7 +643,9 @@ export default function IntroPage() {
 
         {/* ══════════ FOOTER ══════════ */}
         <footer className="intro-footer">
-          <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
+          <div className="intro-footer-inner">
+            <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
+          </div>
         </footer>
         <LoginToast show={showLoginToast} onClose={() => setShowLoginToast(false)} />
       </div>
