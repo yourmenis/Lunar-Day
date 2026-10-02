@@ -142,7 +142,7 @@ def login():
                         "access_token": access_token,
                         "user": {
                             "id": user["UserID"],
-                            "firtName": user["Name"],
+                            "firstName": user["Name"],
                             "lastName": user["LastName"],
                         },
                     }
