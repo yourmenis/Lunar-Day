@@ -630,8 +630,16 @@ export default function ProfilePage() {
     fetchHistory()
   }, [router])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowLogoutModal(false)
+    // แจ้ง backend ให้ blacklist token (ถ้าล้มเหลวก็ยังออกจากระบบฝั่งหน้าเว็บต่อ)
+    try {
+      const token = localStorage.getItem('access_token')
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    } catch {}
     localStorage.removeItem('access_token')
     localStorage.removeItem('user')
     router.push('/login')

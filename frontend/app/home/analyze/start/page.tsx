@@ -17,10 +17,20 @@ import LoginToast from '../../components/LoginToast'
 type Step = 'upload' | 'symptoms' | 'analyzing' | 'result'
 
 interface SymptomForm {
-  pain_level: string
-  duration: string
-  is_pregnant: string
-  size: string
+  flow: string          // q1
+  duration: string      // q2
+  cycle: string         // q3
+  bleeding: string      // q4
+  pain_level: string    // q5
+  pelvic_pain: string   // q6
+  sex_history: string   // q8
+  is_pregnant: string   // q9
+  size: string          // q10
+}
+
+const EMPTY_FORM: SymptomForm = {
+  flow: '', duration: '', cycle: '', bleeding: '', pain_level: '',
+  pelvic_pain: '', sex_history: '', is_pregnant: '', size: '',
 }
 
 interface ImageResult {
@@ -45,18 +55,46 @@ interface RiskResult {
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
+// value ตรงกับ ALLOWED_VALUES ใน backend/routes/analysis.py
 const PAIN_OPTIONS = [
-  { value: 'ปกติ/ปวดเล็กน้อย', label: '😊 ปกติ / ปวดเล็กน้อย' },
-  { value: 'ปวดปานกลาง',       label: '😐 ปวดปานกลาง' },
-  { value: 'ปวดรุนแรง',        label: '😣 ปวดรุนแรง' },
+  { value: 'none',   label: '😊 ปกติ / ปวดเล็กน้อย' },
+  { value: 'mild',   label: '😐 ปวดปานกลาง' },
+  { value: 'severe', label: '😣 ปวดรุนแรง' },
 ]
 const DURATION_OPTIONS = [
-  { value: '1-7 วัน',       label: '📅 1–7 วัน' },
-  { value: 'มากกว่า 7 วัน', label: '📅 มากกว่า 7 วัน' },
+  { value: 'normal', label: '📅 1–7 วัน' },
+  { value: 'long',   label: '📅 มากกว่า 7 วัน' },
 ]
 const SIZE_OPTIONS = [
-  { value: 'เล็กกว่าเหรียญสิบ', label: '🪙 เล็กกว่าเหรียญสิบบาท' },
-  { value: 'ใหญ่กว่าเหรียญสิบ', label: '🩸 ใหญ่กว่าเหรียญสิบบาท' },
+  { value: 'small', label: '🪙 เล็กกว่าเหรียญสิบบาท' },
+  { value: 'large', label: '🩸 ใหญ่กว่าเหรียญสิบบาท' },
+]
+const FLOW_OPTIONS = [
+  { value: 'low',    label: '💧 น้อยกว่าปกติ' },
+  { value: 'normal', label: '🩸 ปกติ' },
+  { value: 'high',   label: '🌊 มากกว่าปกติ' },
+]
+const CYCLE_OPTIONS = [
+  { value: 'short',  label: '📆 ถี่กว่า 21 วัน' },
+  { value: 'normal', label: '📆 ทุก 21–35 วัน' },
+  { value: 'long',   label: '📆 ห่างกว่า 35 วัน' },
+]
+const BLEEDING_OPTIONS = [
+  { value: 'none',       label: '✅ ไม่มีเลือดออกผิดปกติ' },
+  { value: 'spotting',   label: '🔸 เลือดออกกะปริดกะปรอย / นอกรอบเดือน' },
+  { value: 'postcoital', label: '🔹 เลือดออกหลังมีเพศสัมพันธ์' },
+]
+const PELVIC_PAIN_OPTIONS = [
+  { value: 'none',   label: '😊 ไม่ปวด' },
+  { value: 'mild',   label: '😐 ปวดเล็กน้อย' },
+  { value: 'severe', label: '😣 ปวดรุนแรง' },
+]
+const SEX_HISTORY_OPTIONS = [
+  { value: 'no_sex',      label: '🚫 ไม่มีเพศสัมพันธ์' },
+  { value: 'protected',   label: '🛡️ มี และป้องกันทุกครั้ง' },
+  { value: 'unprotected', label: '⚠️ มี โดยไม่ได้ป้องกัน' },
+  { value: 'both',        label: '🔄 มีทั้งป้องกันและไม่ป้องกัน' },
+  { value: 'failure',     label: '❗ ป้องกันแต่การป้องกันล้มเหลว' },
 ]
 
 const RISK_COLORS: Record<string, { bg: string; border: string; text: string; badge: string }> = {
@@ -204,9 +242,7 @@ export default function AnalyzePage() {
   const [imageSuccessToast, setImageSuccessToast] = useState<string | null>(null)
   const [imageErrorToast,   setImageErrorToast]   = useState<string | null>(null)
 
-  const [form, setForm] = useState<SymptomForm>({
-    pain_level: '', duration: '', is_pregnant: '', size: '',
-  })
+  const [form, setForm] = useState<SymptomForm>(EMPTY_FORM)
 
   const [imageResult, setImageResult] = useState<ImageResult | null>(null)
   const [riskResult,  setRiskResult]  = useState<RiskResult  | null>(null)
@@ -258,7 +294,10 @@ export default function AnalyzePage() {
 
   const formValid = (() => {
     if (imageLoading || !imageResult || apiError) return false
-    if (!form.pain_level || !form.duration || !form.is_pregnant) return false
+    if (!form.flow || !form.duration || !form.cycle || !form.bleeding ||
+        !form.pain_level || !form.pelvic_pain || !form.sex_history) return false
+    // backend ต้องการ q9 เมื่อมีเพศสัมพันธ์ (q8 ≠ no_sex)
+    if (form.sex_history !== 'no_sex' && !form.is_pregnant) return false
     if (imageResult?.ai_result === 'clot' && !form.size) return false
     return true
   })()
@@ -276,19 +315,39 @@ export default function AnalyzePage() {
     setStep('analyzing'); setApiError(null)
     try {
       const fd = new FormData()
-      fd.append('ai_result',   imageResult?.ai_result ?? 'none')
-      fd.append('pain_level',  form.pain_level)
-      fd.append('duration',    form.duration)
-      fd.append('is_pregnant', form.is_pregnant)
-      fd.append('image_path',  imageResult?.image_path ?? '')
-      if (imageResult?.ai_result === 'clot' && form.size) fd.append('size', form.size)
+      fd.append('aiResult',   imageResult?.ai_result ?? '')
+      fd.append('imagePath',  imageResult?.image_path ?? '')
+      fd.append('confidence', String(imageResult?.confidence ?? ''))
+      fd.append('q1', form.flow)
+      fd.append('q2', form.duration)
+      fd.append('q3', form.cycle)
+      fd.append('q4', form.bleeding)
+      fd.append('q5', form.pain_level)
+      fd.append('q6', form.pelvic_pain)
+      fd.append('q8', form.sex_history)
+      if (form.sex_history !== 'no_sex' && form.is_pregnant) fd.append('q9', form.is_pregnant)
+      if (imageResult?.ai_result === 'clot' && form.size) fd.append('q10', form.size)
       const res  = await fetch(`${BASE_URL}/analysis/risk`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
       })
-      const data: RiskResult = await res.json()
+      const data = await res.json()
       if (data.status !== 'success') {
-        setApiError((data as any).msg ?? 'ประเมินความเสี่ยงไม่สำเร็จ'); setStep('symptoms')
-      } else { setRiskResult(data); setStep('result') }
+        setApiError(data.msg ?? 'ประเมินความเสี่ยงไม่สำเร็จ'); setStep('symptoms')
+      } else {
+        // backend ส่งผลมาใน data.data (snake_case) → แปลงเป็นรูปแบบที่หน้าจอใช้
+        const d = data.data
+        setRiskResult({
+          status:            data.status,
+          Detect1:           d.detect1,
+          Detect2:           d.detect2,
+          Risk_Level:        d.risk_level,
+          Potential_Disease: d.potential_disease,
+          Recommendation:    d.recommendation ?? '',
+          processing_time:   0,
+          saved:             true,
+        })
+        setStep('result')
+      }
     } catch { setApiError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'); setStep('symptoms') }
   }
 
@@ -300,7 +359,7 @@ export default function AnalyzePage() {
   const resetAll = () => {
     setStep('upload'); setImage(null); setImageFile(null)
     setImageResult(null); setRiskResult(null); setApiError(null); setImageLoading(false)
-    setForm({ pain_level: '', duration: '', is_pregnant: '', size: '' })
+    setForm(EMPTY_FORM)
     setImageValidated(false)
   }
 
@@ -680,6 +739,31 @@ export default function AnalyzePage() {
 
                 <div className="symptom-form">
                   <div>
+                    <div className="sf-label"><Activity size={14} /> ปริมาณเลือดประจำเดือน</div>
+                    <RadioGroup name="flow" options={FLOW_OPTIONS} value={form.flow}
+                      onChange={v => setForm(f => ({ ...f, flow: v }))} />
+                  </div>
+                  <div>
+                    <div className="sf-label"><Clock size={14} /> ความถี่ของรอบเดือน</div>
+                    <RadioGroup name="cycle" options={CYCLE_OPTIONS} value={form.cycle}
+                      onChange={v => setForm(f => ({ ...f, cycle: v }))} />
+                  </div>
+                  <div>
+                    <div className="sf-label"><Info size={14} /> ลักษณะเลือดออกผิดปกติ</div>
+                    <RadioGroup name="bleeding" options={BLEEDING_OPTIONS} value={form.bleeding}
+                      onChange={v => setForm(f => ({ ...f, bleeding: v }))} />
+                  </div>
+                  <div>
+                    <div className="sf-label"><Activity size={14} /> ปวดอุ้งเชิงกราน</div>
+                    <RadioGroup name="pelvic" options={PELVIC_PAIN_OPTIONS} value={form.pelvic_pain}
+                      onChange={v => setForm(f => ({ ...f, pelvic_pain: v }))} />
+                  </div>
+                  <div>
+                    <div className="sf-label"><Shield size={14} /> ประวัติการมีเพศสัมพันธ์</div>
+                    <RadioGroup name="sex" options={SEX_HISTORY_OPTIONS} value={form.sex_history}
+                      onChange={v => setForm(f => ({ ...f, sex_history: v }))} />
+                  </div>
+                  <div>
                     <div className="sf-label"><Activity size={14} /> ระดับอาการปวด</div>
                     <RadioGroup name="pain" options={PAIN_OPTIONS} value={form.pain_level}
                       onChange={v => setForm(f => ({ ...f, pain_level: v }))} />
@@ -689,16 +773,16 @@ export default function AnalyzePage() {
                     <RadioGroup name="duration" options={DURATION_OPTIONS} value={form.duration}
                       onChange={v => setForm(f => ({ ...f, duration: v }))} />
                   </div>
-                  <div>
+                  {form.sex_history !== 'no_sex' && <div>
                     <div className="sf-label"><Baby size={14} /> มีความเป็นไปได้ว่าตั้งครรภ์?</div>
                     <RadioGroup name="preg"
                       options={[
-                        { value: 'true',  label: '🤰 มีความเสี่ยงตั้งครรภ์' },
-                        { value: 'false', label: '🙅 ไม่มีความเสี่ยงตั้งครรภ์' },
+                        { value: 'pregnant',     label: '🤰 มีความเสี่ยงตั้งครรภ์' },
+                        { value: 'not_pregnant', label: '🙅 ไม่มีความเสี่ยงตั้งครรภ์' },
                       ]}
                       value={form.is_pregnant}
                       onChange={v => setForm(f => ({ ...f, is_pregnant: v }))} />
-                  </div>
+                  </div>}
                   <div>
                     <div className="sf-label"><Ruler size={14} /> ขนาดลิ่มเลือด</div>
                     <RadioGroup name="size" options={SIZE_OPTIONS} value={form.size}

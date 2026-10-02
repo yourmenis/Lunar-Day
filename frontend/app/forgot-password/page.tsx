@@ -196,30 +196,61 @@ export default function ForgotPasswordPage() {
   }
 
 
-  const handleSendOTP = async () => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/forgot-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    })
-    const data = await res.json()
-    if (res.ok) {
-    
-      setStep(2)
-    } else {
-      alert(data.msg)
+  // ส่ง (หรือส่งซ้ำ) OTP ไปที่อีเมล — คืน true เมื่อสำเร็จ
+  const requestOtp = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.msg); return false }
+      return true
+    } catch {
+      alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+      return false
+    } finally {
+      setLoading(false)
     }
   }
-  
-  const handleVerifyOtp = () => {
-    const code = otp.join('')
-    if (code.length < OTP_LENGTH) return
-    goTo(3)
+
+  const handleSendOTP = async () => {
+    if (!email || loading) return
+    if (await requestOtp()) setStep(2)
   }
 
-  const handleResend = () => {
-    if (!expired) return
+  const handleVerifyOtp = async () => {
+    const code = otp.join('')
+    if (code.length < OTP_LENGTH) return
+    setOtpError(false)
+    setLoading(true)
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp: code }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        goTo(3)
+      } else {
+        setOtpError(true)
+        alert(data.msg)
+      }
+    } catch {
+      alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResend = async () => {
+    if (!expired || loading) return
+    if (!(await requestOtp())) return
     setOtp(Array(OTP_LENGTH).fill(''))
+    setOtpError(false)
     setExpired(false)
     setTimerKey(k => k + 1)
   }
@@ -235,10 +266,10 @@ export default function ForgotPasswordPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          Email: email,
-          OTP: otp.join(''),
-          NewPassword: password,
-          ConfirmPassword: confirmPassword,
+          email: email,
+          otp: otp.join(''),
+          newPassword: password,
+          confirmPassword: confirmPassword,
         }),
       })
       const data = await res.json()

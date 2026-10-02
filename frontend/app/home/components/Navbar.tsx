@@ -56,9 +56,11 @@ export default function Navbar() {
     fetchAvatar()
   }, [pathname])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowLogoutModal(false)
     setDrawerOpen(false)
+    // แจ้ง backend ให้ blacklist token (ถ้าล้มเหลวก็ยังออกจากระบบฝั่งหน้าเว็บต่อ)
+    try { await api.post('/profile/logout') } catch {}
     localStorage.removeItem('access_token')
     localStorage.removeItem('user')
     showToast('ออกจากระบบเรียบร้อยแล้ว')

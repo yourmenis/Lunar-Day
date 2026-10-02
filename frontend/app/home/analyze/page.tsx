@@ -9,7 +9,7 @@ import LoginToast from '../components/LoginToast'
 const STEPS = [
   {
     num: 1,
-    emoji: '📸',
+    emoji: '🖼️',
     emojiAlt: '🩺',
     color: '#f06292',
     colorLight: 'rgba(240,98,146,0.12)',
@@ -404,10 +404,21 @@ export default function IntroPage() {
         .bcta-desc { font-size: 14px; color: rgba(255,255,255,0.5); line-height: 1.6; }
         .bcta-right { position:relative; z-index:1; flex-shrink:0; }
 
+        /* ── Footer (ชิดซ้าย เหมือนหน้า Home) ── */
         .intro-footer {
-          margin-top: 64px; background: #fff; border-top: 1px solid #f5e6ec;
-          padding: 28px var(--page-pad); display: flex; align-items: center;
-          justify-content: center; font-size: 12.5px; color: #b09aa8;
+          margin-top: 64px;
+          background: #fff;
+          border-top: 1px solid #f5e6ec;
+          padding: 28px var(--page-pad);
+          font-size: 12.5px;
+          color: #b09aa8;
+        }
+        .intro-footer-inner {
+          max-width: var(--page-max);
+          margin: 0 auto;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
         }
 
         .sp-content { transition: opacity 0.3s ease; }
@@ -438,7 +449,6 @@ export default function IntroPage() {
           .trust-section { padding: 40px var(--page-pad) 0; }
           .trust-grid { grid-template-columns: 1fr; gap: 12px; }
           .bcta-card { padding: 36px 28px; flex-direction: column; align-items: flex-start; }
-          .intro-footer { flex-direction: column; gap: 6px; text-align: center; padding: 20px; }
         }
       `}</style>
 
@@ -627,8 +637,7 @@ export default function IntroPage() {
             <div className="bcta-left">
               <p className="bcta-tag">✦ พร้อมใช้งานแล้ววันนี้</p>
               <h2 className="bcta-title">
-                เริ่มวิเคราะห์สุขภาพ<br />
-                ประจำเดือนของคุณ
+                เริ่มวิเคราะห์สุขภาพประจำเดือนของคุณ
               </h2>
               <p className="bcta-desc">ใช้เวลาไม่ถึง 1 นาที · ฟรี · ผลลัพธ์แม่นยำด้วย AI</p>
             </div>
