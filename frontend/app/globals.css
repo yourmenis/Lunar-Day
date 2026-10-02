@@ -21,6 +21,13 @@
 
 * {
   box-sizing: border-box;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ctext y='28' font-size='28'%3E%F0%9F%A9%B8%3C/text%3E%3C/svg%3E") 16 16, auto;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
@@ -33,7 +40,6 @@ body {
   font-family: 'Mitr', sans-serif;
 }
 
-/* Glassmorphism card */
 .glass-card {
   background: var(--glass-bg);
   backdrop-filter: blur(16px);
@@ -42,21 +48,24 @@ body {
   border-radius: 20px;
 }
 
-/* Pink gradient background */
 .pink-gradient-bg {
   background: radial-gradient(ellipse at top left, #F4789E 0%, #E05082 40%, #C23D6B 100%);
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--pink-pale); }
 ::-webkit-scrollbar-thumb { background: var(--pink-light); border-radius: 3px; }
 
-/* Smooth transitions */
-a, button { transition: all 0.2s ease; }
+a, button {
+  transition: all 0.2s ease;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ctext y='28' font-size='28'%3E%F0%9F%A9%B8%3C/text%3E%3C/svg%3E") 16 16, pointer;
+}
 
-/* Hero text outline style matching design */
-.hero-title {
+[role="button"] {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ctext y='28' font-size='28'%3E%F0%9F%A9%B8%3C/text%3E%3C/svg%3E") 16 16, pointer;
+}
+
+/* .hero-title {
   font-family: 'Mitr', sans-serif;
   font-weight: 700;
   color: white;
@@ -67,7 +76,7 @@ a, button { transition: all 0.2s ease; }
      2px  2px 0 #C23D6B,
      0    3px 6px rgba(0,0,0,0.3);
   letter-spacing: 0.02em;
-}
+} */
 
 input:-webkit-autofill {
   -webkit-text-fill-color: white !important;

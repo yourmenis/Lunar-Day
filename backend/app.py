@@ -1,4 +1,5 @@
-from flask import Flask
+from datetime import timedelta
+from flask import Flask, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_bcrypt import Bcrypt
@@ -8,24 +9,52 @@ from dotenv import load_dotenv
 # --- นำเข้า Blueprint จากโฟลเดอร์ routes ---
 from routes.auth import auth_bp
 from routes.articles import articles_bp
-from routes.analysis import analysis_bp
+from routes.analysis import UPLOAD_FOLDER, analysis_bp
 from routes.profile import profile_bp
 from routes.history import history_bp
+from config.database import get_db_connection
 
-# โหลดค่าจากไฟล์ .env (พวก DB_PASSWORD, JWT_SECRET_KEY)
+# โหลดค่าจากไฟล์ .env
 load_dotenv()
 
 app = Flask(__name__)
 
-# --- 1. ตั้งค่า CORS (สำคัญมาก!) ---
-# อนุญาตให้ Frontend (พอร์ต 3000) คุยกับ Backend (พอร์ต 5000) ได้
+
+# Route สำหรับดึงรูปภาพที่อัปโหลดไว้
+@app.route("/uploads/<filename>", methods=["GET"])
+def get_uploaded_image(filename):
+    try:
+        return send_from_directory(UPLOAD_FOLDER, filename)
+    except Exception as e:
+        return {"error": "File not found"}, 404
+
+
+# --- 1. ตั้งค่า CORS ---
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 # --- 2. ตั้งค่าระบบความปลอดภัย (JWT) ---
 app.config["JWT_SECRET_KEY"] = os.environ.get(
-    "JWT_SECRET_KEY", "luna-day-default-key-2026"
+    "JWT_SECRET_KEY", "luna-day-default-secret-key-2026-secure"
 )
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)
 jwt = JWTManager(app)
+
+
+# ดักจับ Token ที่ถูกแบน (Logout)
+@jwt.token_in_blocklist_loader
+def check_if_token_revoked(jwt_header, jwt_payload):
+    jti = jwt_payload["jti"]
+
+    db = get_db_connection()
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT TokenID FROM TokenBlacklist WHERE JTI = %s", (jti,))
+        token = cursor.fetchone()
+        return token is not None
+    finally:
+        cursor.close()
+        db.close()
+
 
 # --- 3. ตั้งค่า Bcrypt ---
 # ใช้สำหรับแฮชรหัสผ่านในระบบ
@@ -34,7 +63,7 @@ bcrypt = Bcrypt(app)
 # --- 4. ลงทะเบียน Blueprint (Route ทั้งหมด) ---
 # กำหนด Prefix ให้ชัดเจน เพื่อให้เรียกใช้ผ่าน Postman/Frontend ได้ง่าย
 app.register_blueprint(auth_bp, url_prefix="/auth")
-app.register_blueprint(articles_bp, url_prefix="/articles")
+app.register_blueprint(articles_bp, url_prefix="/")
 app.register_blueprint(analysis_bp, url_prefix="/analysis")
 app.register_blueprint(profile_bp, url_prefix="/profile")
 app.register_blueprint(history_bp, url_prefix="/history")

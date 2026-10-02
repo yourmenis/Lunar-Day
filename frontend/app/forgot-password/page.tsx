@@ -4,9 +4,10 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Mail, Lock, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react'
 import './forgot-password.css'
+import Image from 'next/image'
 
 // ── Constants ──────────────────────────────────────────────────────────────
-const OTP_LENGTH = 5
+const OTP_LENGTH = 6
 const OTP_EXPIRE_SECONDS = 5 * 60  // 5 minutes
 const CIRCUMFERENCE = 2 * Math.PI * 14  // r=14
 
@@ -194,52 +195,95 @@ export default function ForgotPasswordPage() {
     setTimeout(() => { setStep(target); setAnimating(false) }, 220)
   }
 
-  // ── Step 1: send OTP ─────────────────────────────────────────────────────
-  const handleSendOtp = async () => {
-    const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRx.test(email)) {
-      setEmailError('กรุณากรอกอีเมลให้ถูกต้อง')
-      return
-    }
-    setEmailError('')
+
+  // ส่ง (หรือส่งซ้ำ) OTP ไปที่อีเมล — คืน true เมื่อสำเร็จ
+  const requestOtp = async () => {
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1000))
-    setLoading(false)
-    goTo(2)
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.msg); return false }
+      return true
+    } catch {
+      alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+      return false
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // ── Step 2: verify OTP ────────────────────────────────────────────────────
+  const handleSendOTP = async () => {
+    if (!email || loading) return
+    if (await requestOtp()) setStep(2)
+  }
+
   const handleVerifyOtp = async () => {
     const code = otp.join('')
     if (code.length < OTP_LENGTH) return
+    setOtpError(false)
     setLoading(true)
-    await new Promise(r => setTimeout(r, 900))
-    setLoading(false)
-    // Simulate wrong OTP with "00000"
-    if (code === '00000') {
-      setOtpError(true)
-      setTimeout(() => setOtpError(false), 600)
-      return
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp: code }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        goTo(3)
+      } else {
+        setOtpError(true)
+        alert(data.msg)
+      }
+    } catch {
+      alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+    } finally {
+      setLoading(false)
     }
-    goTo(3)
   }
 
-  const handleResend = () => {
-    if (!expired) return
+  const handleResend = async () => {
+    if (!expired || loading) return
+    if (!(await requestOtp())) return
     setOtp(Array(OTP_LENGTH).fill(''))
+    setOtpError(false)
     setExpired(false)
     setTimerKey(k => k + 1)
   }
-
-  // ── Step 3: set new password ──────────────────────────────────────────────
+  
   const handleSetPassword = async () => {
     if (password.length < 8) { setPwError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
     if (password !== confirmPassword) { setPwError('รหัสผ่านไม่ตรงกัน'); return }
     setPwError('')
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1100))
-    setLoading(false)
-    setDone(true)
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email,
+          otp: otp.join(''),
+          newPassword: password,
+          confirmPassword: confirmPassword,
+        }),
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        setDone(true)
+      } else {
+        setPwError(data.msg)
+      }
+    } catch {
+      setPwError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const canSubmitOtp = otp.join('').length === OTP_LENGTH && !expired
@@ -258,9 +302,15 @@ export default function ForgotPasswordPage() {
 
       <div className={`card-wrap ${mounted ? 'visible' : ''}`}>
         {/* Moon */}
-        <div className="moon-motif">
-          <div className="moon-circle">🌙</div>
-        </div>
+        <div className="moon-motif" style={{ display: 'flex', justifyContent: 'center' }}>
+            <Image 
+              src="/logolunar.png" 
+              alt="Lunar Day Logo" 
+              width={80} 
+              height={80}
+              style={{ borderRadius: '50%' }}
+            />
+          </div>
 
         <p className="app-name">Lunar Day</p>
 
@@ -322,13 +372,13 @@ export default function ForgotPasswordPage() {
                   placeholder="example@email.com"
                   value={email}
                   onChange={e => { setEmail(e.target.value); setEmailError('') }}
-                  onKeyDown={e => e.key === 'Enter' && handleSendOtp()}
+                  onKeyDown={e => e.key === 'Enter' && handleSendOTP()}
                 />
                 {emailError && <p className="field-hint err">{emailError}</p>}
               </div>
 
               <div className="btn-row" style={{ marginTop: 20 }}>
-                <button type="button" className="btn-primary" onClick={handleSendOtp} disabled={loading || !email}>
+                <button type="button" className="btn-primary" onClick={handleSendOTP} disabled={loading || !email}>
                   {loading ? <><div className="spinner" /> กำลังส่ง...</> : <>ส่งรหัส OTP <ChevronRight size={16} /></>}
                 </button>
               </div>
