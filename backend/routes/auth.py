@@ -173,7 +173,6 @@ def forgot_password():
 
     db = None
     cursor = None
-
     try: 
         data = request.get_json(silent=True) or {}
         email = str(data.get("email", "")).strip()
@@ -255,22 +254,22 @@ Luna Day Team
 
 
 # ==========================================
-# 🛡️ ส่วนที่ 4: verify otp
+# 🛡️ verify otp
 # ==========================================
 @auth_bp.route("/verify-otp", methods=["POST"])
 def verify_otp():
-    data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").strip()
-    otp = (data.get("otp") or "").strip()
+    db = None
+    cursor = None
+    try: 
+        data = request.get_json(silent=True) or {}
+        email = str(data.get("email") or "").strip()
+        otp = str(data.get("otp") or "").strip()
 
-    if not otp:
-        return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
+        if not otp:
+            return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
 
-    db = get_db_connection()
-    cursor = db.cursor(dictionary=True, buffered=True)
-
-    try:
-        # เช็คว่า OTP ตรงไหม
+        db = get_db_connection()
+        cursor = db.cursor(dictionary=True, buffered=True)
         cursor.execute(
             """
             SELECT UserID, OTPExpireTime 
@@ -280,7 +279,6 @@ def verify_otp():
             (email, otp),
         )
         user = cursor.fetchone()
-
         if not user:
             return jsonify({"msg": "รหัส OTP ไม่ถูกต้อง โปรดตรวจสอบอีกครั้ง"}), 400
 
@@ -290,12 +288,17 @@ def verify_otp():
 
         return jsonify({"msg": "รหัส OTP ถูกต้อง"}), 200
 
-    except Exception as e:
-        return jsonify({"msg": f"เกิดข้อผิดพลาดทางเทคนิค: {str(e)}"}), 500
+    except mysql.connector.Error:
+        return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
+
+    except Exception:
+        return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if cursor is not None:
+            cursor.close()
+        if db is not None:
+            db.close()
 
 
 # ==========================================
