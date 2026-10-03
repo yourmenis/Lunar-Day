@@ -299,35 +299,36 @@ def verify_otp():
             cursor.close()
         if db is not None:
             db.close()
-
-
+            
 # ==========================================
-# 🛡️ ส่วนที่ 5: ตั้งรหัสผ่านใหม่ (Reset Password + Confirm)
+# 🛡️ Reset Password 
 # ==========================================
 @auth_bp.route("/reset-password", methods=["POST"])
 def reset_password():
-    data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").strip()
-    otp = (data.get("otp") or "").strip()
-    new_password = data.get("newPassword") or ""
-    confirm_password = data.get("confirmPassword") or ""
+    db = None
+    cursor = None
+    try: 
+        data = request.get_json(silent=True) or {}
+        email = str(data.get("email") or "").strip()
+        otp = str(data.get("otp") or "").strip()
+        new_password = str(data.get("newPassword", "")).strip()
+        confirm_password = str(data.get("confirmPassword", "")).strip()
 
-    # เช็คค่าว่าง
-    if not all([email, otp, new_password, confirm_password]):
-        return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
+        # เช็คค่าว่าง
+        if not all([email, otp, new_password, confirm_password]):
+            return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
 
-    # เช็ครหัสผ่านตรงกัน
-    if new_password != confirm_password:
-        return jsonify({"msg": "รหัสผ่านไม่ตรงกัน"}), 400
+        # เช็ครหัสผ่านตรงกัน
+        if new_password != confirm_password:
+            return jsonify({"msg": "รหัสผ่านไม่ตรงกัน"}), 400
 
-    # เช็คความยาว
-    if len(new_password) < 8:
-        return jsonify({"msg": "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร"}), 400
+        # เช็คความยาว
+        if len(new_password) < 8:
+            return jsonify({"msg": "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร"}), 400
 
-    db = get_db_connection()
-    cursor = db.cursor(dictionary=True, buffered=True)
+        db = get_db_connection()
+        cursor = db.cursor(dictionary=True, buffered=True)
 
-    try:
         #  ดึง OTP + เวลา expire 
         cursor.execute(
             """
@@ -362,9 +363,14 @@ def reset_password():
 
         return jsonify({"msg": "เปลี่ยนรหัสผ่านสำเร็จ"}), 200
 
-    except Exception as e:
-        return jsonify({"msg": f"เกิดข้อผิดพลาดทางเทคนิค: {str(e)}"}), 500
+    except mysql.connector.Error:
+        return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
+
+    except Exception:
+        return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if cursor is not None:
+            cursor.close()
+        if db is not None:
+            db.close()
