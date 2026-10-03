@@ -664,11 +664,18 @@ export default function ProfilePage() {
   }
 
   const handleSaveProfile = async () => {
+    const username = editForm.username.trim()
+    const firstName = editForm.name.trim()
+    const lastName = editForm.lastname.trim()
+    if (!username || !firstName || !lastName) {
+      return showToast('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วนก่อนทำการบันทึก', 'error')
+    }
+
     const token = localStorage.getItem('access_token')
     const form = new FormData()
-    form.append('username', editForm.username)
-    form.append('firstName', editForm.name)
-    form.append('lastName', editForm.lastname)
+    form.append('username', username)
+    form.append('firstName', firstName)
+    form.append('lastName', lastName)
     form.append('birthDate', editForm.birthday || profile?.Birthday || '')
     if (editForm.avatarFile) {form.append('profileImg', editForm.avatarFile)}
 

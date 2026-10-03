@@ -256,8 +256,11 @@ export default function ForgotPasswordPage() {
   }
   
   const handleSetPassword = async () => {
-    if (password.length < 8) { setPwError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
-    if (password !== confirmPassword) { setPwError('รหัสผ่านไม่ตรงกัน'); return }
+    // หน้า login ตัดช่องว่างหัว-ท้ายรหัสผ่านเสมอ จึงต้องตัดแบบเดียวกันตอนตั้งรหัสใหม่
+    const newPassword = password.trim()
+    const newConfirm = confirmPassword.trim()
+    if (newPassword.length < 8) { setPwError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
+    if (newPassword !== newConfirm) { setPwError('รหัสผ่านไม่ตรงกัน'); return }
     setPwError('')
     setLoading(true)
 
@@ -268,8 +271,8 @@ export default function ForgotPasswordPage() {
         body: JSON.stringify({
           email: email,
           otp: otp.join(''),
-          newPassword: password,
-          confirmPassword: confirmPassword,
+          newPassword: newPassword,
+          confirmPassword: newConfirm,
         }),
       })
       const data = await res.json()

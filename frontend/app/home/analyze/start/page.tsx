@@ -23,6 +23,7 @@ interface SymptomForm {
   bleeding: string      // q4
   pain_level: string    // q5
   pelvic_pain: string   // q6
+  symptoms: string[]    // q7
   sex_history: string   // q8
   is_pregnant: string   // q9
   size: string          // q10
@@ -30,7 +31,7 @@ interface SymptomForm {
 
 const EMPTY_FORM: SymptomForm = {
   flow: '', duration: '', cycle: '', bleeding: '', pain_level: '',
-  pelvic_pain: '', sex_history: '', is_pregnant: '', size: '',
+  pelvic_pain: '', symptoms: [], sex_history: '', is_pregnant: '', size: '',
 }
 
 interface ImageResult {
@@ -38,7 +39,6 @@ interface ImageResult {
   ai_result: string
   detect_label: string
   confidence: number
-  processing_time: number
   image_path: string | null
 }
 
@@ -49,11 +49,11 @@ interface RiskResult {
   Risk_Level: string
   Potential_Disease: string
   Recommendation: string
-  processing_time: number
   saved: boolean
 }
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL
+const TOAST_MS = 3000
 
 // value ตรงกับ ALLOWED_VALUES ใน backend/routes/analysis.py
 const PAIN_OPTIONS = [
@@ -62,7 +62,8 @@ const PAIN_OPTIONS = [
   { value: 'severe', label: '😣 ปวดรุนแรง' },
 ]
 const DURATION_OPTIONS = [
-  { value: 'normal', label: '📅 1–7 วัน' },
+  { value: 'short',  label: '📅 น้อยกว่า 2 วัน' },
+  { value: 'normal', label: '📅 2–7 วัน' },
   { value: 'long',   label: '📅 มากกว่า 7 วัน' },
 ]
 const SIZE_OPTIONS = [
@@ -89,6 +90,20 @@ const PELVIC_PAIN_OPTIONS = [
   { value: 'mild',   label: '😐 ปวดเล็กน้อย' },
   { value: 'severe', label: '😣 ปวดรุนแรง' },
 ]
+const ASSOCIATED_SYMPTOM_OPTIONS = [
+  { value: 'palpitation', label: '💓 ใจสั่น' },
+  { value: 'nausea',      label: '🤢 คลื่นไส้ / อาเจียน' },
+  { value: 'fever',       label: '🌡️ มีไข้' },
+  { value: 'breast',      label: '🤱 คัดตึง / เจ็บเต้านม' },
+  { value: 'urine',       label: '🚻 ปัสสาวะบ่อย / แสบขัด' },
+  { value: 'bowel',       label: '🚽 ท้องผูก / ขับถ่ายผิดปกติ' },
+  { value: 'discharge',   label: '💧 ตกขาวผิดปกติ' },
+]
+const PREGNANCY_OPTIONS = [
+  { value: 'pregnant',     label: '🤰 มีความเสี่ยงตั้งครรภ์' },
+  { value: 'not_pregnant', label: '🙅 ไม่มีความเสี่ยงตั้งครรภ์' },
+  { value: 'unsure',       label: '🤔 ไม่แน่ใจ' },
+]
 const SEX_HISTORY_OPTIONS = [
   { value: 'no_sex',      label: '🚫 ไม่มีเพศสัมพันธ์' },
   { value: 'protected',   label: '🛡️ มี และป้องกันทุกครั้ง' },
@@ -102,13 +117,36 @@ const RISK_COLORS: Record<string, { bg: string; border: string; text: string; ba
   เสี่ยงปานกลาง: { bg: '#fffbeb', border: '#fcd34d', text: '#b45309', badge: '#fef3c7' },
   เสี่ยงสูง:     { bg: '#fff1f2', border: '#fda4af', text: '#be123c', badge: '#ffe4e6' },
   ฉุกเฉิน:       { bg: '#fdf2f8', border: '#f0abfc', text: '#86198f', badge: '#fae8ff' },
+  ไม่พบโรค:      { bg: '#f8fafc', border: '#cbd5e1', text: '#475569', badge: '#e2e8f0' },
+}
+
+// backend ตอบ A7 เมื่อกรอกครบแต่ไม่ตรงกับโรคใดในฐานข้อมูล → แสดงเป็นผลลัพธ์แทน error
+const NO_MATCH_LEVEL = 'ไม่พบโรค'
+const NO_MATCH_DISEASE = 'ไม่พบโรคที่สอดคล้องกับอาการของท่านในฐานข้อมูลปัจจุบัน'
+const NO_MATCH_RECOMMENDATION =
+  'ระบบไม่พบภาวะหรือโรคที่สอดคล้องกับข้อมูลอาการที่ท่านระบุในฐานข้อมูลปัจจุบัน ' +
+  'เพื่อความถูกต้องและความปลอดภัยของท่าน แนะนำให้เข้ารับคำปรึกษาจากแพทย์ผู้เชี่ยวชาญด้านสูตินรีเวช ' +
+  'เพื่อรับการตรวจวินิจฉัยเพิ่มเติม'
+const CLOT_SIZE_TH: Record<string, string> = { small: 'ขนาดเล็ก', large: 'ขนาดใหญ่' }
+
+// แยกคำแนะนำเป็นข้อ ๆ แล้วตัดข้อที่ซ้ำกันออก (เทียบหลังตัดช่องว่างเกิน) เหลือข้อละครั้ง
+function uniqueSuggestions(text: string): string[] {
+  const seen = new Set<string>()
+  const items: string[] = []
+  for (const part of text.split(/[·•\n]/)) {
+    const item = part.replace(/\s+/g, ' ').trim()
+    if (!item || seen.has(item)) continue
+    seen.add(item)
+    items.push(item)
+  }
+  return items
 }
 const DEFAULT_RC = { bg: '#f0fdf4', border: '#86efac', text: '#15803d', badge: '#dcfce7' }
 
 // ─────────────────────────────────────────────
 // Progress ring
 // ─────────────────────────────────────────────
-function ProgressRing({ score, color }: { score: number; color: string }) {
+function ProgressRing({ score, color, label }: { score: number; color: string; label?: string }) {
   const r    = 46
   const circ = 2 * Math.PI * r
   const [dash, setDash] = useState(circ)
@@ -124,7 +162,7 @@ function ProgressRing({ score, color }: { score: number; color: string }) {
         transform="rotate(-90 55 55)"
         style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)' }} />
       <text x="55" y="50" textAnchor="middle" fontSize="20" fontWeight="700" fill={color}
-        fontFamily="'Mitr', sans-serif">{score}</text>
+        fontFamily="'Mitr', sans-serif">{label ?? score}</text>
       <text x="55" y="67" textAnchor="middle" fontSize="9.5" fill="#9e7a8a"
         fontFamily="'Sarabun', sans-serif">คะแนนความเสี่ยง</text>
     </svg>
@@ -227,6 +265,53 @@ function RadioGroup({
 }
 
 // ─────────────────────────────────────────────
+// Checkbox group (เลือกได้หลายข้อ)
+// ─────────────────────────────────────────────
+function CheckboxGroup({
+  options, values, onChange,
+}: { options: { value: string; label: string }[]; values: string[]; onChange: (v: string[]) => void }) {
+  const toggle = (v: string) =>
+    onChange(values.includes(v) ? values.filter(x => x !== v) : [...values, v])
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {options.map(opt => {
+        const checked = values.includes(opt.value)
+        return (
+          <label key={opt.value} style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '11px 14px', borderRadius: 12, cursor: 'pointer',
+            border: `1.5px solid ${checked ? '#f06292' : '#f5e6ec'}`,
+            background: checked
+              ? 'linear-gradient(135deg,rgba(252,228,236,0.6),rgba(248,187,208,0.3))'
+              : '#faf7f5',
+            transition: 'all 0.18s',
+          }}>
+            <input type="checkbox" value={opt.value}
+              checked={checked}
+              onChange={() => toggle(opt.value)}
+              style={{ display: 'none' }} />
+            <div style={{
+              width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+              border: `2px solid ${checked ? '#f06292' : '#f5c6d8'}`,
+              background: checked ? '#f06292' : '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 0.18s',
+            }}>
+              {checked && <div style={{ width: 6, height: 6, borderRadius: 2, background: '#fff' }} />}
+            </div>
+            <span style={{
+              fontFamily: "'Sarabun',sans-serif", fontSize: 14,
+              color: checked ? '#c2185b' : '#5a3a4a',
+              fontWeight: checked ? 500 : 400,
+            }}>{opt.label}</span>
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
 // Main page
 // ─────────────────────────────────────────────
 export default function AnalyzePage() {
@@ -241,6 +326,20 @@ export default function AnalyzePage() {
   const [imageValidated,    setImageValidated]    = useState(false)
   const [imageSuccessToast, setImageSuccessToast] = useState<string | null>(null)
   const [imageErrorToast,   setImageErrorToast]   = useState<string | null>(null)
+  const [toastSeq, setToastSeq] = useState(0)  // เปลี่ยน key เพื่อให้แอนิเมชันเริ่มใหม่ทุกครั้งที่เด้ง
+  const toastTimers = useRef<{ success?: ReturnType<typeof setTimeout>; error?: ReturnType<typeof setTimeout> }>({})
+
+  // โนติเด้งขึ้นแล้วหายเองใน TOAST_MS (ล้าง timer เก่าเพื่อไม่ให้ปิดโนติใหม่ก่อนเวลา)
+  const flashSuccess = useCallback((msg: string) => {
+    clearTimeout(toastTimers.current.success)
+    setImageSuccessToast(msg); setToastSeq(n => n + 1)
+    toastTimers.current.success = setTimeout(() => setImageSuccessToast(null), TOAST_MS)
+  }, [])
+  const flashError = useCallback((msg: string) => {
+    clearTimeout(toastTimers.current.error)
+    setImageErrorToast(msg); setToastSeq(n => n + 1)
+    toastTimers.current.error = setTimeout(() => setImageErrorToast(null), TOAST_MS)
+  }, [])
 
   const [form, setForm] = useState<SymptomForm>(EMPTY_FORM)
 
@@ -269,23 +368,33 @@ export default function AnalyzePage() {
       const res  = await fetch(`${BASE_URL}/analysis/image`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
       })
+      if (res.status === 401 || res.status === 422) {
+        localStorage.removeItem('access_token')
+        setImage(null); setImageFile(null)
+        flashError('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่')
+        return
+      }
       const data: ImageResult = await res.json()
       if (data.status !== 'success') {
-        setImageErrorToast((data as any).msg ?? 'รูปภาพไม่ถูกต้อง กรุณาอัปโหลดรูปใหม่')
+        // A5 = backend ตรวจแล้วไม่ใช่ภาพที่เกี่ยวกับเลือด/ลิ่มเลือด
+        const err = data as unknown as { error_code?: string; msg?: string }
+        flashError(err.error_code === 'A5'
+          ? 'กรุณาแนบรูปภาพที่เกี่ยวกับลิ่มเลือด'
+          : err.msg ?? 'รูปภาพไม่ถูกต้อง กรุณาอัปโหลดรูปใหม่')
+        // เอารูปเดิมออก และล้าง input เพื่อให้เลือกรูปใหม่ (หรือไฟล์เดิม) ได้ทันที
+        reader.abort()
+        if (fileRef.current) fileRef.current.value = ''
         setImage(null); setImageFile(null); setImageValidated(false)
-        setTimeout(() => setImageErrorToast(null), 4000)
       } else {
         setImageResult(data); setImageValidated(true)
-        setImageSuccessToast(`ผลภาพ: ${data.detect_label} (ความมั่นใจ ${data.confidence.toFixed(1)}%)`)
-        setTimeout(() => setImageSuccessToast(null), 4000)
+        flashSuccess(`ผลภาพ: ${data.detect_label} (ความมั่นใจ ${data.confidence.toFixed(1)}%)`)
         if (data.ai_result !== 'clot') setForm(f => ({ ...f, size: '' }))
       }
     } catch {
-      setImageErrorToast('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+      flashError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
       setImage(null); setImageFile(null)
-      setTimeout(() => setImageErrorToast(null), 4000)
     } finally { setImageLoading(false) }
-  }, [])
+  }, [flashError, flashSuccess])
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false)
@@ -293,7 +402,7 @@ export default function AnalyzePage() {
   }
 
   const formValid = (() => {
-    if (imageLoading || !imageResult || apiError) return false
+    if (imageLoading || !imageResult) return false
     if (!form.flow || !form.duration || !form.cycle || !form.bleeding ||
         !form.pain_level || !form.pelvic_pain || !form.sex_history) return false
     // backend ต้องการ q9 เมื่อมีเพศสัมพันธ์ (q8 ≠ no_sex)
@@ -324,13 +433,36 @@ export default function AnalyzePage() {
       fd.append('q4', form.bleeding)
       fd.append('q5', form.pain_level)
       fd.append('q6', form.pelvic_pain)
+      form.symptoms.forEach(s => fd.append('q7', s))
       fd.append('q8', form.sex_history)
       if (form.sex_history !== 'no_sex' && form.is_pregnant) fd.append('q9', form.is_pregnant)
       if (imageResult?.ai_result === 'clot' && form.size) fd.append('q10', form.size)
       const res  = await fetch(`${BASE_URL}/analysis/risk`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
       })
+      if (res.status === 401 || res.status === 422) {
+        localStorage.removeItem('access_token')
+        setApiError('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่'); setStep('symptoms')
+        return
+      }
       const data = await res.json()
+      if (data.error_code === 'A7') {
+        const detect1 = imageResult?.detect_label ?? ''
+        const detect2 = imageResult?.ai_result === 'clot'
+          ? `${detect1}${CLOT_SIZE_TH[form.size] ?? ''}`
+          : detect1
+        setRiskResult({
+          status:            'no_match',
+          Detect1:           detect1,
+          Detect2:           detect2,
+          Risk_Level:        NO_MATCH_LEVEL,
+          Potential_Disease: NO_MATCH_DISEASE,
+          Recommendation:    NO_MATCH_RECOMMENDATION,
+          saved:             false,
+        })
+        setStep('result')
+        return
+      }
       if (data.status !== 'success') {
         setApiError(data.msg ?? 'ประเมินความเสี่ยงไม่สำเร็จ'); setStep('symptoms')
       } else {
@@ -343,7 +475,6 @@ export default function AnalyzePage() {
           Risk_Level:        d.risk_level,
           Potential_Disease: d.potential_disease,
           Recommendation:    d.recommendation ?? '',
-          processing_time:   0,
           saved:             true,
         })
         setStep('result')
@@ -353,7 +484,7 @@ export default function AnalyzePage() {
 
   const rc = riskResult ? (RISK_COLORS[riskResult.Risk_Level] ?? DEFAULT_RC) : DEFAULT_RC
   const riskScore = riskResult ? ({
-    ปกติ: 15, เสี่ยงปานกลาง: 50, เสี่ยงสูง: 75, ฉุกเฉิน: 95,
+    ปกติ: 15, เสี่ยงปานกลาง: 50, เสี่ยงสูง: 75, ฉุกเฉิน: 95, [NO_MATCH_LEVEL]: 0,
   }[riskResult.Risk_Level] ?? 30) : 0
 
   const resetAll = () => {
@@ -537,6 +668,12 @@ export default function AnalyzePage() {
         @keyframes fadeSlideDown {
           from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
           to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        @keyframes toastAutoHide {
+          0%   { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+          10%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+          85%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+          100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
         }
         .fade-up { animation: fadeUp 0.5s ease forwards; }
 
@@ -776,18 +913,20 @@ export default function AnalyzePage() {
                   {form.sex_history !== 'no_sex' && <div>
                     <div className="sf-label"><Baby size={14} /> มีความเป็นไปได้ว่าตั้งครรภ์?</div>
                     <RadioGroup name="preg"
-                      options={[
-                        { value: 'pregnant',     label: '🤰 มีความเสี่ยงตั้งครรภ์' },
-                        { value: 'not_pregnant', label: '🙅 ไม่มีความเสี่ยงตั้งครรภ์' },
-                      ]}
+                      options={PREGNANCY_OPTIONS}
                       value={form.is_pregnant}
                       onChange={v => setForm(f => ({ ...f, is_pregnant: v }))} />
                   </div>}
                   <div>
+                    <div className="sf-label"><Sparkles size={14} /> อาการร่วม (เลือกได้หลายข้อ / ไม่มีให้ข้าม)</div>
+                    <CheckboxGroup options={ASSOCIATED_SYMPTOM_OPTIONS} values={form.symptoms}
+                      onChange={v => setForm(f => ({ ...f, symptoms: v }))} />
+                  </div>
+                  {imageResult?.ai_result === 'clot' && <div>
                     <div className="sf-label"><Ruler size={14} /> ขนาดลิ่มเลือด</div>
                     <RadioGroup name="size" options={SIZE_OPTIONS} value={form.size}
                       onChange={v => setForm(f => ({ ...f, size: v }))} />
-                  </div>
+                  </div>}
                 </div>
 
                 <div style={{ height: 12 }} />
@@ -817,22 +956,21 @@ export default function AnalyzePage() {
                   <div className="cst-icon"><FlaskConical size={18} color="#c2185b" /></div>
                   <div>
                     <div className="cst-text">ผลการวิเคราะห์</div>
-                    <div className="cst-sub">
-                      ประมวลผลใน {((imageResult?.processing_time ?? 0) + riskResult.processing_time).toFixed(1)} วินาที
-                    </div>
                   </div>
                 </div>
 
                 {/* Risk banner */}
                 <div className="result-risk-banner" style={{ background: rc.bg, borderColor: rc.border }}>
                   <div style={{ flexShrink: 0 }}>
-                    <ProgressRing score={riskScore} color={rc.text} />
+                    <ProgressRing score={riskScore} color={rc.text}
+                      label={riskResult.Risk_Level === NO_MATCH_LEVEL ? '–' : undefined} />
                   </div>
                   <div className="risk-info">
                     <div className="risk-label-tag" style={{ background: rc.badge, color: rc.text }}>
                       {riskResult.Risk_Level === 'ฉุกเฉิน' ? '🚨' :
                        riskResult.Risk_Level === 'เสี่ยงสูง' ? '⚠️' :
-                       riskResult.Risk_Level === 'เสี่ยงปานกลาง' ? '⚡' : '✅'}
+                       riskResult.Risk_Level === 'เสี่ยงปานกลาง' ? '⚡' :
+                       riskResult.Risk_Level === NO_MATCH_LEVEL ? 'ℹ️' : '✅'}
                       &nbsp;{riskResult.Risk_Level}
                     </div>
                     <div className="risk-title" style={{ color: rc.text }}>{riskResult.Risk_Level}</div>
@@ -870,18 +1008,13 @@ export default function AnalyzePage() {
                   <div style={{ fontFamily: "'Mitr',sans-serif", fontSize: 14, fontWeight: 600, color: '#1a0a14' }}>คำแนะนำ</div>
                 </div>
                 <div className="suggestions-list">
-                  {riskResult.Recommendation.split(/[·•]/).filter(Boolean).map((s, i) => (
+                  {/* คำแนะนำข้อเดียวแสดง →  ถ้ามากกว่า 1 ข้อแสดงเลขลำดับ */}
+                  {uniqueSuggestions(riskResult.Recommendation).map((s, i, all) => (
                     <div key={i} className="suggestion-item">
-                      <div className="suggestion-num">{i + 1}</div>
-                      <div className="suggestion-text">{s.trim()}</div>
+                      <div className="suggestion-num">{all.length > 1 ? i + 1 : '→'}</div>
+                      <div className="suggestion-text">{s}</div>
                     </div>
                   ))}
-                  {!riskResult.Recommendation.includes('·') && !riskResult.Recommendation.includes('•') && (
-                    <div className="suggestion-item" style={{ marginTop: -8 }}>
-                      <div className="suggestion-num">→</div>
-                      <div className="suggestion-text">{riskResult.Recommendation}</div>
-                    </div>
-                  )}
                 </div>
 
                 <div className="disclaimer-box">
@@ -921,35 +1054,31 @@ export default function AnalyzePage() {
 
         {/* Toasts */}
         {imageSuccessToast && (
-          <div style={{
+          <div key={`ok-${toastSeq}`} style={{
             position: 'fixed', top: 76, left: '50%', transform: 'translateX(-50%)',
             zIndex: 9999, padding: '11px 18px', borderRadius: 13,
             background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7',
             fontSize: 12.5, fontWeight: 500, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
             fontFamily: "'Sarabun',sans-serif", display: 'flex', alignItems: 'center', gap: 8,
-            maxWidth: 'calc(100vw - 32px)', animation: 'fadeSlideDown 0.3s ease',
+            maxWidth: 'calc(100vw - 32px)', animation: `toastAutoHide ${TOAST_MS}ms ease forwards`,
+            pointerEvents: 'none',
           }}>
             <CheckCircle2 size={14} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{imageSuccessToast}</span>
-            <button onClick={() => setImageSuccessToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#065f46', padding: 0, flexShrink: 0 }}>
-              <X size={13} />
-            </button>
           </div>
         )}
         {imageErrorToast && (
-          <div style={{
+          <div key={`err-${toastSeq}`} style={{
             position: 'fixed', top: 76, left: '50%', transform: 'translateX(-50%)',
             zIndex: 9999, padding: '11px 18px', borderRadius: 13,
             background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5',
             fontSize: 12.5, fontWeight: 500, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
             fontFamily: "'Sarabun',sans-serif", display: 'flex', alignItems: 'center', gap: 8,
-            maxWidth: 'calc(100vw - 32px)', animation: 'fadeSlideDown 0.3s ease',
+            maxWidth: 'calc(100vw - 32px)', animation: `toastAutoHide ${TOAST_MS}ms ease forwards`,
+            pointerEvents: 'none',
           }}>
             <AlertCircle size={14} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{imageErrorToast}</span>
-            <button onClick={() => setImageErrorToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', padding: 0, flexShrink: 0 }}>
-              <X size={13} />
-            </button>
           </div>
         )}
 

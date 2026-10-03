@@ -40,14 +40,6 @@ function ArticleCover({ article, fallback }: { article: any; fallback: string })
   )
 }
 
-// ── ป้ายอันดับ 1-4 ──
-const RANK_CONFIG = [
-  { label: '🔥 อันดับ 1', className: 'rank-1' },
-  { label: '🥈 อันดับ 2', className: 'rank-2' },
-  { label: '🥉 อันดับ 3', className: 'rank-3' },
-  { label: 'อันดับ 4', className: 'rank-4' },
-]
-
 export default function HomePage() {
   const [showLoginToast, setShowLoginToast] = useState(false)
   const router = useRouter()
@@ -393,42 +385,6 @@ export default function HomePage() {
           pointer-events: none;
         }
 
-        /* ── ป้ายอันดับ 1-4 (สีต่างกัน) ── */
-        .article-rank {
-          position: absolute;
-          top: 12px; left: 12px;
-          z-index: 2;
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 4px 10px;
-          border-radius: 999px;
-          font-size: 11px;
-          font-family: 'Mitr', sans-serif;
-          font-weight: 500;
-          backdrop-filter: blur(6px);
-        }
-        .article-rank.rank-1 {
-          background: linear-gradient(135deg, #fff3e0, #ffe0b2);
-          color: #e65100;
-          border: 1px solid rgba(230,81,0,0.25);
-        }
-        .article-rank.rank-2 {
-          background: linear-gradient(135deg, #f1f3f5, #dee2e6);
-          color: #495057;
-          border: 1px solid rgba(73,80,87,0.25);
-        }
-        .article-rank.rank-3 {
-          background: linear-gradient(135deg, #fdeee0, #f3c9a0);
-          color: #a1590f;
-          border: 1px solid rgba(161,89,15,0.25);
-        }
-        .article-rank.rank-4 {
-          background: rgba(255,255,255,0.88);
-          color: #c2185b;
-          border: 1px solid rgba(194,24,91,0.2);
-        }
-
         .article-card-body {
           padding: 18px 20px 20px;
           display: flex;
@@ -644,27 +600,23 @@ export default function HomePage() {
           </div>
 
           <div className="articles-grid">
-            {topArticles.map((article, i) => {
-              const rank = RANK_CONFIG[i] ?? RANK_CONFIG[3]
-              return (
-                <div
-                  key={article.ArticleID}
-                  className="article-card"
-                  onClick={() => router.push(`/home/articles/${article.ArticleID}`)}
-                >
-                  <div className="article-cover">
-                    <ArticleCover article={article} fallback={fallbackEmojis[i % fallbackEmojis.length]} />
-                    <span className={`article-rank ${rank.className}`}>{rank.label}</span>
-                  </div>
-                  <div className="article-card-body">
-                    <h3 className="article-card-title">{article.Title}</h3>
-                    <span className="read-more">
-                      อ่านต่อ <ArrowRight size={14} />
-                    </span>
-                  </div>
+            {topArticles.map((article, i) => (
+              <div
+                key={article.ArticleID}
+                className="article-card"
+                onClick={() => router.push(`/home/articles/${article.ArticleID}`)}
+              >
+                <div className="article-cover">
+                  <ArticleCover article={article} fallback={fallbackEmojis[i % fallbackEmojis.length]} />
                 </div>
-              )
-            })}
+                <div className="article-card-body">
+                  <h3 className="article-card-title">{article.Title}</h3>
+                  <span className="read-more">
+                    อ่านต่อ <ArrowRight size={14} />
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

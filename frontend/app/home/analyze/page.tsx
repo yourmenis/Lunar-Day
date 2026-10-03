@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { ArrowRight, Sparkles, ChevronRight, Shield, Zap, Activity } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import LoginToast from '../components/LoginToast'
@@ -311,6 +312,8 @@ export default function IntroPage() {
           font-size: 90px;
           box-shadow: 0 12px 40px rgba(194,24,91,0.15);
         }
+        /* โลโก้ด้านข้าง: ขยายตามความกว้างคอลัมน์ ไม่เกิน 250px (ปรับขนาดที่ max-width) */
+        .about-side-logo { width: 100%; max-width: 250px; height: auto; aspect-ratio: 1; border-radius: 50%; object-fit: cover; }
 
         .steps-section { max-width: var(--page-max); margin: 0 auto; padding: 72px var(--page-pad) 0; }
         .steps-header { text-align: center; margin-bottom: 48px; }
@@ -435,6 +438,7 @@ export default function IntroPage() {
           .about-card { grid-template-columns: 1fr; }
           .about-side { order: -1; }
           .about-side-ring { width: 160px; height: 160px; font-size: 64px; }
+          .about-side-logo { max-width: 200px; }
         }
 
         @media (max-width: 768px) {
@@ -522,7 +526,10 @@ export default function IntroPage() {
             <div className="about-card-glow" />
             <div>
               <div className="about-title-row">
-                <div className="about-icon">🌙</div>
+                <div className="about-icon">
+                  <Image src="/logolunar.png" alt="Lunar Day Logo" width={48} height={48}
+                    style={{ borderRadius: 16, objectFit: 'cover' }} />
+                </div>
                 <div className="about-title">Lunar Day คืออะไร?</div>
               </div>
               <p className="about-body">
@@ -542,7 +549,7 @@ export default function IntroPage() {
               </div>
             </div>
             <div className="about-side">
-              <div className="about-side-ring">🌙</div>
+                <Image src="/logolunar.png" alt="Lunar Day Logo" width={300} height={300} className="about-side-logo" />
             </div>
           </div>
         </section>
