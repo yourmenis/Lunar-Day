@@ -471,61 +471,61 @@ def _clean(v):
 @analysis_bp.route("/image", methods=["POST"])
 @jwt_required()
 def analyze_image():
-    current_user_id = get_jwt_identity()
+    filepath = None
+    res_filepath = None
     start_time = time.time()
-    file = request.files.get("image")
-
-
-   # ===== ด่านที่ 1  เช็คว่าไม่ได้อัปโหลดรูปภาพมา =====
-    if not file or file.filename == "":
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A1",
-                    "msg": "กรุณาอัปโหลดรูปภาพก่อนทำการวิเคราะห์",
-                }
-            ),
-            400,
-        )
-
-    # ===== ด่านที่ 2 : เช็คว่านามสกุลไฟล์ถูกต้องไหม =====
-    if not allowed_file(file.filename):
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A2",
-                    "msg": "รูปแบบไฟล์ไม่รองรับ กรุณาอัปโหลดไฟล์นามสกุล .jpg, .jpeg หรือ .png",
-                }
-            ),
-            400,
-        )
-
-    # อ่านเนื้อหาไฟล์
-    file_content = file.read()
-
-    # ===== ด่านที่ 3 เช็คขนาดไฟล์เกิน =====
-    if len(file_content) > MAX_FILE_SIZE:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A3",
-                    "msg": "ขนาดไฟล์เกินขีดจำกัด กรุณาอัปโหลดไฟล์ขนาดไม่เกิน 10 MB",
-                }
-            ),
-            400,
-        )
-    # ===== SAVE IMAGE =====
-    timestamp = int(time.time())
-    filename = f"user_{current_user_id}_{timestamp}.jpg"
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-
-    with open(filepath, "wb") as f:
-        f.write(file_content)
-
     try:
+        current_user_id = get_jwt_identity()
+        file = request.files.get("image")
+
+
+    # =====ตรวจสอบการอัปโหลดรูปภาพ=====
+        if not file or file.filename == "":
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A1",
+                        "msg": "กรุณาอัปโหลดรูปภาพก่อนทำการวิเคราะห์",
+                    }
+                ),
+                400,
+            )
+    # =====ตรวจสอบนามสกุลไฟล์=====
+        if not allowed_file(file.filename):
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A2",
+                        "msg": "รูปแบบไฟล์ไม่รองรับ กรุณาอัปโหลดไฟล์นามสกุล .jpg, .jpeg หรือ .png",
+                    }
+                ),
+                400,
+            )
+
+        # อ่านเนื้อหาไฟล์
+        file_content = file.read()
+
+        # =====ตรวจสอบขนาดไฟล์=====
+        if len(file_content) > MAX_FILE_SIZE:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A3",
+                        "msg": "ขนาดไฟล์เกินขีดจำกัด กรุณาอัปโหลดไฟล์ขนาดไม่เกิน 10 MB",
+                    }
+                ),
+                400,
+            )
+        # ===== SAVE IMAGE =====
+        timestamp = int(time.time())
+        filename = f"user_{current_user_id}_{timestamp}.jpg"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+        with open(filepath, "wb") as f:
+            f.write(file_content)
         img_bgr = cv2.imdecode(np.frombuffer(file_content, np.uint8), cv2.IMREAD_COLOR)
         if img_bgr is None:
             return jsonify({"status": "error", "msg": "ไม่สามารถอ่านภาพได้"}), 400
@@ -598,7 +598,7 @@ def analyze_image():
                         cv2.putText(
                             img_visual,
                             info["name"],
-                            (x, y - 10),
+                            (x, label_y),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.7,
                             info["color"],
@@ -611,22 +611,27 @@ def analyze_image():
 
         # เซฟภาพที่วาดเส้นแล้วลงในโฟลเดอร์ uploads
         cv2.imwrite(res_filepath, cv2.cvtColor(img_visual, cv2.COLOR_RGB2BGR))
-
+        base_url = request.host_url
         return jsonify(
             {
                 "status": "success",
                 "ai_result": ai_res,
-                "image_path": f"uploads/{filename}",
-                "visual_path": f"uploads/{res_filename}",
+                "image_path": f"{base_url}uploads/{filename}",
+                "visual_path": f"{base_url}uploads/{res_filename}",
                 "detect_label": AI_RESULT_TH.get(ai_res, ai_res),
                 "confidence": round(avg_conf * 100, 2),
-                "processing_time": round(time.time() - start_time, 2),
+                #"processing_time": round(time.time() - start_time, 2),
             }
         )
 
     except Exception as e:
-        logger.exception(e)
-        return jsonify({"status": "error", "msg": str(e)}), 500
+        print(f"[Error] in analyze_image: {e}")
+        if filepath and os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+            except:
+                pass 
+        return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดขณะประมวลผลรูปภาพ โปรดลองอีกครั้ง"}), 500
 
 
 @analysis_bp.route("/risk", methods=["POST"])
