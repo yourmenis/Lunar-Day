@@ -89,11 +89,11 @@ def register():
         values = (username, hashed_pw, name, lastname, birthday_obj, email, consent_value)
 
         cursor.execute(sql, values)
-        db.commit()  # ยืนยันการบันทึกลง Hard Drive
+        db.commit()  
         return jsonify({"msg": "สมัครสมาชิกสำเร็จ"}), 201
 
     except mysql.connector.Error:
-        return jsonify({"msg": "ระบบไม่สามารถบันทึกข้อมูลได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"}), 500
+        return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
     except Exception:
         return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
@@ -105,36 +105,33 @@ def register():
             db.close()
 
 # ==========================================
-# เข้าสู่ระบบ
+# 🔑 เข้าสู่ระบบ (Login)
 # ==========================================
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.get_json(silent=True) or {}
-    username = data.get("username", "").strip()
-    password = data.get("password", "").strip()
-
-    if not username or not password:
-        return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
-
-    db = get_db_connection()
-    cursor = db.cursor(dictionary=True)
-
+    db = None    
+    cursor = None
+    
     try:
-        # 1. ค้นหา User จากฐานข้อมูล
+        data = request.get_json(silent=True) or {}
+        username = str(data.get("username", "")).strip()
+        password = str(data.get("password", "")).strip()
+
+        if not username or not password:
+            return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
+
+        db = get_db_connection()
+        cursor = db.cursor(dictionary=True)
         sql = "SELECT * FROM User WHERE Username = %s"
         cursor.execute(sql, (username,))
         user = cursor.fetchone()
-
-        # 2. ตรวจสอบว่ามี User นี้ไหม และรหัสผ่านถูกต้องหรือไม่
-        # [A1] กรณีรหัสผ่านหรือชื่อผู้ใช้ผิด
+        
+        # กรณีรหัสผ่านหรือชื่อผู้ใช้ถูกต้อง
         if user and bcrypt.check_password_hash(user["Password"], password):
-            # 3. ถ้าถูกต้อง สร้าง Access Token (JWT)
             access_token = create_access_token(identity=str(user["UserID"]))
-
             return (
                 jsonify(
                     {
-            
                         "access_token": access_token,
                         "user": {
                             "id": user["UserID"],
@@ -145,24 +142,28 @@ def login():
                 ),
                 200,
             )
+        # กรณีรหัสผิดหรือไม่มีผู้ใช้นี้
         else:
             return jsonify({"msg": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
 
-    except mysql.connector.Error as err:
-        return jsonify({"msg": f"เกิดข้อผิดพลาดทางเทคนิค: {err}"}), 500
-    finally:
-        cursor.close()
-        db.close()
+    except mysql.connector.Error:
+        return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
+    except Exception:
+        return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if db is not None:
+            db.close()
 
 # --- Configuration (ระบบส่งเมล) ---
-
 GMAIL_USER1 = os.environ.get("GMAIL_USER1")
 GMAIL_USER2 = os.environ.get("GMAIL_USER2")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
 PW_OTP1 =os.environ.get("PW_OTP1")
 PW_OTP2 =os.environ.get("PW_OTP2")
-
 
 # ==========================================
 # 🔑 1. ส่ง OTP ไปที่อีเมล (Forgot Password)
