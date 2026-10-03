@@ -166,30 +166,29 @@ PW_OTP1 =os.environ.get("PW_OTP1")
 PW_OTP2 =os.environ.get("PW_OTP2")
 
 # ==========================================
-# 🔑 1. ส่ง OTP ไปที่อีเมล (Forgot Password)
+# 🔑 Forgot Password
 # ==========================================
 @auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
-    data = request.get_json(silent=True) or {}
 
-    email = data.get("email", "").strip()
+    db = None
+    cursor = None
 
-    if not email:
-        return jsonify({"msg": "กรุณากรอกอีเมล"}), 400
+    try: 
+        data = request.get_json(silent=True) or {}
+        email = str(data.get("email", "")).strip()
 
-    db = get_db_connection()
-    cursor = db.cursor(dictionary=True, buffered=True)
+        if not email:
+            return jsonify({"msg": "กรุณากรอกอีเมล"}), 400
+        db = get_db_connection()
+        cursor = db.cursor(dictionary=True, buffered=True)
 
-
-
-    try:
         # ตรวจสอบอีเมลในระบบ
         cursor.execute("SELECT UserID FROM User WHERE Email = %s", (email,))
         user = cursor.fetchone()
 
         if not user:
             return jsonify({"msg": "ไม่พบอีเมลนี้ในระบบ"}), 404
-
         if email == GMAIL_USER1:
             otp = PW_OTP1
             expire_time = datetime.now() + timedelta(minutes=5)
@@ -199,8 +198,6 @@ def forgot_password():
         else:
             otp = str(random.randint(100000, 999999))
             expire_time = datetime.now() + timedelta(minutes=5)
-
-        
 
         # บันทึก OTP + เวลาหมดอายุ
         cursor.execute(
@@ -244,12 +241,17 @@ Luna Day Team
 
         return jsonify({"msg": "ส่งรหัส OTP ไปยังอีเมลของคุณเรียบร้อยแล้ว"}), 200
 
-    except Exception as e:
-        return jsonify({"msg": f"เกิดข้อผิดพลาดในการส่งอีเมล: {str(e)}"}), 500
-
+    except mysql.connector.Error:
+        return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
+    except smtplib.SMTPException:
+        return jsonify({"msg": "เกิดปัญหาในการส่งอีเมล กรุณาลองใหม่อีกครั้งภายหลัง"}), 500
+    except Exception:
+        return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
-        cursor.close()
-        db.close()
+        if cursor is not None:
+            cursor.close()
+        if db is not None:
+            db.close()
 
 
 # ==========================================
