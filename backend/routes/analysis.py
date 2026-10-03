@@ -637,84 +637,83 @@ def analyze_image():
 @analysis_bp.route("/risk", methods=["POST"])
 @jwt_required()
 def analyze_risk():
-    current_user_id = get_jwt_identity()
-
-    start_time = time.time()
-    data = request.form
-
-    ai_res = _clean(data.get("aiResult"))
-    image_path = data.get("imagePath")
-    confidence_raw = data.get("confidence")
-    try:
-        confidence = float(confidence_raw) if confidence_raw not in (None, "") else None
-    except (TypeError, ValueError):
-        confidence = None
-
-    q7_list = [_clean(x) for x in data.getlist("q7")]  # รับค่า q7 เป็น list
-    q7_valid = [x for x in q7_list if x]
-
-    answers = {
-        "q1": _clean(data.get("q1")),
-        "q2": _clean(data.get("q2")),
-        "q3": _clean(data.get("q3")),
-        "q4": _clean(data.get("q4")),
-        "q5": _clean(data.get("q5")),
-        "q6": _clean(data.get("q6")),
-        "q7": q7_valid,
-        "q8": _clean(data.get("q8")),
-        "q9": _clean(data.get("q9")),
-        "q10": _clean(data.get("q10")),
-    }
-
-    errors = validate_answers(answers, ai_res, answers["q8"])
-    if errors:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A4",
-                    "msg": "กรุณากรอกข้อมูลอาการให้ครบถ้วน",
-                    "errors": errors,
-                },
-            ),
-            400,
-        )
-    if answers["q4"] == "postcoital" and answers["q8"] == "no_sex":
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A6",
-                    "msg": "ความสัมพันธ์อาการไม่สอดคล้องกันของลักษณะเลือดออกและประวัติทางเพศ",
-                }
-            ),
-            400,
-        )
-
-    detect1 = AI_RESULT_TH.get(ai_res, ai_res)
-    detect2 = build_detect2(ai_res, answers["q10"])
-
-    results, risk_level, recommendation = screen_symptoms(ai_res, answers)
-
-    if not results:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A7",
-                    "msg": "ไม่พบโรคที่สอดคล้องกับอาการที่ระบุ กรุณาตรวจสอบข้อมูลอาการอีกครั้ง",
-                }
-            ),
-            400,
-        )
-    potential_disease = ", ".join(r["disease"] for r in results)[:255]
-
-    q7_joined = ",".join(answers["q7"])
-
     db = None
     cursor = None
     assessment_id = None
+    start_time = time.time()
+    
     try:
+        current_user_id = get_jwt_identity()
+        data = request.form
+
+        ai_res = _clean(data.get("aiResult"))
+        image_path = data.get("imagePath")
+        confidence_raw = data.get("confidence")
+        try:
+            confidence = float(confidence_raw) if confidence_raw not in (None, "") else None
+        except (TypeError, ValueError):
+            confidence = None
+
+        q7_list = [_clean(x) for x in data.getlist("q7")]  # รับค่า q7 เป็น list
+        q7_valid = [x for x in q7_list if x]
+
+        answers = {
+            "q1": _clean(data.get("q1")),
+            "q2": _clean(data.get("q2")),
+            "q3": _clean(data.get("q3")),
+            "q4": _clean(data.get("q4")),
+            "q5": _clean(data.get("q5")),
+            "q6": _clean(data.get("q6")),
+            "q7": q7_valid,
+            "q8": _clean(data.get("q8")),
+            "q9": _clean(data.get("q9")),
+            "q10": _clean(data.get("q10")),
+        }
+
+        errors = validate_answers(answers, ai_res, answers["q8"])
+        if errors:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A4",
+                        "msg": "กรุณากรอกข้อมูลอาการให้ครบถ้วน",
+                        "errors": errors,
+                    },
+                ),
+                400,
+            )
+        if answers["q4"] == "postcoital" and answers["q8"] == "no_sex":
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A6",
+                        "msg": "ความสัมพันธ์อาการไม่สอดคล้องกันของลักษณะเลือดออกและประวัติทางเพศ",
+                    }
+                ),
+                400,
+         )
+
+        detect1 = AI_RESULT_TH.get(ai_res, ai_res)
+        detect2 = build_detect2(ai_res, answers["q10"])
+
+        results, risk_level, recommendation = screen_symptoms(ai_res, answers)
+
+        if not results:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A7",
+                        "msg": "ไม่พบโรคที่สอดคล้องกับอาการที่ระบุ กรุณาตรวจสอบข้อมูลอาการอีกครั้ง",
+                    }
+                ),
+                400,
+            )
+        potential_disease = ", ".join(r["disease"] for r in results)[:255]
+
+        q7_joined = ",".join(answers["q7"])
         db = get_db_connection()
         cursor = db.cursor()
         cursor.execute(
@@ -750,36 +749,42 @@ def analyze_risk():
         )
         db.commit()
         assessment_id = cursor.lastrowid
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "assessment_id": assessment_id,
+                    "msg": "บันทึกข้อมูลเรียบร้อยแล้ว",
+                    "data": {
+                        "detect1": detect1,
+                        "detect2": detect2,
+                        "confidence": confidence,
+                        "potential_disease": potential_disease,
+                        "risk_level": risk_level,
+                        "recommendation": recommendation,
+                        "disease_scores": results,
+                    },
+                }
+            ),
+            201,
+        )
     except mysql.connector.Error as err:
         if db is not None:
             db.rollback()
-        logger.error(f"บันทึกผลวิเคราะห์ล้มเหลว: {err}")
-        return jsonify({"status": "error", "msg": "บันทึกผลวิเคราะห์ไม่สำเร็จ"}), 500
+        print(f"[DB Error] in analyze_risk: {err}") 
+        return jsonify({"status": "error", "msg": "บันทึกผลวิเคราะห์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"}), 500
+        
+    except Exception as e:
+        print(f"[Error] in analyze_risk: {e}")
+        return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        
     finally:
         if cursor is not None:
             cursor.close()
         if db is not None:
             db.close()
 
-    return (
-        jsonify(
-            {
-                "status": "success",
-                "assessment_id": assessment_id,
-                "msg": "บันทึกข้อมูลเรียบร้อยแล้ว",
-                "data": {
-                    "detect1": detect1,
-                    "detect2": detect2,
-                    "confidence": confidence,
-                    "potential_disease": potential_disease,
-                    "risk_level": risk_level,
-                    "recommendation": recommendation,
-                    "disease_scores": results,
-                },
-            }
-        ),
-        201,
-    )
+    
 
 
 @analysis_bp.route("/result/<int:assessment_id>", methods=["GET"])
