@@ -131,17 +131,18 @@ def run_inference(img):
         conf, mask = torch.max(prob, dim=1)
 
     mask_np = mask[0].cpu().numpy()
-
     conf_np = conf[0].cpu().numpy()
+    
     detected = (mask_np > 0) & (conf_np > CONF_THRESHOLD)
+    
     if np.any(detected):
         avg_conf = np.mean(conf_np[detected])
     else:
-       background_pixels = mask_np == 0
+        background_pixels = mask_np == 0
         if np.any(background_pixels):
             avg_conf = np.mean(conf_np[background_pixels])
         else:
-           avg_conf = np.mean(conf_np)
+            avg_conf = np.mean(conf_np)
 
     return mask_np, conf_np, float(avg_conf)
 
