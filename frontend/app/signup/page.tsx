@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, User, Mail, Lock, Calendar, AtSign, ChevronRight, ChevronLeft } from 'lucide-react'
 import './signup.css'
 import Image from 'next/image'
+import AuthToast, { SIGNUP_SUCCESS_KEY, useAuthToast } from '../components/AuthToast'
+import { postJson } from '../lib/postJson'
 
 const STEPS = [
   { id: 1, title: 'ข้อมูลส่วนตัว', subtitle: 'บอกเราเกี่ยวกับคุณ' },
@@ -19,13 +21,45 @@ const THAI_MONTHS = [
 ]
 const DOW = ['อา','จ','อ','พ','พฤ','ศ','ส']
 
+// แปลง 'YYYY-MM-DD' เป็นวันที่ตามเวลาท้องถิ่น (new Date('YYYY-MM-DD') จะตีความเป็น UTC)
+function parseYmd(value: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null
+}
+
+function ageFrom(birth: Date): number {
+  const t = new Date()
+  const beforeBirthday =
+    t.getMonth() < birth.getMonth() ||
+    (t.getMonth() === birth.getMonth() && t.getDate() < birth.getDate())
+  return t.getFullYear() - birth.getFullYear() - (beforeBirthday ? 1 : 0)
+}
+
+// รูปแบบเดียวกับที่ backend ตรวจ (routes/auth.py)
+const EMAIL_PATTERN = /^[\w.-]+@[\w.-]+\.\w+$/
+
   function ThaiDatePicker({
     value, onChange,
   }: { value: string; onChange: (v: string) => void }) {
     const today = new Date()
     const [open, setOpen] = useState(false)
+    const wrapRef = useRef<HTMLDivElement>(null)
 
-    const parsed = value ? new Date(value) : null
+    // ปิดปฏิทินเมื่อคลิกนอกกรอบ
+    useEffect(() => {
+      if (!open) return
+      const onDown = (e: MouseEvent | TouchEvent) => {
+        if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+      }
+      document.addEventListener('mousedown', onDown)
+      document.addEventListener('touchstart', onDown)
+      return () => {
+        document.removeEventListener('mousedown', onDown)
+        document.removeEventListener('touchstart', onDown)
+      }
+    }, [open])
+
+    const parsed = parseYmd(value)
     const initYear  = parsed ? parsed.getFullYear()  : today.getFullYear()
     const initMonth = parsed ? parsed.getMonth()      : today.getMonth()
 
@@ -41,7 +75,11 @@ const DOW = ['อา','จ','อ','พ','พฤ','ศ','ส']
     const selectedDay = parsed && parsed.getFullYear() === viewYear && parsed.getMonth() === viewMonth
       ? parsed.getDate() : null
 
+    // วันในอนาคตเลือกไม่ได้
+    const isFuture = (d: number) => new Date(viewYear, viewMonth, d) > today
+
     const selectDay = (d: number) => {
+      if (isFuture(d)) return
       const ce = `${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
       onChange(ce)
       setOpen(false)
@@ -61,7 +99,7 @@ const DOW = ['อา','จ','อ','พ','พฤ','ศ','ส']
       : null
 
     return (
-      <div style={{ position: 'relative' }}>
+      <div ref={wrapRef} style={{ position: 'relative' }}>
         <button
           type="button"
           className={`date-trigger${open ? ' open' : ''}${!displayLabel ? ' placeholder' : ''}`}
@@ -121,6 +159,8 @@ const DOW = ['อา','จ','อ','พ','พฤ','ศ','ส']
                     d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear() ? ' today' : ''
                   }`}
                   onClick={() => selectDay(d)}
+                  disabled={isFuture(d)}
+                  style={isFuture(d) ? { opacity: 0.3, cursor: 'not-allowed' } : undefined}
                 >
                   {d}
                 </button>
@@ -142,6 +182,7 @@ export default function SignUpPage() {
   const [agreed, setAgreed] = useState(false)
   const [animating, setAnimating] = useState(false)
   const [stars, setStars] = useState<Array<React.CSSProperties>>([])
+  const { toast, showToast } = useAuthToast()
 
   const [form, setForm] = useState({
     firstName: '',
@@ -172,71 +213,87 @@ export default function SignUpPage() {
     setForm(f => ({ ...f, [key]: value }))
   }
 
-  const nextStep = () => {
-    if (step < 3) {
-      setAnimating(true)
-      setTimeout(() => {
-        setStep(s => s + 1)
-        setAnimating(false)
-      }, 220)
+  // ตรวจข้อมูลของแต่ละขั้น คืนข้อความ error หรือ null ถ้าผ่าน
+  const validateStep = (n: number): string | null => {
+    if (n === 1) {
+      if (!form.firstName.trim() || !form.lastName.trim()) return 'กรุณากรอกชื่อและนามสกุล'
+      const birth = parseYmd(form.birthDate)
+      if (!birth) return 'กรุณาเลือกวันเกิด'
+      if (birth > new Date()) return 'วันเกิดต้องไม่เป็นวันในอนาคต'
+      if (ageFrom(birth) < 13) return 'ผู้สมัครต้องมีอายุตั้งแต่ 13 ปีขึ้นไปจึงจะใช้งานได้'
     }
+    if (n === 2) {
+      if (!form.email.trim()) return 'กรุณากรอกอีเมล'
+      if (!EMAIL_PATTERN.test(form.email.trim())) return 'รูปแบบอีเมลไม่ถูกต้อง'
+      if (!form.username.trim()) return 'กรุณากรอกชื่อผู้ใช้'
+    }
+    if (n === 3) {
+      // backend ตัดช่องว่างหัว-ท้ายรหัสผ่านก่อนตรวจ จึงตรวจแบบเดียวกัน
+      const pw = form.password.trim()
+      if (!pw) return 'กรุณากรอกรหัสผ่าน'
+      if (pw.length < 8) return 'รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร'
+      if (pw !== form.confirmPassword.trim()) return 'โปรดระบุรหัสผ่านทั้งสองช่องให้ตรงกัน'
+      if (!agreed) return 'กรุณากดยอมรับเงื่อนไขและนโยบายความเป็นส่วนตัวก่อนดำเนินการต่อ'
+    }
+    return null
+  }
+
+  const goToStep = (target: number) => {
+    if (target === step) return
+    setAnimating(true)
+    setTimeout(() => {
+      setStep(target)
+      setAnimating(false)
+    }, 220)
+  }
+
+  const nextStep = () => {
+    if (step >= 3) return
+    const err = validateStep(step)
+    if (err) { showToast(err); return }
+    goToStep(step + 1)
   }
 
   const prevStep = () => {
-    if (step > 1) {
-      setAnimating(true)
-      setTimeout(() => {
-        setStep(s => s - 1)
-        setAnimating(false)
-      }, 220)
-    }
+    if (step > 1) goToStep(step - 1)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!agreed || loading) return
-    setLoading(true)
+    if (loading) return
+    // กด Enter ในขั้นที่ 1-2 → ไปขั้นถัดไปแทนการส่งฟอร์ม
+    if (step < 3) { nextStep(); return }
 
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName: form.firstName,
-          lastName: form.lastName,
-          birthDate: form.birthDate,
-          email: form.email,
-          username: form.username,
-          password: form.password,
-          confirmPassword: form.confirmPassword,
-          isConsent: agreed,
-        }),
-      })
-      const data = await res.json()
-
-      if (res.ok) {
-        router.push('/login')
-      } else {
-        alert(data.msg)
-        setLoading(false)
-      }
-    } catch {
-      alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
-      setLoading(false)
+    // ตรวจทุกขั้นอีกครั้ง ถ้าขั้นไหนผิดให้พากลับไปที่ขั้นนั้น
+    for (const n of [1, 2, 3]) {
+      const err = validateStep(n)
+      if (err) { showToast(err); goToStep(n); return }
     }
-  }
 
-  const inputBase: React.CSSProperties = {
-    width: '100%',
-    padding: '13px 18px 13px 44px',
-    borderRadius: '16px',
-    fontFamily: "'Sarabun', sans-serif",
-    fontSize: '14.5px',
-    color: '#fff',
-    outline: 'none',
-    background: 'rgba(255,255,255,0.08)',
-    border: '1.5px solid rgba(255,255,255,0.16)',
-    transition: 'border-color 0.25s, box-shadow 0.25s, background 0.25s',
+    setLoading(true)
+    const result = await postJson('/auth/register', {
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      birthDate: form.birthDate,
+      email: form.email.trim(),
+      username: form.username.trim(),
+      password: form.password,
+      confirmPassword: form.confirmPassword,
+      isConsent: agreed,
+    })
+
+    if (result.data && result.ok) {
+      try { sessionStorage.setItem(SIGNUP_SUCCESS_KEY, '1') } catch {}
+      router.push('/login')
+      return
+    }
+
+    const msg = result.data ? (result.data.msg ?? 'สมัครสมาชิกไม่สำเร็จ') : result.error
+    showToast(msg)
+    // พากลับไปขั้นที่มีช่องผิด (ชื่อผู้ใช้/อีเมลซ้ำ → ขั้น 2, อายุ/วันที่ → ขั้น 1)
+    if (/ชื่อผู้ใช้|อีเมล/.test(msg)) goToStep(2)
+    else if (/อายุ|วันที่/.test(msg)) goToStep(1)
+    setLoading(false)
   }
 
   return (
@@ -291,7 +348,7 @@ export default function SignUpPage() {
             <div className="divider-line" />
           </div>
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} noValidate>
             {/* ── Step 1: Personal Info ── */}
             <div className={`step-content ${animating ? 'exit' : ''}`} style={{ display: step === 1 ? 'block' : 'none' }}>
               <div className="grid-2">
@@ -429,7 +486,7 @@ export default function SignUpPage() {
                 <button
                   type="submit"
                   className="btn-submit"
-                  disabled={!agreed || loading}
+                  disabled={loading}
                 >
                   {loading ? (
                     <><div className="spinner" /> กำลังสมัคร...</>
@@ -449,6 +506,8 @@ export default function SignUpPage() {
           </p>
         </div>
       </div>
+
+      <AuthToast toast={toast} />
     </>
   )
 }

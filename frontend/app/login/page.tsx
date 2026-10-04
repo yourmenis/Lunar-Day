@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
 import './login.css'
 import Image from 'next/image'
-
+import AuthToast, { SIGNUP_SUCCESS_KEY, useAuthToast } from '../components/AuthToast'
+import { postJson } from '../lib/postJson'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -14,8 +15,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const [focusedField, setFocusedField] = useState<string | null>(null)
   const [stars, setStars] = useState<Array<React.CSSProperties>>([])
+  const { toast, showToast } = useAuthToast()
 
   useEffect(() => {
     setMounted(true)
@@ -30,36 +31,51 @@ export default function LoginPage() {
         height: `${Math.random() > 0.7 ? 4 : 2}px`,
       } as React.CSSProperties))
     )
+    // มาจากหน้าสมัครสมาชิกที่สำเร็จแล้ว
+    try {
+      if (sessionStorage.getItem(SIGNUP_SUCCESS_KEY)) {
+        sessionStorage.removeItem(SIGNUP_SUCCESS_KEY)
+        showToast('สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ', 'success')
+      }
+    } catch {}
+
+    // มี token อยู่แล้ว → เช็กกับ backend ก่อนว่ายังใช้ได้ ค่อยพาไปหน้า home
+    // (token หมดอายุ/ถูก logout แล้ว → ลบทิ้งและอยู่หน้า login ต่อ)
     const token = localStorage.getItem('access_token')
-    if (token) {
-      router.replace('/home')
-    }
-  }, [])
+    if (!token) return
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => {
+        if (res.ok) router.replace('/home')
+        else if (res.status === 401 || res.status === 422) {
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('user')
+        }
+      })
+      .catch(() => {})
+  }, [router, showToast])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (loading) return
+    if (!username.trim() || !password.trim()) {
+      showToast('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน')
+      return
+    }
     setLoading(true)
 
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      })
-      const data = await res.json()
-
-      if (res.ok) {
-        localStorage.setItem('access_token', data.access_token)
-        localStorage.setItem('user', JSON.stringify(data.user))
-        router.replace('/home')
-      } else {
-        alert(data.msg)
-        setLoading(false)
-      }
-    } catch {
-      alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
-      setLoading(false)
+    const result = await postJson<{ access_token: string; user: unknown }>(
+      '/auth/login', { username, password },
+    )
+    if (result.data && result.ok) {
+      localStorage.setItem('access_token', result.data.access_token)
+      localStorage.setItem('user', JSON.stringify(result.data.user))
+      router.replace('/home')
+      return
     }
+    showToast(result.data ? (result.data.msg ?? 'เข้าสู่ระบบไม่สำเร็จ') : result.error)
+    setLoading(false)
   }
 
   return (
@@ -109,8 +125,6 @@ export default function LoginPage() {
                   placeholder="กรอกชื่อผู้ใช้ของคุณ"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
-                  onFocus={() => setFocusedField('username')}
-                  onBlur={() => setFocusedField(null)}
                   autoComplete="username"
                 />
               </div>
@@ -124,8 +138,6 @@ export default function LoginPage() {
                     placeholder="กรอกรหัสผ่านของคุณ"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    onFocus={() => setFocusedField('password')}
-                    onBlur={() => setFocusedField(null)}
                     style={{ paddingRight: '44px' }}
                     autoComplete="current-password"
                   />
@@ -165,6 +177,8 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
+
+      <AuthToast toast={toast} />
     </>
   )
 }
