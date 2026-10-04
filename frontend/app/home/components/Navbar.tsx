@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { Activity, BookOpen, Phone, User, LogOut, Menu, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import api from '../../lib/api'
+import { useToast } from '../../components/Toast'
 import Image from 'next/image'
 
 const NAV_LINKS = [
@@ -19,12 +20,7 @@ export default function Navbar() {
   const [profileImage,    setProfileImage]    = useState<string | null>(null)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [drawerOpen,      setDrawerOpen]      = useState(false)
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
-
-  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
-  }
+  const showToast = useToast()
 
   // ล็อก scroll เมื่อ drawer เปิด
   useEffect(() => {
@@ -329,25 +325,6 @@ export default function Navbar() {
         }
       `}</style>
 
-      {/* TOAST */}
-      {toast && (
-        <div style={{
-          position: 'fixed', top: 80, left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 9999, padding: '12px 20px', borderRadius: 14,
-          fontSize: 13, fontWeight: 500,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-          border: '1px solid', animation: 'fadeSlideDown 0.3s ease',
-          whiteSpace: 'nowrap', fontFamily: "'Sarabun', sans-serif",
-          ...(toast.type === 'success'
-            ? { background: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' }
-            : toast.type === 'error'
-            ? { background: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5' }
-            : { background: '#fce4ef', color: '#9d174d', borderColor: '#f9a8d4' })
-        }}>
-          {toast.type === 'success' ? '✓ ' : toast.type === 'error' ? '✕ ' : 'ℹ '}{toast.msg}
-        </div>
-      )}
 
       {/* ── Navbar ── */}
       <nav className="navbar">

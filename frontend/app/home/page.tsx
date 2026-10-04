@@ -4,7 +4,10 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { TrendingUp, BookOpen, ArrowRight, ChevronRight, Sparkles, Activity } from 'lucide-react'
 import Navbar from './components/Navbar'
+import Footer from './components/Footer'
 import api from '../lib/api'
+import { useToast } from '../components/Toast'
+import { axiosErrorMessage } from '../lib/postJson'
 import LoginToast from './components/LoginToast'
 
 // ── ดึง URL ภาพปกจากข้อมูลบทความ (ปรับชื่อ field ให้ตรงกับ API ของคุณ) ──
@@ -46,13 +49,14 @@ export default function HomePage() {
   const [mounted, setMounted] = useState(false)
   const [waveBars, setWaveBars] = useState<number[]>([])
   const [articles, setArticles] = useState<any[]>([])
+  const showToast = useToast()
 
   const fetchArticles = async () => {
     try {
       const res = await api.get('/articles')
       setArticles(res.data)
-    } catch {
-      console.error('โหลดบทความไม่สำเร็จ')
+    } catch (err) {
+      showToast(axiosErrorMessage(err, 'โหลดบทความไม่สำเร็จ'), 'error')
     }
   }
 
@@ -236,56 +240,62 @@ export default function HomePage() {
         }
         .btn-ghost:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.35); }
 
-        /* Hero graphic */
-        .hero-graphic {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex: 1;
-          opacity: 0;
-          transition: opacity 0.9s ease 0.3s;
-        }
-        .hero-graphic.visible { opacity: 1; }
-        .cycle-ring {
-          width: 360px; height: 360px;
-          border-radius: 50%;
-          border: 2px solid rgba(240,98,146,0.25);
-          position: relative;
+        /* Hero graphic (วงโคจร + ลิ่มเลือดตรงกลาง) */
+        .ih-right {
+          position: relative; z-index: 2; flex: 1 1 auto;
           display: flex; align-items: center; justify-content: center;
-          animation: slowSpin 18s linear infinite;
+          opacity: 0; transform: translateY(20px) scale(0.95);
+          transition: opacity 0.9s ease 0.25s, transform 0.9s ease 0.25s;
         }
-        @keyframes slowSpin { to { transform: rotate(360deg); } }
-        .cycle-inner {
-          width: 260px; height: 260px;
-          border-radius: 50%;
-          border: 1.5px solid rgba(240,98,146,0.15);
-          background: rgba(240,98,146,0.05);
+        .ih-right.visible { opacity: 1; transform: translateY(0) scale(1); }
+        .hero-orb-wrap {
+          width: 320px; height: 320px; position: relative;
           display: flex; align-items: center; justify-content: center;
-          animation: slowSpin 12s linear infinite reverse;
         }
-        .cycle-core {
-          width: 150px; height: 150px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, rgba(240,98,146,0.2), rgba(194,24,91,0.3));
-          border: 1px solid rgba(240,98,146,0.3);
+        .hero-ring {
+          position: absolute; inset: 0; border-radius: 50%;
+          border: 1.5px solid rgba(240,98,146,0.22);
+          animation: spinRing 20s linear infinite;
+        }
+        .hero-ring-2 {
+          position: absolute; inset: 36px; border-radius: 50%;
+          border: 1px dashed rgba(240,98,146,0.14);
+          animation: spinRing 14s linear infinite reverse;
+        }
+        @keyframes spinRing { to { transform: rotate(360deg); } }
+        .hero-core {
+          width: 160px; height: 160px; border-radius: 50%;
+          background: linear-gradient(135deg, rgba(240,98,146,0.18), rgba(194,24,91,0.28));
+          border: 1.5px solid rgba(240,98,146,0.35);
           display: flex; align-items: center; justify-content: center;
-          font-size: 52px;
-          animation: pulse 3s ease-in-out infinite;
+          font-size: 64px;
+          animation: corePulse 3.5s ease-in-out infinite;
+          box-shadow: 0 0 48px rgba(240,98,146,0.2);
         }
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(240,98,146,0.3); }
-          50% { transform: scale(1.05); box-shadow: 0 0 0 24px rgba(240,98,146,0); }
+        @keyframes corePulse {
+          0%,100% { transform: scale(1); box-shadow: 0 0 40px rgba(240,98,146,0.2); }
+          50% { transform: scale(1.06); box-shadow: 0 0 64px rgba(240,98,146,0.35); }
         }
-        .cycle-dot {
-          position: absolute;
-          width: 12px; height: 12px;
-          border-radius: 50%;
-          background: #f06292;
-          box-shadow: 0 0 8px rgba(240,98,146,0.8);
+        .hero-orbit-dot {
+          position: absolute; width: 14px; height: 14px; border-radius: 50%;
+          box-shadow: 0 0 10px currentColor;
         }
-        .cycle-dot:nth-child(1) { top: -6px; left: 50%; transform: translateX(-50%); }
-        .cycle-dot:nth-child(2) { bottom: -6px; left: 50%; transform: translateX(-50%); background: #f48fb1; }
-        .cycle-dot:nth-child(3) { left: -6px; top: 50%; transform: translateY(-50%); background: #ce93d8; }
+        /* จุด 4 จุดเป็นลูกทั้งหมดของ .hero-ring → nth-child(1-4) */
+        .hero-orbit-dot:nth-child(1) { top: 10px; left: 50%; transform: translateX(-50%); background: #f06292; color: #f06292; }
+        .hero-orbit-dot:nth-child(2) { bottom: 10px; left: 50%; transform: translateX(-50%); background: #f48fb1; color: #f48fb1; }
+        .hero-orbit-dot:nth-child(3) { left: 10px; top: 50%; transform: translateY(-50%); background: #ce93d8; color: #ce93d8; }
+        .hero-orbit-dot:nth-child(4) { right: 10px; top: 50%; transform: translateY(-50%); background: #f06292; color: #f06292; }
+        .float-em {
+          position: absolute; font-size: 24px;
+          animation: floatEm 4s ease-in-out infinite;
+        }
+        .float-em-1 { top: 14px; right: 26px; animation-delay: 0s; }
+        .float-em-2 { bottom: 26px; left: 14px; animation-delay: 1.4s; font-size: 20px; }
+        .float-em-3 { top: 55%; right: -5px; animation-delay: 0.7s; font-size: 18px; }
+        @keyframes floatEm {
+          0%,100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-10px) rotate(6deg); }
+        }
 
         /* ── Section ── */
         .section {
@@ -383,6 +393,42 @@ export default function HomePage() {
           inset: 0;
           background: linear-gradient(to top, rgba(26,10,20,0.28), transparent 55%);
           pointer-events: none;
+        }
+
+        /* ── ป้ายอันดับ 1-4 (สีต่างกัน) ── */
+        .article-rank {
+          position: absolute;
+          top: 12px; left: 12px;
+          z-index: 2;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 4px 10px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-family: 'Mitr', sans-serif;
+          font-weight: 500;
+          backdrop-filter: blur(6px);
+        }
+        .article-rank.rank-1 {
+          background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+          color: #e65100;
+          border: 1px solid rgba(230,81,0,0.25);
+        }
+        .article-rank.rank-2 {
+          background: linear-gradient(135deg, #f1f3f5, #dee2e6);
+          color: #495057;
+          border: 1px solid rgba(73,80,87,0.25);
+        }
+        .article-rank.rank-3 {
+          background: linear-gradient(135deg, #fdeee0, #f3c9a0);
+          color: #a1590f;
+          border: 1px solid rgba(161,89,15,0.25);
+        }
+        .article-rank.rank-4 {
+          background: rgba(255,255,255,0.88);
+          color: #c2185b;
+          border: 1px solid rgba(194,24,91,0.2);
         }
 
         .article-card-body {
@@ -497,34 +543,17 @@ export default function HomePage() {
           50% { transform: scaleY(1); }
         }
 
-        /* ── Footer ── */
-        .home-footer {
-          background: #fff;
-          border-top: 1px solid #f5e6ec;
-          padding: 28px var(--page-pad);
-          font-size: 12.5px;
-          color: #b09aa8;
-        }
-        .home-footer-inner {
-          max-width: var(--page-max);
-          margin: 0 auto;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-
         /* ── Responsive ── */
         @media (max-width: 1200px) {
           .articles-grid { grid-template-columns: repeat(2, 1fr); }
         }
         @media (max-width: 1024px) {
-          .cycle-ring { width: 280px; height: 280px; }
-          .cycle-inner { width: 200px; height: 200px; }
-          .cycle-core { width: 120px; height: 120px; font-size: 40px; }
+          .hero-orb-wrap { width: 260px; height: 260px; }
+          .hero-core { width: 130px; height: 130px; font-size: 52px; }
         }
         @media (max-width: 768px) {
           .hero { padding: 48px var(--page-pad); min-height: auto; }
-          .hero-graphic { display: none; }
+          .ih-right { display: none; }
           .section { padding: 40px var(--page-pad); }
           .cta-wrap { padding-bottom: 40px; }
           .cta-section { padding: 32px 24px; flex-direction: column; align-items: flex-start; }
@@ -568,15 +597,19 @@ export default function HomePage() {
                 </button>
               </div>
             </div>
-
-            <div className={`hero-graphic ${mounted ? 'visible' : ''}`}>
-              <div className="cycle-ring">
-                <div className="cycle-dot" />
-                <div className="cycle-dot" />
-                <div className="cycle-dot" />
-                <div className="cycle-inner">
-                  <div className="cycle-core">🩸</div>
+            <div className={`ih-right ${mounted ? 'visible' : ''}`}>
+              <div className="hero-orb-wrap">
+                <div className="hero-ring">
+                  <div className="hero-orbit-dot" />
+                  <div className="hero-orbit-dot" />
+                  <div className="hero-orbit-dot" />
+                  <div className="hero-orbit-dot" />
                 </div>
+                <div className="hero-ring-2" />
+                <div className="hero-core">🩸</div>
+                <span className="float-em float-em-1">🔬</span>
+                <span className="float-em float-em-2">💊</span>
+                <span className="float-em float-em-3">📋</span>
               </div>
             </div>
           </div>
@@ -592,7 +625,7 @@ export default function HomePage() {
                 </div>
                 <h2 className="section-title">บทความสุขภาพสตรี</h2>
               </div>
-              <p className="section-subtitle">คัดสรรจากบทความที่มีผู้เข้าชมสูงสุด</p>
+              <p className="section-subtitle">บทความแนะนำเพื่อการดูแลสุขภาพสตรี</p>
             </div>
             <button className="see-all-btn" onClick={() => router.push('/home/articles')}>
               ดูทั้งหมด <ChevronRight size={14} />
@@ -658,11 +691,7 @@ export default function HomePage() {
         </div>
 
         {/* ── Footer ── */}
-        <footer className="home-footer">
-          <div className="home-footer-inner">
-            <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
-          </div>
-        </footer>
+        <Footer />
       </div>
       <LoginToast show={showLoginToast} onClose={() => setShowLoginToast(false)} />
     </>

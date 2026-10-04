@@ -9,6 +9,13 @@ import {
   Calendar, Edit3, X, Check, AlertTriangle
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
+import { MIN_AGE, ageFrom, latestAllowedBirthDate, parseYmd } from '../../lib/birthDate'
+import { parseServerDate } from '../../lib/serverDate'
+import { useToast } from '../../components/Toast'
+import { PRIVACY_TEXT, TERMS_TEXT } from '../../lib/policyText'
+import { USERNAME_MAX, usernameError } from '../../lib/authRules'
+import { MSG_NETWORK_ERROR, responseMessage } from '../../lib/postJson'
 
 // ============================================================
 // TYPES
@@ -23,30 +30,15 @@ type EditForm = {
   avatarFile: File | null
 }
 
-// ============================================================
-// STATIC TEXT
-// ============================================================
-const PRIVACY_TEXT = [
-  { title: '1. ข้อมูลที่เราจัดเก็บ', body: 'เราเก็บรวบรวมข้อมูลส่วนบุคคล เช่น ชื่อผู้ใช้ อีเมล วันเกิด และรหัสผ่านในรูปแบบที่ผ่านการเข้ารหัส (Hashing) เพื่อความปลอดภัยสูงสุด ไม่มีการจัดเก็บหรือรับข้อมูลโปรไฟล์จากผู้ให้บริการภายนอก' },
-  { title: '2. การประมวลผลข้อมูล', body: 'เราประมวลผลข้อมูลเพื่ออำนวยความสะดวกในการสร้างบัญชี แสดงโปรไฟล์ และปรับปรุงบริการตามที่ผู้ใช้ร้องขอ' },
-  { title: '3. ฐานทางกฎหมาย', body: 'เราดำเนินการภายใต้ PDPA โดยอาศัยฐานความยินยอม การปฏิบัติตามสัญญา และผลประโยชน์อันชอบธรรม' },
-  { title: '4. การเปิดเผยข้อมูล', body: 'เราไม่มีนโยบายในการขายข้อมูลส่วนบุคคลของท่านให้แก่บุคคลที่สาม อาจมีการแบ่งปันเฉพาะกรณีที่กฎหมายกำหนดเท่านั้น' },
-  { title: '5. ความปลอดภัยของข้อมูล', body: 'เราเข้ารหัสรหัสผ่านด้วยอัลกอริทึมความปลอดภัยสูง มีมาตรการทางเทคนิคและการบริหารจัดการเพื่อปกป้องข้อมูลของท่าน' },
-  { title: '6. การเก็บรักษาข้อมูล', body: 'เราจัดเก็บข้อมูลตลอดระยะเวลาที่ท่านมีบัญชี และจะลบข้อมูลทั้งหมดทันทีเมื่อท่านลบบัญชีผู้ใช้งาน' },
-]
-
-const TERMS_TEXT = [
-  { title: '1. การยอมรับเงื่อนไข', body: 'การใช้งานบริการ Luna Day ถือว่าท่านได้อ่านและยอมรับเงื่อนไขการใช้งานทั้งหมดแล้ว หากท่านไม่ยอมรับเงื่อนไขเหล่านี้ กรุณาหยุดใช้บริการ' },
-  { title: '2. การใช้บริการ', body: 'ท่านตกลงใช้บริการเพื่อวัตถุประสงค์ที่ถูกกฎหมายเท่านั้น และไม่กระทำการใดๆ ที่อาจก่อให้เกิดความเสียหายต่อระบบหรือผู้ใช้รายอื่น' },
-  { title: '3. ข้อมูลสุขภาพ', body: 'ข้อมูลที่ได้จากการวิเคราะห์ในแอปพลิเคชันเป็นเพียงข้อมูลเบื้องต้น ไม่สามารถใช้แทนการวินิจฉัยจากแพทย์ผู้เชี่ยวชาญได้' },
-  { title: '4. ทรัพย์สินทางปัญญา', body: 'เนื้อหา โลโก้ และซอฟต์แวร์ทั้งหมดในแอปพลิเคชันเป็นทรัพย์สินของ Luna Day ห้ามทำซ้ำหรือนำไปใช้โดยไม่ได้รับอนุญาต' },
-  { title: '5. การยกเลิกบริการ', body: 'เราขอสงวนสิทธิ์ในการระงับหรือยกเลิกบัญชีที่ละเมิดเงื่อนไขการใช้งานโดยไม่ต้องแจ้งล่วงหน้า' },
-  { title: '6. การเปลี่ยนแปลงเงื่อนไข', body: 'เราอาจปรับปรุงเงื่อนไขการใช้งานเป็นครั้งคราว การใช้งานต่อเนื่องหลังจากมีการเปลี่ยนแปลงถือว่าท่านยอมรับเงื่อนไขใหม่' },
-]
 
 // ============================================================
 // HELPERS
 // ============================================================
+// backend บันทึกภาพที่วาดกรอบผล AI ไว้เป็น res_<ชื่อไฟล์เดิม> ในโฟลเดอร์เดียวกัน
+function resultImagePath(path: string) {
+  return path.replace(/([^/]+)$/, 'res_$1')
+}
+
 function buddhistDate(iso: string) {
   if (!iso) return '-'
   const [y, m, d] = iso.split('-')
@@ -72,16 +64,19 @@ const DOW_SHORT = ['อา','จ','อ','พ','พฤ','ศ','ส']
 function ThaiDatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const today = new Date()
   const [open, setOpen] = useState(false)
+  // เลือกได้เฉพาะวันเกิดที่ทำให้อายุครบ 13 ปีขึ้นไป
+  const maxBirth = latestAllowedBirthDate()
 
-  const parsed = value ? new Date(value) : null
-  const initYear  = parsed ? parsed.getFullYear()  : today.getFullYear()
-  const initMonth = parsed ? parsed.getMonth()      : today.getMonth()
+  const parsed = parseYmd(value)
+  const initYear  = parsed ? parsed.getFullYear()  : maxBirth.getFullYear()
+  const initMonth = parsed ? parsed.getMonth()      : maxBirth.getMonth()
 
   const [viewYear,  setViewYear]  = useState(initYear)
   const [viewMonth, setViewMonth] = useState(initMonth)
 
-  const currentCE = today.getFullYear()
-  const years = Array.from({ length: 101 }, (_, i) => currentCE - 100 + i)
+  const maxYear = maxBirth.getFullYear()
+  const years = Array.from({ length: 101 }, (_, i) => maxYear - 100 + i)
+  const isTooYoung = (d: number) => new Date(viewYear, viewMonth, d) > maxBirth
 
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
   const firstDow    = new Date(viewYear, viewMonth, 1).getDay()
@@ -90,6 +85,7 @@ function ThaiDatePicker({ value, onChange }: { value: string; onChange: (v: stri
     ? parsed.getDate() : null
 
   const selectDay = (d: number) => {
+    if (isTooYoung(d)) return
     const ce = `${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
     onChange(ce)
     setOpen(false)
@@ -195,14 +191,17 @@ function ThaiDatePicker({ value, onChange }: { value: string; onChange: (v: stri
             {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
               const isSelected = selectedDay === d
               const isToday = d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear()
+              const disabled = isTooYoung(d)
               return (
                 <button
                   key={d}
                   type="button"
                   onClick={() => selectDay(d)}
+                  disabled={disabled}
                   style={{
                     aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 9, borderRadius: 4, cursor: 'pointer', border: 'none',
+                    fontSize: 9, borderRadius: 4, cursor: disabled ? 'not-allowed' : 'pointer', border: 'none',
+                    opacity: disabled ? 0.3 : 1,
                     fontFamily: "'Sarabun', sans-serif",
                     background: isSelected ? 'linear-gradient(135deg, #f06292, #c2185b)' : 'transparent',
                     color: isSelected ? '#fff' : isToday ? '#c2185b' : '#3a2030',
@@ -439,7 +438,7 @@ function EditProfileView({
             <div className="pf-form-grid">
               <FormField label="ชื่อ"       value={editForm.name}     onChange={v => setEditForm(f => ({ ...f, name: v }))}     onKeyDown={e => e.key === 'Enter' && handleSaveProfile()} />
               <FormField label="นามสกุล"   value={editForm.lastname}  onChange={v => setEditForm(f => ({ ...f, lastname: v }))} onKeyDown={e => e.key === 'Enter' && handleSaveProfile()} />
-              <FormField label="ชื่อผู้ใช้" value={editForm.username}  onChange={v => setEditForm(f => ({ ...f, username: v }))} prefix="@" onKeyDown={e => e.key === 'Enter' && handleSaveProfile()} />
+              <FormField label="ชื่อผู้ใช้" value={editForm.username}  onChange={v => setEditForm(f => ({ ...f, username: v }))} prefix="@" maxLength={USERNAME_MAX} onKeyDown={e => e.key === 'Enter' && handleSaveProfile()} />
 
               {/* Birthday */}
               <div>
@@ -525,7 +524,7 @@ function HistoryView({ history, onBack, onSelectItem }: {
                     </p>
                     <p style={{ fontSize: 12, color: '#9e7a8a', display: 'flex', alignItems: 'center', gap: 4 }}>
                       <Calendar size={11} />
-                      {item.Create_At ? new Date(item.Create_At).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
+                      {parseServerDate(item.Create_At)?.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) ?? '-'}
                     </p>
                   </div>
                   <ChevronRight size={16} color="#d6b4c4" />
@@ -574,11 +573,7 @@ export default function ProfilePage() {
   const [history, setHistory] = useState<any[]>([])
   const [selectedHistory, setSelectedHistory] = useState<any>(null)
 
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
-  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
-  }
+  const showToast = useToast()
 
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -604,7 +599,11 @@ export default function ProfilePage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/`, {
         headers: { Authorization: `Bearer ${token}`, 'Cache-Control': 'no-cache' },
       })
-      if (!res.ok) { if (res.status === 401) router.replace('/login'); return }
+      if (!res.ok) {
+        if (res.status === 401) { router.replace('/login'); return }
+        showToast(await responseMessage(res, 'ไม่สามารถโหลดข้อมูลโปรไฟล์ได้'), 'error')
+        return
+      }
       const data = await res.json()
       if (data.data) setProfile(data.data)
     } catch { showToast('ไม่สามารถโหลดข้อมูลโปรไฟล์ได้', 'error') }
@@ -616,7 +615,11 @@ export default function ProfilePage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/history/`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) { if (res.status === 401) router.replace('/login'); return }
+      if (!res.ok) {
+        if (res.status === 401) { router.replace('/login'); return }
+        showToast(await responseMessage(res, 'ไม่สามารถโหลดประวัติได้'), 'error')
+        return
+      }
       const data = await res.json()
       if (data.status === 'success') setHistory(data.data)
     } catch { showToast('ไม่สามารถโหลดประวัติได้', 'error') }
@@ -633,13 +636,16 @@ export default function ProfilePage() {
   const handleLogout = async () => {
     setShowLogoutModal(false)
     // แจ้ง backend ให้ blacklist token (ถ้าล้มเหลวก็ยังออกจากระบบฝั่งหน้าเว็บต่อ)
+    let msg = 'ออกจากระบบเรียบร้อยแล้ว'
     try {
       const token = localStorage.getItem('access_token')
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/logout`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/logout`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (res.ok) msg = await responseMessage(res, msg)
     } catch {}
+    showToast(msg, 'success')
     localStorage.removeItem('access_token')
     localStorage.removeItem('user')
     router.push('/login')
@@ -656,6 +662,7 @@ export default function ProfilePage() {
       })
       const data = await res.json()
       if (!res.ok) return showToast(data.msg || 'รหัสผ่านไม่ถูกต้อง', 'error')
+      showToast(data.msg || 'ลบบัญชีผู้ใช้งานเรียบร้อยแล้ว', 'success')
       setShowDeleteConfirm(false)
       localStorage.removeItem('access_token')
       localStorage.removeItem('user')
@@ -669,6 +676,12 @@ export default function ProfilePage() {
     const lastName = editForm.lastname.trim()
     if (!username || !firstName || !lastName) {
       return showToast('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วนก่อนทำการบันทึก', 'error')
+    }
+    const nameErr = usernameError(username)
+    if (nameErr) return showToast(nameErr, 'error')
+    const birth = parseYmd(editForm.birthday || profile?.Birthday || '')
+    if (birth && ageFrom(birth) < MIN_AGE) {
+      return showToast(`ผู้ใช้ต้องมีอายุตั้งแต่ ${MIN_AGE} ปีขึ้นไป`, 'error')
     }
 
     const token = localStorage.getItem('access_token')
@@ -687,7 +700,7 @@ export default function ProfilePage() {
       })
       const data = await res.json()
       if (res.ok) {
-        showToast('บันทึกข้อมูลเรียบร้อย')
+        showToast(data.msg || 'บันทึกข้อมูลเรียบร้อย', 'success')
         setEditForm(f => ({ ...f, avatarFile: null }))
         setPreviewUrl(null)
         await fetchProfile()
@@ -878,20 +891,6 @@ export default function ProfilePage() {
       <div className="profile-root">
         <Navbar />
 
-        {/* TOAST */}
-        {toast && (
-          <div style={{
-            position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)',
-            zIndex: 50, padding: '12px 20px', borderRadius: 14,
-            fontSize: 13, fontWeight: 500, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-            border: '1px solid', animation: 'fadeSlideDown 0.3s ease', whiteSpace: 'nowrap',
-            ...(toast.type === 'success' ? { background: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' }
-              : toast.type === 'error' ? { background: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5' }
-              : { background: '#fce4ef', color: '#9d174d', borderColor: '#f9a8d4' })
-          }}>
-            {toast.type === 'success' ? '✓ ' : toast.type === 'error' ? '✕ ' : 'ℹ '}{toast.msg}
-          </div>
-        )}
 
         {view === 'profile' && (
           <ProfileView
@@ -1035,6 +1034,8 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
+
+        <Footer />
       </div>
     </>
   )
@@ -1087,9 +1088,9 @@ function MenuItem({ icon, label, desc, onClick, danger = false, badge }: {
   )
 }
 
-function FormField({ label, value, onChange, readOnly = false, prefix, icon, onKeyDown }: {
+function FormField({ label, value, onChange, readOnly = false, prefix, icon, onKeyDown, maxLength }: {
   label: string; value: string; onChange?: (v: string) => void;
-  readOnly?: boolean; prefix?: string; icon?: React.ReactNode;
+  readOnly?: boolean; prefix?: string; icon?: React.ReactNode; maxLength?: number;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
 }) {
   return (
@@ -1103,7 +1104,7 @@ function FormField({ label, value, onChange, readOnly = false, prefix, icon, onK
           <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: '#9e7a8a' }}>{icon}</span>
         )}
         <input
-          type="text" value={value} readOnly={readOnly}
+          type="text" value={value} readOnly={readOnly} maxLength={maxLength}
           onChange={e => onChange?.(e.target.value)}
           onKeyDown={e => onKeyDown?.(e)}
           style={{
@@ -1126,6 +1127,7 @@ function FormField({ label, value, onChange, readOnly = false, prefix, icon, onK
 function HistoryDetailView({ item, onBack }: { item: any; onBack: () => void }) {
   const [detail, setDetail] = useState<any>(item)
   const [loading, setLoading] = useState(true)
+  const showToast = useToast()
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -1134,12 +1136,18 @@ function HistoryDetailView({ item, onBack }: { item: any; onBack: () => void }) 
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/history/${item.AssessmentID}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
+        if (!res.ok) {
+          showToast(await responseMessage(res, 'ไม่สามารถโหลดรายละเอียดได้'), 'error')
+          return
+        }
         const data = await res.json()
         if (data.status === 'success') setDetail(data.data)
-      } catch {} finally { setLoading(false) }
+      } catch {
+        showToast(MSG_NETWORK_ERROR, 'error')
+      } finally { setLoading(false) }
     }
     fetchDetail()
-  }, [item.AssessmentID])
+  }, [item.AssessmentID, showToast])
 
   const levelMap: Record<string, string> = {
     'ฉุกเฉิน': 'high', 'เสี่ยงสูง': 'high', 'เสี่ยงปานกลาง': 'medium', 'ปกติ': 'low',
@@ -1151,9 +1159,9 @@ function HistoryDetailView({ item, onBack }: { item: any; onBack: () => void }) 
     { label: 'รายละเอียดที่พบ',         value: detail.Detect2, emoji: '🔬' },
     { label: 'โรคที่อาจเกี่ยวข้อง',    value: detail.Potential_Disease, emoji: '🎯' },
     { label: 'ระดับความเสี่ยง',         value: detail.Risk_Level, emoji: '📊' },
-    { label: 'วันที่วิเคราะห์', value: detail.Create_At
-        ? new Date(detail.Create_At).toLocaleDateString('th-TH', { year:'numeric', month:'long', day:'numeric' })
-        : '-', emoji: '📅' },
+    { label: 'วันที่วิเคราะห์', value:
+        parseServerDate(detail.Create_At)?.toLocaleDateString('th-TH', { year:'numeric', month:'long', day:'numeric' }) ?? '-',
+      emoji: '📅' },
   ]
 
   return (
@@ -1172,10 +1180,22 @@ function HistoryDetailView({ item, onBack }: { item: any; onBack: () => void }) 
               <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 13, fontWeight: 600, color: '#9e7a8a', padding: '14px 20px 12px' }}>ภาพที่วิเคราะห์</p>
               {detail.Image_Path ? (
                 <img
-                  src={`${process.env.NEXT_PUBLIC_API_URL}/${detail.Image_Path}`}
+                  src={`${process.env.NEXT_PUBLIC_API_URL}/${resultImagePath(detail.Image_Path)}`}
                   alt="Analyzed"
-                  onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-                  style={{ width: '100%', display: 'block', maxHeight: 640, objectFit: 'contain', background: '#fdf6f9' }}
+                  onError={e => {
+                    const img = e.currentTarget
+                    if (img.dataset.fallback !== '1') {
+                      img.dataset.fallback = '1'
+                      img.src = `${process.env.NEXT_PUBLIC_API_URL}/${detail.Image_Path}`
+                    } else {
+                      img.style.display = 'none'
+                    }
+                  }}
+                  style={{
+                    width: '100%', display: 'block', objectFit: 'contain', background: '#fdf6f9',
+                    // สูงไม่เกิน 360px และไม่เกินครึ่งจอ (จอเล็ก/มือถือไม่ต้องเลื่อนนาน)
+                    height: 'min(360px, 50vh)',
+                  }}
                 />
               ) : (
                 <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9e7a8a', fontSize: 13 }}>ไม่มีรูปภาพสำหรับการวิเคราะห์นี้</div>

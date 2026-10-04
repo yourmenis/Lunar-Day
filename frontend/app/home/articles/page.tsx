@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { BookOpen, Search, ChevronRight } from 'lucide-react'
 import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
 import api from '../../lib/api'
+import { useToast } from '../../components/Toast'
+import { axiosErrorMessage } from '../../lib/postJson'
 
 // ความกว้างเนื้อหา + ระยะขอบข้าง (ปรับตามขนาดจอ) ใช้ร่วมกันทั้ง Header และรายการบทความ
 const CONTAINER: React.CSSProperties = {
@@ -29,12 +32,14 @@ export default function ArticlesPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
+  const showToast = useToast()
+
   useEffect(() => {
     api.get('/articles')
       .then(res => setArticles(res.data))
-      .catch(() => {})
+      .catch(err => showToast(axiosErrorMessage(err, 'โหลดบทความไม่สำเร็จ'), 'error'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [showToast])
 
   const filtered = articles.filter(a =>
     a.Title?.toLowerCase().includes(search.toLowerCase())
@@ -192,6 +197,8 @@ export default function ArticlesPage() {
           </div>
         )}
       </div>
+
+      <Footer />
     </div>
   )
 }

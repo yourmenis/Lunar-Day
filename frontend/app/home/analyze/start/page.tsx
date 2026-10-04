@@ -9,7 +9,9 @@ import {
   Shield, Zap, FlaskConical, Baby, Clock, Ruler
 } from 'lucide-react'
 import Navbar from '../../components/Navbar'
+import Footer from '../../components/Footer'
 import LoginToast from '../../components/LoginToast'
+import { useToast } from '../../../components/Toast'
 
 // ─────────────────────────────────────────────
 // Types
@@ -40,6 +42,7 @@ interface ImageResult {
   detect_label: string
   confidence: number
   image_path: string | null
+  visual_path?: string | null   // ภาพที่ backend วาดกรอบผล AI แล้ว
 }
 
 interface RiskResult {
@@ -49,11 +52,11 @@ interface RiskResult {
   Risk_Level: string
   Potential_Disease: string
   Recommendation: string
+  Match_Percent: number | null  // % ความตรงของอาการกับโรคที่กำหนดระดับความเสี่ยง
   saved: boolean
 }
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL
-const TOAST_MS = 3000
 
 // value ตรงกับ ALLOWED_VALUES ใน backend/routes/analysis.py
 const PAIN_OPTIONS = [
@@ -129,6 +132,15 @@ const NO_MATCH_RECOMMENDATION =
   'เพื่อรับการตรวจวินิจฉัยเพิ่มเติม'
 const CLOT_SIZE_TH: Record<string, string> = { small: 'ขนาดเล็ก', large: 'ขนาดใหญ่' }
 
+// กรณีไม่พบลิ่มเลือด/เนื้อเยื่อ ค่าที่ backend ส่งมาคือความมั่นใจว่าเป็น "พื้นหลัง" ซึ่งสูงเสมอ
+// และไม่ได้สื่อถึงผลที่บอกผู้ใช้ จึงไม่แสดง %
+function hasConfidence(r: { ai_result: string }) {
+  return r.ai_result !== 'negative space'
+}
+function confidenceText(r: { ai_result: string; confidence: number }) {
+  return hasConfidence(r) ? `${r.confidence.toFixed(1)}%` : '–'
+}
+
 // แยกคำแนะนำเป็นข้อ ๆ แล้วตัดข้อที่ซ้ำกันออก (เทียบหลังตัดช่องว่างเกิน) เหลือข้อละครั้ง
 function uniqueSuggestions(text: string): string[] {
   const seen = new Set<string>()
@@ -146,7 +158,7 @@ const DEFAULT_RC = { bg: '#f0fdf4', border: '#86efac', text: '#15803d', badge: '
 // ─────────────────────────────────────────────
 // Progress ring
 // ─────────────────────────────────────────────
-function ProgressRing({ score, color, label }: { score: number; color: string; label?: string }) {
+function ProgressRing({ score, color, label, caption }: { score: number; color: string; label?: string; caption: string }) {
   const r    = 46
   const circ = 2 * Math.PI * r
   const [dash, setDash] = useState(circ)
@@ -164,7 +176,7 @@ function ProgressRing({ score, color, label }: { score: number; color: string; l
       <text x="55" y="50" textAnchor="middle" fontSize="20" fontWeight="700" fill={color}
         fontFamily="'Mitr', sans-serif">{label ?? score}</text>
       <text x="55" y="67" textAnchor="middle" fontSize="9.5" fill="#9e7a8a"
-        fontFamily="'Sarabun', sans-serif">คะแนนความเสี่ยง</text>
+        fontFamily="'Sarabun', sans-serif">{caption}</text>
     </svg>
   )
 }
@@ -324,28 +336,15 @@ export default function AnalyzePage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [showLoginToast,    setShowLoginToast]    = useState(false)
   const [imageValidated,    setImageValidated]    = useState(false)
-  const [imageSuccessToast, setImageSuccessToast] = useState<string | null>(null)
-  const [imageErrorToast,   setImageErrorToast]   = useState<string | null>(null)
-  const [toastSeq, setToastSeq] = useState(0)  // เปลี่ยน key เพื่อให้แอนิเมชันเริ่มใหม่ทุกครั้งที่เด้ง
-  const toastTimers = useRef<{ success?: ReturnType<typeof setTimeout>; error?: ReturnType<typeof setTimeout> }>({})
-
-  // โนติเด้งขึ้นแล้วหายเองใน TOAST_MS (ล้าง timer เก่าเพื่อไม่ให้ปิดโนติใหม่ก่อนเวลา)
-  const flashSuccess = useCallback((msg: string) => {
-    clearTimeout(toastTimers.current.success)
-    setImageSuccessToast(msg); setToastSeq(n => n + 1)
-    toastTimers.current.success = setTimeout(() => setImageSuccessToast(null), TOAST_MS)
-  }, [])
-  const flashError = useCallback((msg: string) => {
-    clearTimeout(toastTimers.current.error)
-    setImageErrorToast(msg); setToastSeq(n => n + 1)
-    toastTimers.current.error = setTimeout(() => setImageErrorToast(null), TOAST_MS)
-  }, [])
+  // ข้อความจาก backend ทั้งหมดแสดงผ่าน toast กลาง (components/Toast)
+  const showToast = useToast()
+  const flashSuccess = useCallback((msg: string) => showToast(msg, 'success'), [showToast])
+  const flashError = useCallback((msg: string) => showToast(msg, 'error'), [showToast])
 
   const [form, setForm] = useState<SymptomForm>(EMPTY_FORM)
 
   const [imageResult, setImageResult] = useState<ImageResult | null>(null)
   const [riskResult,  setRiskResult]  = useState<RiskResult  | null>(null)
-  const [apiError,    setApiError]    = useState<string | null>(null)
   const [imageLoading, setImageLoading] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
@@ -387,7 +386,13 @@ export default function AnalyzePage() {
         setImage(null); setImageFile(null); setImageValidated(false)
       } else {
         setImageResult(data); setImageValidated(true)
-        flashSuccess(`ผลภาพ: ${data.detect_label} (ความมั่นใจ ${data.confidence.toFixed(1)}%)`)
+        if (data.visual_path) {
+          reader.abort()  // กันภาพตัวอย่างเดิมโหลดเสร็จทีหลังแล้วทับภาพผล
+          setImage(`${BASE_URL}/${data.visual_path}`)
+        }
+        flashSuccess(hasConfidence(data)
+          ? `ผลภาพ: ${data.detect_label} (ความมั่นใจ ${confidenceText(data)})`
+          : `ผลภาพ: ${data.detect_label}`)
         if (data.ai_result !== 'clot') setForm(f => ({ ...f, size: '' }))
       }
     } catch {
@@ -421,7 +426,7 @@ export default function AnalyzePage() {
     const token = localStorage.getItem('access_token')
     if (!token) { setShowLoginToast(true); return }
     if (!formValid) return
-    setStep('analyzing'); setApiError(null)
+    setStep('analyzing')
     try {
       const fd = new FormData()
       fd.append('aiResult',   imageResult?.ai_result ?? '')
@@ -442,7 +447,7 @@ export default function AnalyzePage() {
       })
       if (res.status === 401 || res.status === 422) {
         localStorage.removeItem('access_token')
-        setApiError('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่'); setStep('symptoms')
+        flashError('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่'); setStep('symptoms')
         return
       }
       const data = await res.json()
@@ -458,16 +463,20 @@ export default function AnalyzePage() {
           Risk_Level:        NO_MATCH_LEVEL,
           Potential_Disease: NO_MATCH_DISEASE,
           Recommendation:    NO_MATCH_RECOMMENDATION,
+          Match_Percent:     null,
           saved:             false,
         })
         setStep('result')
         return
       }
       if (data.status !== 'success') {
-        setApiError(data.msg ?? 'ประเมินความเสี่ยงไม่สำเร็จ'); setStep('symptoms')
+        flashError(data.msg ?? 'ประเมินความเสี่ยงไม่สำเร็จ'); setStep('symptoms')
       } else {
         // backend ส่งผลมาใน data.data (snake_case) → แปลงเป็นรูปแบบที่หน้าจอใช้
         const d = data.data
+        // % ความตรงสูงสุดของโรคที่อยู่ในระดับความเสี่ยงที่ backend สรุปมา
+        const scores: { risk_level: string; match_percent: number }[] = d.disease_scores ?? []
+        const levelScores = scores.filter(x => x.risk_level === d.risk_level).map(x => x.match_percent)
         setRiskResult({
           status:            data.status,
           Detect1:           d.detect1,
@@ -475,21 +484,20 @@ export default function AnalyzePage() {
           Risk_Level:        d.risk_level,
           Potential_Disease: d.potential_disease,
           Recommendation:    d.recommendation ?? '',
+          Match_Percent:     levelScores.length ? Math.max(...levelScores) : null,
           saved:             true,
         })
         setStep('result')
       }
-    } catch { setApiError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'); setStep('symptoms') }
+    } catch { flashError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'); setStep('symptoms') }
   }
 
   const rc = riskResult ? (RISK_COLORS[riskResult.Risk_Level] ?? DEFAULT_RC) : DEFAULT_RC
-  const riskScore = riskResult ? ({
-    ปกติ: 15, เสี่ยงปานกลาง: 50, เสี่ยงสูง: 75, ฉุกเฉิน: 95, [NO_MATCH_LEVEL]: 0,
-  }[riskResult.Risk_Level] ?? 30) : 0
+  const matchPercent = riskResult?.Match_Percent ?? null
 
   const resetAll = () => {
     setStep('upload'); setImage(null); setImageFile(null)
-    setImageResult(null); setRiskResult(null); setApiError(null); setImageLoading(false)
+    setImageResult(null); setRiskResult(null); setImageLoading(false)
     setForm(EMPTY_FORM)
     setImageValidated(false)
   }
@@ -655,8 +663,6 @@ export default function AnalyzePage() {
         .trust-sub   { font-size: 11px; color: #9e7a8a; }
 
         /* Footer */
-        .analyze-footer { background: #fff; border-top: 1px solid #f5e6ec; padding: 24px var(--page-pad); display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: #b09aa8; gap: 8px; flex-wrap: wrap; max-width: var(--page-max); margin: 0 auto; }
-        .analyze-footer-wrap { background: #fff; border-top: 1px solid #f5e6ec; }
 
         /* Animations */
         @keyframes analyzePulse {
@@ -668,12 +674,6 @@ export default function AnalyzePage() {
         @keyframes fadeSlideDown {
           from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
           to   { opacity: 1; transform: translateX(-50%) translateY(0); }
-        }
-        @keyframes toastAutoHide {
-          0%   { opacity: 0; transform: translateX(-50%) translateY(-8px); }
-          10%  { opacity: 1; transform: translateX(-50%) translateY(0); }
-          85%  { opacity: 1; transform: translateX(-50%) translateY(0); }
-          100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
         }
         .fade-up { animation: fadeUp 0.5s ease forwards; }
 
@@ -719,7 +719,6 @@ export default function AnalyzePage() {
           .btn-outline-full, .btn-primary-full { width: 100%; min-width: unset; }
 
           .trust-strip { grid-template-columns: 1fr; padding: 0 12px; gap: 8px; }
-          .analyze-footer { flex-direction: column; text-align: center; }
         }
 
         /* ── Tablet ── */
@@ -855,7 +854,7 @@ export default function AnalyzePage() {
 
                 <div style={{ height: 14 }} />
 
-                {!imageResult && !apiError && (
+                {!imageResult && (
                   <div className="ai-loading-badge">
                     <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
                     กำลังวิเคราะห์ภาพ...
@@ -865,12 +864,7 @@ export default function AnalyzePage() {
                   <div className="ai-result-badge">
                     <CheckCircle2 size={13} />
                     ผลภาพ: <strong>{imageResult.detect_label}</strong>
-                    &nbsp;(ความมั่นใจ {imageResult.confidence.toFixed(1)}%)
-                  </div>
-                )}
-                {apiError && (
-                  <div className="error-box">
-                    <AlertCircle size={14} style={{ flexShrink: 0 }} />{apiError}
+                    {hasConfidence(imageResult) && <>&nbsp;(ความมั่นใจ {confidenceText(imageResult)})</>}
                   </div>
                 )}
 
@@ -936,7 +930,7 @@ export default function AnalyzePage() {
                 </div>
 
                 <div className="card-footer">
-                  <button className="btn-ghost-sm" onClick={() => { setStep('upload'); setImageResult(null); setApiError(null) }}>
+                  <button className="btn-ghost-sm" onClick={() => setStep('upload')}>
                     ← ย้อนกลับ
                   </button>
                   <button className="btn-primary" disabled={!formValid} onClick={runAnalysis}>
@@ -962,8 +956,8 @@ export default function AnalyzePage() {
                 {/* Risk banner */}
                 <div className="result-risk-banner" style={{ background: rc.bg, borderColor: rc.border }}>
                   <div style={{ flexShrink: 0 }}>
-                    <ProgressRing score={riskScore} color={rc.text}
-                      label={riskResult.Risk_Level === NO_MATCH_LEVEL ? '–' : undefined} />
+                    <ProgressRing score={matchPercent ?? 0} color={rc.text} caption="ตรงกับอาการ"
+                      label={matchPercent === null ? '–' : `${Math.round(matchPercent)}%`} />
                   </div>
                   <div className="risk-info">
                     <div className="risk-label-tag" style={{ background: rc.badge, color: rc.text }}>
@@ -994,7 +988,7 @@ export default function AnalyzePage() {
                   {imageResult && (
                     <div className="rd-row">
                       <div className="rd-icon">📊</div>
-                      <div><div className="rd-label">ความมั่นใจของ AI</div><div className="rd-value">{imageResult.confidence.toFixed(1)}%</div></div>
+                      <div><div className="rd-label">ความมั่นใจของ AI</div><div className="rd-value">{confidenceText(imageResult)}</div></div>
                     </div>
                   )}
                   <div className="rd-row">
@@ -1052,42 +1046,7 @@ export default function AnalyzePage() {
           </div>
         )}
 
-        {/* Toasts */}
-        {imageSuccessToast && (
-          <div key={`ok-${toastSeq}`} style={{
-            position: 'fixed', top: 76, left: '50%', transform: 'translateX(-50%)',
-            zIndex: 9999, padding: '11px 18px', borderRadius: 13,
-            background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7',
-            fontSize: 12.5, fontWeight: 500, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-            fontFamily: "'Sarabun',sans-serif", display: 'flex', alignItems: 'center', gap: 8,
-            maxWidth: 'calc(100vw - 32px)', animation: `toastAutoHide ${TOAST_MS}ms ease forwards`,
-            pointerEvents: 'none',
-          }}>
-            <CheckCircle2 size={14} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{imageSuccessToast}</span>
-          </div>
-        )}
-        {imageErrorToast && (
-          <div key={`err-${toastSeq}`} style={{
-            position: 'fixed', top: 76, left: '50%', transform: 'translateX(-50%)',
-            zIndex: 9999, padding: '11px 18px', borderRadius: 13,
-            background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5',
-            fontSize: 12.5, fontWeight: 500, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-            fontFamily: "'Sarabun',sans-serif", display: 'flex', alignItems: 'center', gap: 8,
-            maxWidth: 'calc(100vw - 32px)', animation: `toastAutoHide ${TOAST_MS}ms ease forwards`,
-            pointerEvents: 'none',
-          }}>
-            <AlertCircle size={14} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{imageErrorToast}</span>
-          </div>
-        )}
-
-        <div className="analyze-footer-wrap">
-          <footer className="analyze-footer">
-            <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
-            <span>นโยบายความเป็นส่วนตัว · ติดต่อเรา</span>
-          </footer>
-        </div>
+        <Footer />
 
         <LoginToast show={showLoginToast} onClose={() => setShowLoginToast(false)} />
       </div>

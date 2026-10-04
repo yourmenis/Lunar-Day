@@ -4,7 +4,11 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Heart, Bookmark, Share2, AlertCircle, Calendar } from 'lucide-react'
 import Navbar from '../../components/Navbar'
+import Footer from '../../components/Footer'
 import api from '../../../lib/api'
+import { useToast } from '../../../components/Toast'
+import { axiosErrorMessage } from '../../../lib/postJson'
+import { parseServerDate } from '../../../lib/serverDate'
 
 export default function ArticleDetailPage() {
   const { id } = useParams()
@@ -14,6 +18,7 @@ export default function ArticleDetailPage() {
   const [links, setLinks]     = useState<{ text: string; url?: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(false)
+  const showToast = useToast()
   const [liked, setLiked]     = useState(false)
   const [saved, setSaved]     = useState(false)
 
@@ -41,13 +46,15 @@ export default function ArticleDetailPage() {
           setLinks(Array.isArray(pl) ? pl : [])
         } catch { setLinks([]) }
       })
-      .catch(() => setError(true))
+      .catch(err => {
+        setError(true)
+        showToast(axiosErrorMessage(err, 'ไม่สามารถโหลดเนื้อหาได้'), 'error')
+      })
       .finally(() => setLoading(false))
-  }, [id])
+  }, [id, showToast])
 
-  const formatDate = (iso?: string) => iso
-    ? new Date(iso).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })
-    : ''
+  const formatDate = (value?: string) =>
+    parseServerDate(value)?.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) ?? ''
 
   const extractUrl = (text: string) => {
     const match = text.match(/https?:\/\/[^\s]+/)
@@ -150,6 +157,8 @@ export default function ArticleDetailPage() {
           )}
         </div>
       </div>
+
+      <Footer />
     </div>
   )
 }

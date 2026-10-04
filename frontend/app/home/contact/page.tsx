@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { MapPin, Mail, ExternalLink } from 'lucide-react'
 import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
 
 export default function ContactPage() {
   const [mounted, setMounted] = useState(false)
@@ -505,22 +506,6 @@ export default function ContactPage() {
           box-shadow: 0 10px 32px rgba(194,24,91,0.55);
         }
 
-        /* ── Footer ── */
-        .contact-footer {
-          background: #fff;
-          border-top: 1px solid #f5e6ec;
-        }
-        .contact-footer-inner {
-          padding-top: 24px;
-          padding-bottom: 24px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 8px;
-          font-size: 12.5px;
-          color: #b09aa8;
-        }
-
         /* ── Responsive ── */
         @media (max-width: 1024px) {
           .contact-layout { grid-template-columns: 1fr; }
@@ -536,7 +521,6 @@ export default function ContactPage() {
           .map-header, .map-footer { padding-left: 20px; padding-right: 20px; }
           .map-footer { flex-direction: column; align-items: flex-start; }
           .contact-cta { flex-direction: column; text-align: center; }
-          .contact-footer-inner { flex-direction: column; text-align: center; }
         }
       `}</style>
 
@@ -692,11 +676,7 @@ export default function ContactPage() {
         </main>
 
         {/* ── Footer ── */}
-        <footer className="contact-footer">
-          <div className="contact-footer-inner contact-container">
-            <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
-          </div>
-        </footer>
+        <Footer />
       </div>
     </>
   )

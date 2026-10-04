@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
 import './login.css'
 import Image from 'next/image'
-import AuthToast, { SIGNUP_SUCCESS_KEY, useAuthToast } from '../components/AuthToast'
+import { SIGNUP_SUCCESS_KEY, useToast } from '../components/Toast'
 import { postJson } from '../lib/postJson'
+import { PASSWORD_MAX, USERNAME_MAX } from '../lib/authRules'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -16,7 +17,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [stars, setStars] = useState<Array<React.CSSProperties>>([])
-  const { toast, showToast } = useAuthToast()
+  const showToast = useToast()
 
   useEffect(() => {
     setMounted(true)
@@ -59,14 +60,27 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     if (loading) return
-    if (!username.trim() || !password.trim()) {
-      showToast('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน')
+    const name = username.trim()
+    if (!name || !password.trim()) {
+      showToast('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน', 'error')
+      return
+    }
+    if (/\s/.test(name)) {
+      showToast('ชื่อผู้ใช้ห้ามมีช่องว่าง', 'error')
+      return
+    }
+    if (name.length > USERNAME_MAX) {
+      showToast(`ชื่อผู้ใช้ต้องมีความยาวไม่เกิน ${USERNAME_MAX} ตัวอักษร`, 'error')
+      return
+    }
+    if (password.length > PASSWORD_MAX) {
+      showToast(`รหัสผ่านต้องมีความยาวไม่เกิน ${PASSWORD_MAX} ตัวอักษร`, 'error')
       return
     }
     setLoading(true)
 
     const result = await postJson<{ access_token: string; user: unknown }>(
-      '/auth/login', { username, password },
+      '/auth/login', { username: name, password },
     )
     if (result.data && result.ok) {
       localStorage.setItem('access_token', result.data.access_token)
@@ -74,7 +88,7 @@ export default function LoginPage() {
       router.replace('/home')
       return
     }
-    showToast(result.data ? (result.data.msg ?? 'เข้าสู่ระบบไม่สำเร็จ') : result.error)
+    showToast(result.data ? (result.data.msg ?? 'เข้าสู่ระบบไม่สำเร็จ') : result.error, 'error')
     setLoading(false)
   }
 
@@ -125,6 +139,7 @@ export default function LoginPage() {
                   placeholder="กรอกชื่อผู้ใช้ของคุณ"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
+                  maxLength={USERNAME_MAX}
                   autoComplete="username"
                 />
               </div>
@@ -138,6 +153,7 @@ export default function LoginPage() {
                     placeholder="กรอกรหัสผ่านของคุณ"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
+                    maxLength={PASSWORD_MAX}
                     style={{ paddingRight: '44px' }}
                     autoComplete="current-password"
                   />
@@ -177,8 +193,6 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
-
-      <AuthToast toast={toast} />
     </>
   )
 }

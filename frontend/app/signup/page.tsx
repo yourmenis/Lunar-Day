@@ -5,8 +5,11 @@ import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, User, Mail, Lock, Calendar, AtSign, ChevronRight, ChevronLeft } from 'lucide-react'
 import './signup.css'
 import Image from 'next/image'
-import AuthToast, { SIGNUP_SUCCESS_KEY, useAuthToast } from '../components/AuthToast'
+import { SIGNUP_SUCCESS_KEY, useToast } from '../components/Toast'
 import { postJson } from '../lib/postJson'
+import { ageFrom, parseYmd } from '../lib/birthDate'
+import { PASSWORD_MAX, USERNAME_MAX, passwordLengthError, usernameError } from '../lib/authRules'
+import { PRIVACY_TEXT, TERMS_TEXT } from '../lib/policyText'
 
 const STEPS = [
   { id: 1, title: 'ข้อมูลส่วนตัว', subtitle: 'บอกเราเกี่ยวกับคุณ' },
@@ -20,20 +23,6 @@ const THAI_MONTHS = [
   'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม',
 ]
 const DOW = ['อา','จ','อ','พ','พฤ','ศ','ส']
-
-// แปลง 'YYYY-MM-DD' เป็นวันที่ตามเวลาท้องถิ่น (new Date('YYYY-MM-DD') จะตีความเป็น UTC)
-function parseYmd(value: string): Date | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null
-}
-
-function ageFrom(birth: Date): number {
-  const t = new Date()
-  const beforeBirthday =
-    t.getMonth() < birth.getMonth() ||
-    (t.getMonth() === birth.getMonth() && t.getDate() < birth.getDate())
-  return t.getFullYear() - birth.getFullYear() - (beforeBirthday ? 1 : 0)
-}
 
 // รูปแบบเดียวกับที่ backend ตรวจ (routes/auth.py)
 const EMAIL_PATTERN = /^[\w.-]+@[\w.-]+\.\w+$/
@@ -182,7 +171,8 @@ export default function SignUpPage() {
   const [agreed, setAgreed] = useState(false)
   const [animating, setAnimating] = useState(false)
   const [stars, setStars] = useState<Array<React.CSSProperties>>([])
-  const { toast, showToast } = useAuthToast()
+  const showToast = useToast()
+  const [policyDoc, setPolicyDoc] = useState<'terms' | 'privacy' | null>(null)
 
   const [form, setForm] = useState({
     firstName: '',
@@ -225,13 +215,15 @@ export default function SignUpPage() {
     if (n === 2) {
       if (!form.email.trim()) return 'กรุณากรอกอีเมล'
       if (!EMAIL_PATTERN.test(form.email.trim())) return 'รูปแบบอีเมลไม่ถูกต้อง'
-      if (!form.username.trim()) return 'กรุณากรอกชื่อผู้ใช้'
+      const nameErr = usernameError(form.username)
+      if (nameErr) return nameErr
     }
     if (n === 3) {
       // backend ตัดช่องว่างหัว-ท้ายรหัสผ่านก่อนตรวจ จึงตรวจแบบเดียวกัน
       const pw = form.password.trim()
       if (!pw) return 'กรุณากรอกรหัสผ่าน'
-      if (pw.length < 8) return 'รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร'
+      const pwErr = passwordLengthError(form.password)
+      if (pwErr) return pwErr
       if (pw !== form.confirmPassword.trim()) return 'โปรดระบุรหัสผ่านทั้งสองช่องให้ตรงกัน'
       if (!agreed) return 'กรุณากดยอมรับเงื่อนไขและนโยบายความเป็นส่วนตัวก่อนดำเนินการต่อ'
     }
@@ -250,7 +242,7 @@ export default function SignUpPage() {
   const nextStep = () => {
     if (step >= 3) return
     const err = validateStep(step)
-    if (err) { showToast(err); return }
+    if (err) { showToast(err, 'error'); return }
     goToStep(step + 1)
   }
 
@@ -267,7 +259,7 @@ export default function SignUpPage() {
     // ตรวจทุกขั้นอีกครั้ง ถ้าขั้นไหนผิดให้พากลับไปที่ขั้นนั้น
     for (const n of [1, 2, 3]) {
       const err = validateStep(n)
-      if (err) { showToast(err); goToStep(n); return }
+      if (err) { showToast(err, 'error'); goToStep(n); return }
     }
 
     setLoading(true)
@@ -289,7 +281,7 @@ export default function SignUpPage() {
     }
 
     const msg = result.data ? (result.data.msg ?? 'สมัครสมาชิกไม่สำเร็จ') : result.error
-    showToast(msg)
+    showToast(msg, 'error')
     // พากลับไปขั้นที่มีช่องผิด (ชื่อผู้ใช้/อีเมลซ้ำ → ขั้น 2, อายุ/วันที่ → ขั้น 1)
     if (/ชื่อผู้ใช้|อีเมล/.test(msg)) goToStep(2)
     else if (/อายุ|วันที่/.test(msg)) goToStep(1)
@@ -413,6 +405,7 @@ export default function SignUpPage() {
                   className="field-input"
                   placeholder="username"
                   value={form.username}
+                  maxLength={USERNAME_MAX}
                   onChange={e => handleChange('username', e.target.value)}
                 />
               </div>
@@ -437,6 +430,7 @@ export default function SignUpPage() {
                   className="field-input"
                   placeholder="อย่างน้อย 8 ตัวอักษร"
                   value={form.password}
+                  maxLength={PASSWORD_MAX}
                   onChange={e => handleChange('password', e.target.value)}
                   style={{ paddingRight: '44px' }}
                 />
@@ -453,6 +447,7 @@ export default function SignUpPage() {
                   className="field-input"
                   placeholder="พิมพ์รหัสผ่านอีกครั้ง"
                   value={form.confirmPassword}
+                  maxLength={PASSWORD_MAX}
                   onChange={e => handleChange('confirmPassword', e.target.value)}
                   style={{ paddingRight: '44px' }}
                 />
@@ -472,9 +467,13 @@ export default function SignUpPage() {
                 </button>
                 <p className="checkbox-text">
                   ฉันยอมรับ{' '}
-                  <span className="checkbox-link">เงื่อนไขการใช้งาน</span>
+                  <span className="checkbox-link" role="button" tabIndex={0} style={{ cursor: 'pointer' }}
+                    onClick={() => setPolicyDoc('terms')}
+                    onKeyDown={e => e.key === 'Enter' && setPolicyDoc('terms')}>เงื่อนไขการใช้งาน</span>
                   {' '}และ{' '}
-                  <span className="checkbox-link">นโยบายความเป็นส่วนตัว</span>
+                  <span className="checkbox-link" role="button" tabIndex={0} style={{ cursor: 'pointer' }}
+                    onClick={() => setPolicyDoc('privacy')}
+                    onKeyDown={e => e.key === 'Enter' && setPolicyDoc('privacy')}>นโยบายความเป็นส่วนตัว</span>
                   {' '}และยืนยันว่ามีอายุครบ 13 ปีบริบูรณ์
                 </p>
               </div>
@@ -507,7 +506,46 @@ export default function SignUpPage() {
         </div>
       </div>
 
-      <AuthToast toast={toast} />
+      {policyDoc && (
+        <div
+          onClick={() => setPolicyDoc(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(26,10,20,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}
+        >
+          <div
+            role="dialog" aria-modal="true"
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff', borderRadius: 20, width: '100%', maxWidth: 560,
+              maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)', fontFamily: "'Sarabun', sans-serif",
+            }}
+          >
+            <div style={{ padding: '20px 24px 12px', borderBottom: '1px solid #f5e6ec' }}>
+              <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 17, fontWeight: 600, color: '#1a0a14' }}>
+                {policyDoc === 'terms' ? 'ข้อตกลงเงื่อนไขการใช้งาน' : 'ประกาศนโยบายความเป็นส่วนตัว'}
+              </p>
+            </div>
+            <div style={{ padding: '16px 24px', overflowY: 'auto' }}>
+              {(policyDoc === 'terms' ? TERMS_TEXT : PRIVACY_TEXT).map((sec, i) => (
+                <div key={i} style={{ marginBottom: 16 }}>
+                  <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 600, color: '#c2185b', marginBottom: 4 }}>{sec.title}</p>
+                  <p style={{ fontSize: 13.5, color: '#5a3a4a', lineHeight: 1.8 }}>{sec.body}</p>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '12px 24px 20px', borderTop: '1px solid #f5e6ec', display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="button" onClick={() => setPolicyDoc(null)} style={{
+                padding: '10px 28px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                background: 'linear-gradient(135deg, #f06292, #c2185b)', color: '#fff',
+                fontFamily: "'Mitr', sans-serif", fontSize: 14,
+              }}>ปิด</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

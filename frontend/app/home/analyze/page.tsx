@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { ArrowRight, Sparkles, ChevronRight, Shield, Zap, Activity } from 'lucide-react'
 import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
 import LoginToast from '../components/LoginToast'
 
 const STEPS = [
@@ -239,10 +240,10 @@ export default function IntroPage() {
           position: absolute; width: 14px; height: 14px; border-radius: 50%;
           box-shadow: 0 0 10px currentColor;
         }
-        .hero-orbit-dot:nth-child(3) { top: 10px; left: 50%; transform: translateX(-50%); background: #f06292; color: #f06292; }
-        .hero-orbit-dot:nth-child(4) { bottom: 10px; left: 50%; transform: translateX(-50%); background: #f48fb1; color: #f48fb1; }
-        .hero-orbit-dot:nth-child(5) { left: 10px; top: 50%; transform: translateY(-50%); background: #ce93d8; color: #ce93d8; }
-        .hero-orbit-dot:nth-child(6) { right: 10px; top: 50%; transform: translateY(-50%); background: #f06292; color: #f06292; }
+        .hero-orbit-dot:nth-child(1) { top: 10px; left: 50%; transform: translateX(-50%); background: #f06292; color: #f06292; }
+        .hero-orbit-dot:nth-child(2) { bottom: 10px; left: 50%; transform: translateX(-50%); background: #f48fb1; color: #f48fb1; }
+        .hero-orbit-dot:nth-child(3) { left: 10px; top: 50%; transform: translateY(-50%); background: #ce93d8; color: #ce93d8; }
+        .hero-orbit-dot:nth-child(4) { right: 10px; top: 50%; transform: translateY(-50%); background: #f06292; color: #f06292; }
         .float-em {
           position: absolute; font-size: 24px;
           animation: floatEm 4s ease-in-out infinite;
@@ -406,23 +407,6 @@ export default function IntroPage() {
         .bcta-title { font-family: 'Mitr', sans-serif; font-weight: 600; font-size: clamp(22px, 3.2vw, 30px); color: #fff; line-height: 1.3; margin-bottom: 10px; }
         .bcta-desc { font-size: 14px; color: rgba(255,255,255,0.5); line-height: 1.6; }
         .bcta-right { position:relative; z-index:1; flex-shrink:0; }
-
-        /* ── Footer (ชิดซ้าย เหมือนหน้า Home) ── */
-        .intro-footer {
-          margin-top: 64px;
-          background: #fff;
-          border-top: 1px solid #f5e6ec;
-          padding: 28px var(--page-pad);
-          font-size: 12.5px;
-          color: #b09aa8;
-        }
-        .intro-footer-inner {
-          max-width: var(--page-max);
-          margin: 0 auto;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
 
         .sp-content { transition: opacity 0.3s ease; }
         .sp-content.hidden { opacity: 0; }
@@ -658,11 +642,8 @@ export default function IntroPage() {
         </div>
 
         {/* ══════════ FOOTER ══════════ */}
-        <footer className="intro-footer">
-          <div className="intro-footer-inner">
-            <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
-          </div>
-        </footer>
+        <div style={{ height: 64 }} />
+        <Footer />
         <LoginToast show={showLoginToast} onClose={() => setShowLoginToast(false)} />
       </div>
     </>
