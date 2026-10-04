@@ -40,3 +40,5 @@ bacjkend/hurl/*.hurl
 backend/hurl/
 backend/report/
 backend/test/
+
+backend/static
