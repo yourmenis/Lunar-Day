@@ -23,7 +23,7 @@ backend/.env
 
 # --- User Uploads ---
 backend/uploads/
-backend/static/uploads/
+#backend/static/uploads/
 
 # --- IDE & Misc ---
 .vscode/

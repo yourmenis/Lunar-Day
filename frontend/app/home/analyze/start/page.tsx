@@ -9,7 +9,9 @@ import {
   Shield, Zap, FlaskConical, Baby, Clock, Ruler
 } from 'lucide-react'
 import Navbar from '../../components/Navbar'
+import Footer from '../../components/Footer'
 import LoginToast from '../../components/LoginToast'
+import { useToast } from '../../../components/Toast'
 
 // ─────────────────────────────────────────────
 // Types
@@ -17,10 +19,21 @@ import LoginToast from '../../components/LoginToast'
 type Step = 'upload' | 'symptoms' | 'analyzing' | 'result'
 
 interface SymptomForm {
-  pain_level: string
-  duration: string
-  is_pregnant: string
-  size: string
+  flow: string          // q1
+  duration: string      // q2
+  cycle: string         // q3
+  bleeding: string      // q4
+  pain_level: string    // q5
+  pelvic_pain: string   // q6
+  symptoms: string[]    // q7
+  sex_history: string   // q8
+  is_pregnant: string   // q9
+  size: string          // q10
+}
+
+const EMPTY_FORM: SymptomForm = {
+  flow: '', duration: '', cycle: '', bleeding: '', pain_level: '',
+  pelvic_pain: '', symptoms: [], sex_history: '', is_pregnant: '', size: '',
 }
 
 interface ImageResult {
@@ -28,8 +41,8 @@ interface ImageResult {
   ai_result: string
   detect_label: string
   confidence: number
-  processing_time: number
   image_path: string | null
+  visual_path?: string | null   // ภาพที่ backend วาดกรอบผล AI แล้ว
 }
 
 interface RiskResult {
@@ -39,24 +52,67 @@ interface RiskResult {
   Risk_Level: string
   Potential_Disease: string
   Recommendation: string
-  processing_time: number
+  Match_Percent: number | null  // % ความตรงของอาการกับโรคที่กำหนดระดับความเสี่ยง
   saved: boolean
 }
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
+// value ตรงกับ ALLOWED_VALUES ใน backend/routes/analysis.py
 const PAIN_OPTIONS = [
-  { value: 'ปกติ/ปวดเล็กน้อย', label: '😊 ปกติ / ปวดเล็กน้อย' },
-  { value: 'ปวดปานกลาง',       label: '😐 ปวดปานกลาง' },
-  { value: 'ปวดรุนแรง',        label: '😣 ปวดรุนแรง' },
+  { value: 'none',   label: '😊 ปกติ / ปวดเล็กน้อย' },
+  { value: 'mild',   label: '😐 ปวดปานกลาง' },
+  { value: 'severe', label: '😣 ปวดรุนแรง' },
 ]
 const DURATION_OPTIONS = [
-  { value: '1-7 วัน',       label: '📅 1–7 วัน' },
-  { value: 'มากกว่า 7 วัน', label: '📅 มากกว่า 7 วัน' },
+  { value: 'short',  label: '📅 น้อยกว่า 2 วัน' },
+  { value: 'normal', label: '📅 2–7 วัน' },
+  { value: 'long',   label: '📅 มากกว่า 7 วัน' },
 ]
 const SIZE_OPTIONS = [
-  { value: 'เล็กกว่าเหรียญสิบ', label: '🪙 เล็กกว่าเหรียญสิบบาท' },
-  { value: 'ใหญ่กว่าเหรียญสิบ', label: '🩸 ใหญ่กว่าเหรียญสิบบาท' },
+  { value: 'small', label: '🪙 เล็กกว่าเหรียญสิบบาท' },
+  { value: 'large', label: '🩸 ใหญ่กว่าเหรียญสิบบาท' },
+]
+const FLOW_OPTIONS = [
+  { value: 'low',    label: '💧 น้อยกว่าปกติ' },
+  { value: 'normal', label: '🩸 ปกติ' },
+  { value: 'high',   label: '🌊 มากกว่าปกติ' },
+]
+const CYCLE_OPTIONS = [
+  { value: 'short',  label: '📆 ถี่กว่า 21 วัน' },
+  { value: 'normal', label: '📆 ทุก 21–35 วัน' },
+  { value: 'long',   label: '📆 ห่างกว่า 35 วัน' },
+]
+const BLEEDING_OPTIONS = [
+  { value: 'none',       label: '✅ ไม่มีเลือดออกผิดปกติ' },
+  { value: 'spotting',   label: '🔸 เลือดออกกะปริดกะปรอย / นอกรอบเดือน' },
+  { value: 'postcoital', label: '🔹 เลือดออกหลังมีเพศสัมพันธ์' },
+]
+const PELVIC_PAIN_OPTIONS = [
+  { value: 'none',   label: '😊 ไม่ปวด' },
+  { value: 'mild',   label: '😐 ปวดเล็กน้อย' },
+  { value: 'severe', label: '😣 ปวดรุนแรง' },
+]
+const ASSOCIATED_SYMPTOM_OPTIONS = [
+  { value: 'palpitation', label: '💓 ใจสั่น' },
+  { value: 'nausea',      label: '🤢 คลื่นไส้ / อาเจียน' },
+  { value: 'fever',       label: '🌡️ มีไข้' },
+  { value: 'breast',      label: '🤱 คัดตึง / เจ็บเต้านม' },
+  { value: 'urine',       label: '🚻 ปัสสาวะบ่อย / แสบขัด' },
+  { value: 'bowel',       label: '🚽 ท้องผูก / ขับถ่ายผิดปกติ' },
+  { value: 'discharge',   label: '💧 ตกขาวผิดปกติ' },
+]
+const PREGNANCY_OPTIONS = [
+  { value: 'pregnant',     label: '🤰 มีความเสี่ยงตั้งครรภ์' },
+  { value: 'not_pregnant', label: '🙅 ไม่มีความเสี่ยงตั้งครรภ์' },
+  { value: 'unsure',       label: '🤔 ไม่แน่ใจ' },
+]
+const SEX_HISTORY_OPTIONS = [
+  { value: 'no_sex',      label: '🚫 ไม่มีเพศสัมพันธ์' },
+  { value: 'protected',   label: '🛡️ มี และป้องกันทุกครั้ง' },
+  { value: 'unprotected', label: '⚠️ มี โดยไม่ได้ป้องกัน' },
+  { value: 'both',        label: '🔄 มีทั้งป้องกันและไม่ป้องกัน' },
+  { value: 'failure',     label: '❗ ป้องกันแต่การป้องกันล้มเหลว' },
 ]
 
 const RISK_COLORS: Record<string, { bg: string; border: string; text: string; badge: string }> = {
@@ -64,13 +120,45 @@ const RISK_COLORS: Record<string, { bg: string; border: string; text: string; ba
   เสี่ยงปานกลาง: { bg: '#fffbeb', border: '#fcd34d', text: '#b45309', badge: '#fef3c7' },
   เสี่ยงสูง:     { bg: '#fff1f2', border: '#fda4af', text: '#be123c', badge: '#ffe4e6' },
   ฉุกเฉิน:       { bg: '#fdf2f8', border: '#f0abfc', text: '#86198f', badge: '#fae8ff' },
+  ไม่พบโรค:      { bg: '#f8fafc', border: '#cbd5e1', text: '#475569', badge: '#e2e8f0' },
+}
+
+// backend ตอบ A7 เมื่อกรอกครบแต่ไม่ตรงกับโรคใดในฐานข้อมูล → แสดงเป็นผลลัพธ์แทน error
+const NO_MATCH_LEVEL = 'ไม่พบโรค'
+const NO_MATCH_DISEASE = 'ไม่พบโรคที่สอดคล้องกับอาการของท่านในฐานข้อมูลปัจจุบัน'
+const NO_MATCH_RECOMMENDATION =
+  'ระบบไม่พบภาวะหรือโรคที่สอดคล้องกับข้อมูลอาการที่ท่านระบุในฐานข้อมูลปัจจุบัน ' +
+  'เพื่อความถูกต้องและความปลอดภัยของท่าน แนะนำให้เข้ารับคำปรึกษาจากแพทย์ผู้เชี่ยวชาญด้านสูตินรีเวช ' +
+  'เพื่อรับการตรวจวินิจฉัยเพิ่มเติม'
+const CLOT_SIZE_TH: Record<string, string> = { small: 'ขนาดเล็ก', large: 'ขนาดใหญ่' }
+
+// กรณีไม่พบลิ่มเลือด/เนื้อเยื่อ ค่าที่ backend ส่งมาคือความมั่นใจว่าเป็น "พื้นหลัง" ซึ่งสูงเสมอ
+// และไม่ได้สื่อถึงผลที่บอกผู้ใช้ จึงไม่แสดง %
+function hasConfidence(r: { ai_result: string }) {
+  return r.ai_result !== 'negative space'
+}
+function confidenceText(r: { ai_result: string; confidence: number }) {
+  return hasConfidence(r) ? `${r.confidence.toFixed(1)}%` : '–'
+}
+
+// แยกคำแนะนำเป็นข้อ ๆ แล้วตัดข้อที่ซ้ำกันออก (เทียบหลังตัดช่องว่างเกิน) เหลือข้อละครั้ง
+function uniqueSuggestions(text: string): string[] {
+  const seen = new Set<string>()
+  const items: string[] = []
+  for (const part of text.split(/[·•\n]/)) {
+    const item = part.replace(/\s+/g, ' ').trim()
+    if (!item || seen.has(item)) continue
+    seen.add(item)
+    items.push(item)
+  }
+  return items
 }
 const DEFAULT_RC = { bg: '#f0fdf4', border: '#86efac', text: '#15803d', badge: '#dcfce7' }
 
 // ─────────────────────────────────────────────
 // Progress ring
 // ─────────────────────────────────────────────
-function ProgressRing({ score, color }: { score: number; color: string }) {
+function ProgressRing({ score, color, label, caption }: { score: number; color: string; label?: string; caption: string }) {
   const r    = 46
   const circ = 2 * Math.PI * r
   const [dash, setDash] = useState(circ)
@@ -86,9 +174,9 @@ function ProgressRing({ score, color }: { score: number; color: string }) {
         transform="rotate(-90 55 55)"
         style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)' }} />
       <text x="55" y="50" textAnchor="middle" fontSize="20" fontWeight="700" fill={color}
-        fontFamily="'Mitr', sans-serif">{score}</text>
+        fontFamily="'Mitr', sans-serif">{label ?? score}</text>
       <text x="55" y="67" textAnchor="middle" fontSize="9.5" fill="#9e7a8a"
-        fontFamily="'Sarabun', sans-serif">คะแนนความเสี่ยง</text>
+        fontFamily="'Sarabun', sans-serif">{caption}</text>
     </svg>
   )
 }
@@ -109,7 +197,7 @@ function AnalyzingScreen() {
     return () => clearInterval(t)
   }, [])
   return (
-    <div style={{ textAlign: 'center', padding: '48px 20px' }}>
+    <div style={{ textAlign: 'center', padding: '56px 20px' }}>
       <div style={{
         width: 88, height: 88, borderRadius: '50%', margin: '0 auto 28px',
         background: 'linear-gradient(135deg,rgba(240,98,146,0.15),rgba(194,24,91,0.2))',
@@ -123,7 +211,7 @@ function AnalyzingScreen() {
       <p style={{ fontSize: 13, color: '#9e7a8a', marginBottom: 32 }}>
         AI กำลังประมวลผลข้อมูลของคุณ กรุณารอสักครู่
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 300, margin: '0 auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 340, margin: '0 auto' }}>
         {steps.map((s, i) => (
           <div key={i} style={{
             display: 'flex', alignItems: 'center', gap: 10,
@@ -189,6 +277,53 @@ function RadioGroup({
 }
 
 // ─────────────────────────────────────────────
+// Checkbox group (เลือกได้หลายข้อ)
+// ─────────────────────────────────────────────
+function CheckboxGroup({
+  options, values, onChange,
+}: { options: { value: string; label: string }[]; values: string[]; onChange: (v: string[]) => void }) {
+  const toggle = (v: string) =>
+    onChange(values.includes(v) ? values.filter(x => x !== v) : [...values, v])
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {options.map(opt => {
+        const checked = values.includes(opt.value)
+        return (
+          <label key={opt.value} style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '11px 14px', borderRadius: 12, cursor: 'pointer',
+            border: `1.5px solid ${checked ? '#f06292' : '#f5e6ec'}`,
+            background: checked
+              ? 'linear-gradient(135deg,rgba(252,228,236,0.6),rgba(248,187,208,0.3))'
+              : '#faf7f5',
+            transition: 'all 0.18s',
+          }}>
+            <input type="checkbox" value={opt.value}
+              checked={checked}
+              onChange={() => toggle(opt.value)}
+              style={{ display: 'none' }} />
+            <div style={{
+              width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+              border: `2px solid ${checked ? '#f06292' : '#f5c6d8'}`,
+              background: checked ? '#f06292' : '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 0.18s',
+            }}>
+              {checked && <div style={{ width: 6, height: 6, borderRadius: 2, background: '#fff' }} />}
+            </div>
+            <span style={{
+              fontFamily: "'Sarabun',sans-serif", fontSize: 14,
+              color: checked ? '#c2185b' : '#5a3a4a',
+              fontWeight: checked ? 500 : 400,
+            }}>{opt.label}</span>
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
 // Main page
 // ─────────────────────────────────────────────
 export default function AnalyzePage() {
@@ -201,16 +336,15 @@ export default function AnalyzePage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [showLoginToast,    setShowLoginToast]    = useState(false)
   const [imageValidated,    setImageValidated]    = useState(false)
-  const [imageSuccessToast, setImageSuccessToast] = useState<string | null>(null)
-  const [imageErrorToast,   setImageErrorToast]   = useState<string | null>(null)
+  // ข้อความจาก backend ทั้งหมดแสดงผ่าน toast กลาง (components/Toast)
+  const showToast = useToast()
+  const flashSuccess = useCallback((msg: string) => showToast(msg, 'success'), [showToast])
+  const flashError = useCallback((msg: string) => showToast(msg, 'error'), [showToast])
 
-  const [form, setForm] = useState<SymptomForm>({
-    pain_level: '', duration: '', is_pregnant: '', size: '',
-  })
+  const [form, setForm] = useState<SymptomForm>(EMPTY_FORM)
 
   const [imageResult, setImageResult] = useState<ImageResult | null>(null)
   const [riskResult,  setRiskResult]  = useState<RiskResult  | null>(null)
-  const [apiError,    setApiError]    = useState<string | null>(null)
   const [imageLoading, setImageLoading] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
@@ -233,23 +367,39 @@ export default function AnalyzePage() {
       const res  = await fetch(`${BASE_URL}/analysis/image`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
       })
+      if (res.status === 401 || res.status === 422) {
+        localStorage.removeItem('access_token')
+        setImage(null); setImageFile(null)
+        flashError('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่')
+        return
+      }
       const data: ImageResult = await res.json()
       if (data.status !== 'success') {
-        setImageErrorToast((data as any).msg ?? 'รูปภาพไม่ถูกต้อง กรุณาอัปโหลดรูปใหม่')
+        // A5 = backend ตรวจแล้วไม่ใช่ภาพที่เกี่ยวกับเลือด/ลิ่มเลือด
+        const err = data as unknown as { error_code?: string; msg?: string }
+        flashError(err.error_code === 'A5'
+          ? 'กรุณาแนบรูปภาพที่เกี่ยวกับลิ่มเลือด'
+          : err.msg ?? 'รูปภาพไม่ถูกต้อง กรุณาอัปโหลดรูปใหม่')
+        // เอารูปเดิมออก และล้าง input เพื่อให้เลือกรูปใหม่ (หรือไฟล์เดิม) ได้ทันที
+        reader.abort()
+        if (fileRef.current) fileRef.current.value = ''
         setImage(null); setImageFile(null); setImageValidated(false)
-        setTimeout(() => setImageErrorToast(null), 4000)
       } else {
         setImageResult(data); setImageValidated(true)
-        setImageSuccessToast(`ผลภาพ: ${data.detect_label} (ความมั่นใจ ${data.confidence.toFixed(1)}%)`)
-        setTimeout(() => setImageSuccessToast(null), 4000)
+        if (data.visual_path) {
+          reader.abort()  // กันภาพตัวอย่างเดิมโหลดเสร็จทีหลังแล้วทับภาพผล
+          setImage(`${BASE_URL}/${data.visual_path}`)
+        }
+        flashSuccess(hasConfidence(data)
+          ? `ผลภาพ: ${data.detect_label} (ความมั่นใจ ${confidenceText(data)})`
+          : `ผลภาพ: ${data.detect_label}`)
         if (data.ai_result !== 'clot') setForm(f => ({ ...f, size: '' }))
       }
     } catch {
-      setImageErrorToast('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
+      flashError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
       setImage(null); setImageFile(null)
-      setTimeout(() => setImageErrorToast(null), 4000)
     } finally { setImageLoading(false) }
-  }, [])
+  }, [flashError, flashSuccess])
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false)
@@ -257,8 +407,11 @@ export default function AnalyzePage() {
   }
 
   const formValid = (() => {
-    if (imageLoading || !imageResult || apiError) return false
-    if (!form.pain_level || !form.duration || !form.is_pregnant) return false
+    if (imageLoading || !imageResult) return false
+    if (!form.flow || !form.duration || !form.cycle || !form.bleeding ||
+        !form.pain_level || !form.pelvic_pain || !form.sex_history) return false
+    // backend ต้องการ q9 เมื่อมีเพศสัมพันธ์ (q8 ≠ no_sex)
+    if (form.sex_history !== 'no_sex' && !form.is_pregnant) return false
     if (imageResult?.ai_result === 'clot' && !form.size) return false
     return true
   })()
@@ -273,34 +426,79 @@ export default function AnalyzePage() {
     const token = localStorage.getItem('access_token')
     if (!token) { setShowLoginToast(true); return }
     if (!formValid) return
-    setStep('analyzing'); setApiError(null)
+    setStep('analyzing')
     try {
       const fd = new FormData()
-      fd.append('ai_result',   imageResult?.ai_result ?? 'none')
-      fd.append('pain_level',  form.pain_level)
-      fd.append('duration',    form.duration)
-      fd.append('is_pregnant', form.is_pregnant)
-      fd.append('image_path',  imageResult?.image_path ?? '')
-      if (imageResult?.ai_result === 'clot' && form.size) fd.append('size', form.size)
+      fd.append('aiResult',   imageResult?.ai_result ?? '')
+      fd.append('imagePath',  imageResult?.image_path ?? '')
+      fd.append('confidence', String(imageResult?.confidence ?? ''))
+      fd.append('q1', form.flow)
+      fd.append('q2', form.duration)
+      fd.append('q3', form.cycle)
+      fd.append('q4', form.bleeding)
+      fd.append('q5', form.pain_level)
+      fd.append('q6', form.pelvic_pain)
+      form.symptoms.forEach(s => fd.append('q7', s))
+      fd.append('q8', form.sex_history)
+      if (form.sex_history !== 'no_sex' && form.is_pregnant) fd.append('q9', form.is_pregnant)
+      if (imageResult?.ai_result === 'clot' && form.size) fd.append('q10', form.size)
       const res  = await fetch(`${BASE_URL}/analysis/risk`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
       })
-      const data: RiskResult = await res.json()
+      if (res.status === 401 || res.status === 422) {
+        localStorage.removeItem('access_token')
+        flashError('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่'); setStep('symptoms')
+        return
+      }
+      const data = await res.json()
+      if (data.error_code === 'A7') {
+        const detect1 = imageResult?.detect_label ?? ''
+        const detect2 = imageResult?.ai_result === 'clot'
+          ? `${detect1}${CLOT_SIZE_TH[form.size] ?? ''}`
+          : detect1
+        setRiskResult({
+          status:            'no_match',
+          Detect1:           detect1,
+          Detect2:           detect2,
+          Risk_Level:        NO_MATCH_LEVEL,
+          Potential_Disease: NO_MATCH_DISEASE,
+          Recommendation:    NO_MATCH_RECOMMENDATION,
+          Match_Percent:     null,
+          saved:             false,
+        })
+        setStep('result')
+        return
+      }
       if (data.status !== 'success') {
-        setApiError((data as any).msg ?? 'ประเมินความเสี่ยงไม่สำเร็จ'); setStep('symptoms')
-      } else { setRiskResult(data); setStep('result') }
-    } catch { setApiError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'); setStep('symptoms') }
+        flashError(data.msg ?? 'ประเมินความเสี่ยงไม่สำเร็จ'); setStep('symptoms')
+      } else {
+        // backend ส่งผลมาใน data.data (snake_case) → แปลงเป็นรูปแบบที่หน้าจอใช้
+        const d = data.data
+        // % ความตรงสูงสุดของโรคที่อยู่ในระดับความเสี่ยงที่ backend สรุปมา
+        const scores: { risk_level: string; match_percent: number }[] = d.disease_scores ?? []
+        const levelScores = scores.filter(x => x.risk_level === d.risk_level).map(x => x.match_percent)
+        setRiskResult({
+          status:            data.status,
+          Detect1:           d.detect1,
+          Detect2:           d.detect2,
+          Risk_Level:        d.risk_level,
+          Potential_Disease: d.potential_disease,
+          Recommendation:    d.recommendation ?? '',
+          Match_Percent:     levelScores.length ? Math.max(...levelScores) : null,
+          saved:             true,
+        })
+        setStep('result')
+      }
+    } catch { flashError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'); setStep('symptoms') }
   }
 
   const rc = riskResult ? (RISK_COLORS[riskResult.Risk_Level] ?? DEFAULT_RC) : DEFAULT_RC
-  const riskScore = riskResult ? ({
-    ปกติ: 15, เสี่ยงปานกลาง: 50, เสี่ยงสูง: 75, ฉุกเฉิน: 95,
-  }[riskResult.Risk_Level] ?? 30) : 0
+  const matchPercent = riskResult?.Match_Percent ?? null
 
   const resetAll = () => {
     setStep('upload'); setImage(null); setImageFile(null)
-    setImageResult(null); setRiskResult(null); setApiError(null); setImageLoading(false)
-    setForm({ pain_level: '', duration: '', is_pregnant: '', size: '' })
+    setImageResult(null); setRiskResult(null); setImageLoading(false)
+    setForm(EMPTY_FORM)
     setImageValidated(false)
   }
 
@@ -311,6 +509,8 @@ export default function AnalyzePage() {
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         .analyze-root {
+          --page-max: 960px;
+          --page-pad: clamp(20px, 4vw, 48px);
           min-height: 100vh;
           font-family: 'Sarabun', sans-serif;
           background: #faf7f5;
@@ -320,36 +520,36 @@ export default function AnalyzePage() {
         /* ── Header ── */
         .analyze-header {
           background: linear-gradient(135deg, #1a0a14 0%, #3d1a2e 50%, #6b2646 100%);
-          padding: 40px 40px 64px;
+          padding: 48px var(--page-pad) 68px;
           position: relative;
           overflow: hidden;
         }
-        .ah-circle-1 { position: absolute; width: 360px; height: 360px; top: -140px; right: -60px; border-radius: 50%; background: radial-gradient(circle, rgba(244,143,177,0.18), transparent 60%); }
-        .ah-circle-2 { position: absolute; width: 220px; height: 220px; bottom: -80px; left: 15%; border-radius: 50%; background: radial-gradient(circle, rgba(206,147,216,0.12), transparent 60%); }
+        .ah-circle-1 { position: absolute; width: 420px; height: 420px; top: -160px; right: -80px; border-radius: 50%; background: radial-gradient(circle, rgba(244,143,177,0.18), transparent 60%); }
+        .ah-circle-2 { position: absolute; width: 260px; height: 260px; bottom: -90px; left: 15%; border-radius: 50%; background: radial-gradient(circle, rgba(206,147,216,0.12), transparent 60%); }
         .ah-dots { position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 26px 26px; }
         .ah-arc { position: absolute; bottom: -1px; left: 0; right: 0; height: 52px; background: #faf7f5; clip-path: ellipse(55% 100% at 50% 100%); }
-        .ah-content { position: relative; z-index: 2; max-width: 700px; opacity: 0; transform: translateY(20px); transition: opacity 0.7s ease, transform 0.7s ease; }
+        .ah-content { position: relative; z-index: 2; max-width: var(--page-max); margin: 0 auto; opacity: 0; transform: translateY(20px); transition: opacity 0.7s ease, transform 0.7s ease; }
         .ah-content.visible { opacity: 1; transform: translateY(0); }
         .ah-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 14px; border-radius: 999px; background: rgba(240,98,146,0.18); border: 1px solid rgba(240,98,146,0.35); font-family: 'Mitr', sans-serif; font-size: 11.5px; color: #f8bbd0; letter-spacing: 0.5px; margin-bottom: 16px; }
-        .ah-title { font-family: 'Mitr', sans-serif; font-weight: 600; font-size: clamp(20px, 4vw, 34px); color: #fff; line-height: 1.3; margin-bottom: 10px; }
+        .ah-title { font-family: 'Mitr', sans-serif; font-weight: 600; font-size: clamp(22px, 3.6vw, 38px); color: #fff; line-height: 1.3; margin-bottom: 10px; max-width: 640px; }
         .ah-title span { background: linear-gradient(135deg, #f48fb1, #f06292); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-        .ah-sub { font-size: 13.5px; color: rgba(255,255,255,0.55); line-height: 1.6; }
+        .ah-sub { font-size: 14px; color: rgba(255,255,255,0.55); line-height: 1.6; max-width: 540px; }
 
         /* ── Step bar ── */
-        .step-bar { max-width: 700px; margin: -20px auto 0; padding: 0 20px; position: relative; z-index: 10; }
+        .step-bar { max-width: var(--page-max); margin: -24px auto 0; padding: 0 var(--page-pad); position: relative; z-index: 10; }
         .step-track {
           display: flex; align-items: center;
           background: #fff; border-radius: 16px;
           border: 1px solid #f5e6ec;
           box-shadow: 0 8px 32px rgba(194,24,91,0.1);
-          padding: 14px 16px; gap: 0;
+          padding: 16px 20px; gap: 0;
           overflow-x: auto;
         }
-        .step-node { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+        .step-node { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
         .step-circle {
-          width: 30px; height: 30px; border-radius: 50%;
+          width: 32px; height: 32px; border-radius: 50%;
           display: flex; align-items: center; justify-content: center;
-          font-family: 'Mitr', sans-serif; font-size: 12px; font-weight: 600;
+          font-family: 'Mitr', sans-serif; font-size: 12.5px; font-weight: 600;
           flex-shrink: 0; transition: all 0.3s ease;
         }
         .step-circle.done   { background: linear-gradient(135deg, #f06292, #c2185b); color: #fff; box-shadow: 0 4px 12px rgba(194,24,91,0.35); }
@@ -359,111 +559,110 @@ export default function AnalyzePage() {
           0%, 100% { box-shadow: 0 4px 16px rgba(194,24,91,0.45); }
           50%       { box-shadow: 0 4px 24px rgba(194,24,91,0.7); }
         }
-        .step-label { font-family: 'Mitr', sans-serif; font-size: 11px; min-width: 0; }
+        .step-label { font-family: 'Mitr', sans-serif; font-size: 12px; min-width: 0; }
         .step-label-main { color: #1a0a14; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .step-label-sub  { font-size: 10px; color: #9e7a8a; font-family: 'Sarabun', sans-serif; white-space: nowrap; }
-        .step-connector { width: 20px; height: 2px; border-radius: 1px; background: #f5e6ec; flex-shrink: 0; margin: 0 4px; transition: background 0.3s ease; }
+        .step-label-sub  { font-size: 10.5px; color: #9e7a8a; font-family: 'Sarabun', sans-serif; white-space: nowrap; }
+        .step-connector { width: 32px; height: 2px; border-radius: 1px; background: #f5e6ec; flex-shrink: 0; margin: 0 8px; transition: background 0.3s ease; }
         .step-connector.done { background: linear-gradient(90deg, #f06292, #c2185b); }
 
         /* ── Main ── */
-        .analyze-main { max-width: 700px; margin: 28px auto 48px; padding: 0 20px; }
-        .main-card { background: #fff; border-radius: 20px; border: 1px solid #f5e6ec; box-shadow: 0 8px 40px rgba(194,24,91,0.08); overflow: hidden; }
+        .analyze-main { max-width: var(--page-max); margin: 28px auto 56px; padding: 0 var(--page-pad); }
+        .main-card { background: #fff; border-radius: 22px; border: 1px solid #f5e6ec; box-shadow: 0 8px 40px rgba(194,24,91,0.08); overflow: hidden; }
 
         /* Card header */
-        .card-section-title { display: flex; align-items: center; gap: 10px; padding: 24px 20px 0; }
-        .cst-icon { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, #fce4ec, #f8bbd0); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-        .cst-text { font-family: 'Mitr', sans-serif; font-size: 15px; font-weight: 600; color: #1a0a14; }
-        .cst-sub  { font-size: 12px; color: #9e7a8a; font-family: 'Sarabun', sans-serif; }
+        .card-section-title { display: flex; align-items: center; gap: 12px; padding: 30px 32px 0; }
+        .cst-icon { width: 38px; height: 38px; border-radius: 11px; background: linear-gradient(135deg, #fce4ec, #f8bbd0); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .cst-text { font-family: 'Mitr', sans-serif; font-size: 16px; font-weight: 600; color: #1a0a14; }
+        .cst-sub  { font-size: 12.5px; color: #9e7a8a; font-family: 'Sarabun', sans-serif; }
 
         /* Upload zone */
         .upload-zone {
-          margin: 16px 20px;
-          border: 2px dashed #f5c6d8; border-radius: 16px;
-          min-height: 200px;
-          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+          margin: 20px 32px;
+          border: 2px dashed #f5c6d8; border-radius: 18px;
+          min-height: 240px;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
           cursor: pointer; background: #fdf9fb;
           transition: all 0.2s ease; position: relative; overflow: hidden;
-          padding: 24px 16px;
+          padding: 28px 20px;
         }
         .upload-zone:hover, .upload-zone.drag-over { border-color: #f06292; background: linear-gradient(135deg, rgba(252,228,236,0.4), rgba(248,187,208,0.2)); }
-        .upload-zone-icon { width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, #fce4ec, #f8bbd0); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(194,24,91,0.2); }
-        .upload-zone-title { font-family: 'Mitr', sans-serif; font-size: 14px; color: #1a0a14; text-align: center; }
-        .upload-zone-sub { font-size: 12px; color: #9e7a8a; text-align: center; line-height: 1.5; }
-        .upload-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: 999px; background: linear-gradient(135deg, #f06292, #c2185b); color: #fff; font-family: 'Mitr', sans-serif; font-size: 13px; font-weight: 500; box-shadow: 0 4px 16px rgba(194,24,91,0.35); }
+        .upload-zone-icon { width: 64px; height: 64px; border-radius: 18px; background: linear-gradient(135deg, #fce4ec, #f8bbd0); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(194,24,91,0.2); }
+        .upload-zone-title { font-family: 'Mitr', sans-serif; font-size: 15px; color: #1a0a14; text-align: center; }
+        .upload-zone-sub { font-size: 12.5px; color: #9e7a8a; text-align: center; line-height: 1.5; }
+        .upload-chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border-radius: 999px; background: linear-gradient(135deg, #f06292, #c2185b); color: #fff; font-family: 'Mitr', sans-serif; font-size: 13px; font-weight: 500; box-shadow: 0 4px 16px rgba(194,24,91,0.35); }
 
         /* Image preview */
-        .img-preview { margin: 16px 20px; border-radius: 16px; overflow: hidden; position: relative; border: 2px solid #f5e6ec; }
-        .img-preview img { width: 100%; max-height: 260px; object-fit: cover; display: block; }
-        .img-preview-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(26,10,20,0.5), transparent 50%); display: flex; align-items: flex-end; padding: 14px; }
+        .img-preview { margin: 20px 32px; border-radius: 18px; overflow: hidden; position: relative; border: 2px solid #f5e6ec; }
+        .img-preview img { width: 100%; max-height: 320px; object-fit: cover; display: block; }
+        .img-preview-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(26,10,20,0.5), transparent 50%); display: flex; align-items: flex-end; padding: 16px; }
         .img-preview-tag { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.9); backdrop-filter: blur(8px); padding: 5px 11px; border-radius: 9px; font-family: 'Mitr', sans-serif; font-size: 11.5px; color: #c2185b; }
-        .img-remove-btn { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,0.5); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.18s; }
+        .img-remove-btn { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.5); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.18s; }
         .img-remove-btn:hover { background: rgba(194,24,91,0.8); }
 
         /* Tip / error boxes */
         .tip-box {
-          margin: 0 20px 20px;
-          padding: 12px 14px; border-radius: 12px;
+          margin: 0 32px 24px;
+          padding: 13px 16px; border-radius: 13px;
           background: rgba(240,98,146,0.06); border: 1px solid rgba(240,98,146,0.18);
-          display: flex; gap: 9px; align-items: flex-start;
+          display: flex; gap: 10px; align-items: flex-start;
         }
         .tip-box-icon { color: #f06292; flex-shrink: 0; margin-top: 2px; }
-        .tip-box-text { font-size: 12.5px; color: #7a5a6a; line-height: 1.6; }
+        .tip-box-text { font-size: 13px; color: #7a5a6a; line-height: 1.6; }
         .tip-box-text strong { color: #c2185b; font-weight: 600; }
-        .error-box { margin: 0 20px 16px; padding: 12px 14px; border-radius: 12px; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.25); display: flex; gap: 9px; align-items: flex-start; font-size: 12.5px; color: #b91c1c; }
+        .error-box { margin: 0 32px 18px; padding: 13px 16px; border-radius: 13px; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.25); display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: #b91c1c; }
 
         /* Card footer */
-        .card-footer { padding: 16px 20px 22px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid #f5e6ec; flex-wrap: wrap; }
+        .card-footer { padding: 18px 32px 26px; display: flex; gap: 12px; justify-content: flex-end; border-top: 1px solid #f5e6ec; flex-wrap: wrap; }
 
         /* Buttons */
-        .btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 24px; border-radius: 13px; border: none; background: linear-gradient(135deg, #f06292, #c2185b); color: #fff; font-family: 'Mitr', sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: 0 6px 20px rgba(194,24,91,0.4); transition: transform 0.18s, box-shadow 0.18s; white-space: nowrap; }
+        .btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 26px; border-radius: 14px; border: none; background: linear-gradient(135deg, #f06292, #c2185b); color: #fff; font-family: 'Mitr', sans-serif; font-size: 14.5px; font-weight: 500; cursor: pointer; box-shadow: 0 6px 20px rgba(194,24,91,0.4); transition: transform 0.18s, box-shadow 0.18s; white-space: nowrap; }
         .btn-primary:hover    { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(194,24,91,0.55); }
         .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-        .btn-ghost-sm { display: inline-flex; align-items: center; gap: 6px; padding: 12px 18px; border-radius: 13px; border: 1.5px solid #f5c6d8; background: transparent; font-family: 'Mitr', sans-serif; font-size: 13px; color: #c2185b; cursor: pointer; transition: background 0.18s; white-space: nowrap; }
+        .btn-ghost-sm { display: inline-flex; align-items: center; gap: 6px; padding: 13px 20px; border-radius: 14px; border: 1.5px solid #f5c6d8; background: transparent; font-family: 'Mitr', sans-serif; font-size: 13.5px; color: #c2185b; cursor: pointer; transition: background 0.18s; white-space: nowrap; }
         .btn-ghost-sm:hover { background: rgba(194,24,91,0.06); }
 
         /* Symptom form */
-        .symptom-form { padding: 0 20px 8px; display: flex; flex-direction: column; gap: 24px; }
-        .sf-label { display: flex; align-items: center; gap: 8px; font-family: 'Mitr', sans-serif; font-size: 13.5px; font-weight: 600; color: #1a0a14; margin-bottom: 10px; }
+        .symptom-form { padding: 0 32px 8px; display: grid; grid-template-columns: 1fr; gap: 26px; }
+        .sf-label { display: flex; align-items: center; gap: 8px; font-family: 'Mitr', sans-serif; font-size: 14px; font-weight: 600; color: #1a0a14; margin-bottom: 10px; }
         .sf-label svg { color: #c2185b; }
 
         /* Status badges */
-        .ai-loading-badge, .ai-result-badge { display: inline-flex; align-items: center; gap: 7px; padding: 6px 14px; border-radius: 999px; background: rgba(194,24,91,0.08); border: 1px solid rgba(194,24,91,0.2); font-family: 'Mitr', sans-serif; font-size: 12px; color: #c2185b; margin: 0 20px 16px; flex-wrap: wrap; }
+        .ai-loading-badge, .ai-result-badge { display: inline-flex; align-items: center; gap: 7px; padding: 7px 16px; border-radius: 999px; background: rgba(194,24,91,0.08); border: 1px solid rgba(194,24,91,0.2); font-family: 'Mitr', sans-serif; font-size: 12.5px; color: #c2185b; margin: 0 32px 18px; flex-wrap: wrap; }
 
         /* Result */
-        .result-risk-banner { margin: 20px; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; border: 1.5px solid; flex-wrap: wrap; }
-        .risk-info { flex: 1; min-width: 160px; }
-        .risk-label-tag { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 999px; font-family: 'Mitr', sans-serif; font-size: 11px; font-weight: 500; margin-bottom: 8px; }
-        .risk-title { font-family: 'Mitr', sans-serif; font-size: 18px; font-weight: 600; margin-bottom: 5px; }
-        .risk-desc  { font-size: 12.5px; color: #7a5a6a; line-height: 1.6; }
+        .result-risk-banner { margin: 24px 32px; border-radius: 18px; padding: 24px; display: flex; align-items: center; gap: 20px; border: 1.5px solid; flex-wrap: wrap; }
+        .risk-info { flex: 1; min-width: 200px; }
+        .risk-label-tag { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 999px; font-family: 'Mitr', sans-serif; font-size: 11.5px; font-weight: 500; margin-bottom: 8px; }
+        .risk-title { font-family: 'Mitr', sans-serif; font-size: 19px; font-weight: 600; margin-bottom: 5px; }
+        .risk-desc  { font-size: 13px; color: #7a5a6a; line-height: 1.6; }
 
-        .result-detail { margin: 0 20px 16px; background: #faf7f5; border-radius: 14px; border: 1px solid #f5e6ec; overflow: hidden; }
-        .rd-row { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #f5e6ec; }
+        .result-detail { margin: 0 32px 20px; background: #faf7f5; border-radius: 15px; border: 1px solid #f5e6ec; overflow: hidden; display: grid; grid-template-columns: 1fr; }
+        .rd-row { display: flex; align-items: flex-start; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #f5e6ec; }
         .rd-row:last-child { border-bottom: none; }
-        .rd-icon  { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, #fce4ec, #f8bbd0); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-        .rd-label { font-size: 11px; color: #9e7a8a; margin-bottom: 3px; }
-        .rd-value { font-family: 'Mitr', sans-serif; font-size: 13.5px; font-weight: 500; color: #1a0a14; }
+        .rd-icon  { width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, #fce4ec, #f8bbd0); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .rd-label { font-size: 11.5px; color: #9e7a8a; margin-bottom: 3px; }
+        .rd-value { font-family: 'Mitr', sans-serif; font-size: 14px; font-weight: 500; color: #1a0a14; }
 
-        .suggestions-list { margin: 0 20px 20px; display: flex; flex-direction: column; gap: 8px; }
-        .suggestion-item { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; background: #faf7f5; border: 1px solid #f5e6ec; align-items: flex-start; }
-        .suggestion-num  { width: 22px; height: 22px; border-radius: 7px; flex-shrink: 0; background: linear-gradient(135deg, #f06292, #c2185b); display: flex; align-items: center; justify-content: center; font-family: 'Mitr', sans-serif; font-size: 11px; color: #fff; font-weight: 600; }
-        .suggestion-text { font-size: 13px; color: #4a2a3a; line-height: 1.6; }
+        .suggestions-list { margin: 0 32px 24px; display: flex; flex-direction: column; gap: 10px; }
+        .suggestion-item { display: flex; gap: 12px; padding: 14px 16px; border-radius: 13px; background: #faf7f5; border: 1px solid #f5e6ec; align-items: flex-start; }
+        .suggestion-num  { width: 24px; height: 24px; border-radius: 8px; flex-shrink: 0; background: linear-gradient(135deg, #f06292, #c2185b); display: flex; align-items: center; justify-content: center; font-family: 'Mitr', sans-serif; font-size: 11.5px; color: #fff; font-weight: 600; }
+        .suggestion-text { font-size: 13.5px; color: #4a2a3a; line-height: 1.6; }
 
-        .disclaimer-box { margin: 0 20px 20px; padding: 11px 14px; border-radius: 11px; background: rgba(240,98,146,0.05); border: 1px solid rgba(240,98,146,0.15); display: flex; gap: 8px; align-items: flex-start; font-size: 11.5px; color: #9e7a8a; line-height: 1.6; }
-        .result-actions { margin: 0 20px 24px; display: flex; gap: 10px; flex-wrap: wrap; }
-        .btn-outline-full { flex: 1; min-width: 120px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 13px 12px; border-radius: 13px; border: 1.5px solid #f5c6d8; background: transparent; font-family: 'Mitr', sans-serif; font-size: 13px; color: #c2185b; cursor: pointer; transition: background 0.18s; }
+        .disclaimer-box { margin: 0 32px 24px; padding: 13px 16px; border-radius: 12px; background: rgba(240,98,146,0.05); border: 1px solid rgba(240,98,146,0.15); display: flex; gap: 9px; align-items: flex-start; font-size: 12px; color: #9e7a8a; line-height: 1.6; }
+        .result-actions { margin: 0 32px 28px; display: flex; gap: 12px; flex-wrap: wrap; }
+        .btn-outline-full { flex: 1; min-width: 140px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 14px 14px; border-radius: 14px; border: 1.5px solid #f5c6d8; background: transparent; font-family: 'Mitr', sans-serif; font-size: 13.5px; color: #c2185b; cursor: pointer; transition: background 0.18s; }
         .btn-outline-full:hover { background: rgba(194,24,91,0.06); }
-        .btn-primary-full { flex: 1; min-width: 140px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 13px 12px; border-radius: 13px; border: none; background: linear-gradient(135deg, #f06292, #c2185b); font-family: 'Mitr', sans-serif; font-size: 13px; color: #fff; cursor: pointer; font-weight: 500; box-shadow: 0 6px 20px rgba(194,24,91,0.35); transition: transform 0.18s, box-shadow 0.18s; text-decoration: none; }
+        .btn-primary-full { flex: 1; min-width: 160px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 14px 14px; border-radius: 14px; border: none; background: linear-gradient(135deg, #f06292, #c2185b); font-family: 'Mitr', sans-serif; font-size: 13.5px; color: #fff; cursor: pointer; font-weight: 500; box-shadow: 0 6px 20px rgba(194,24,91,0.35); transition: transform 0.18s, box-shadow 0.18s; text-decoration: none; }
         .btn-primary-full:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(194,24,91,0.5); }
 
         /* Trust strip */
-        .trust-strip { max-width: 700px; margin: 0 auto 48px; padding: 0 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .trust-item { background: #fff; border-radius: 14px; border: 1px solid #f5e6ec; padding: 14px 12px; display: flex; gap: 10px; align-items: center; }
-        .trust-icon  { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, #fce4ec, #f8bbd0); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-        .trust-label { font-family: 'Mitr', sans-serif; font-size: 12px; color: #1a0a14; line-height: 1.4; }
-        .trust-sub   { font-size: 10.5px; color: #9e7a8a; }
+        .trust-strip { max-width: var(--page-max); margin: 0 auto 56px; padding: 0 var(--page-pad); display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+        .trust-item { background: #fff; border-radius: 16px; border: 1px solid #f5e6ec; padding: 18px 16px; display: flex; gap: 12px; align-items: center; }
+        .trust-icon  { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #fce4ec, #f8bbd0); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .trust-label { font-family: 'Mitr', sans-serif; font-size: 13px; color: #1a0a14; line-height: 1.4; }
+        .trust-sub   { font-size: 11px; color: #9e7a8a; }
 
         /* Footer */
-        .analyze-footer { background: #fff; border-top: 1px solid #f5e6ec; padding: 20px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #b09aa8; gap: 8px; flex-wrap: wrap; }
 
         /* Animations */
         @keyframes analyzePulse {
@@ -477,6 +676,14 @@ export default function AnalyzePage() {
           to   { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
         .fade-up { animation: fadeUp 0.5s ease forwards; }
+
+        /* ── Desktop: wider two-column layouts ── */
+        @media (min-width: 769px) {
+          .symptom-form { grid-template-columns: 1fr 1fr; column-gap: 28px; }
+          .result-detail { grid-template-columns: 1fr 1fr; }
+          .rd-row:nth-last-child(2) { border-bottom: none; }
+          .upload-zone { min-height: 280px; }
+        }
 
         /* ── Mobile overrides ── */
         @media (max-width: 480px) {
@@ -512,7 +719,6 @@ export default function AnalyzePage() {
           .btn-outline-full, .btn-primary-full { width: 100%; min-width: unset; }
 
           .trust-strip { grid-template-columns: 1fr; padding: 0 12px; gap: 8px; }
-          .analyze-footer { flex-direction: column; text-align: center; }
         }
 
         /* ── Tablet ── */
@@ -546,7 +752,7 @@ export default function AnalyzePage() {
         <div className="step-bar">
           <div className="step-track">
             {([
-              { key: 'upload',    num: 1, main: 'อัปโหลดภาพ', sub: 'ถ่ายหรือเลือกไฟล์' },
+              { key: 'upload',    num: 1, main: 'อัปโหลดภาพ', sub: 'เลือกไฟล์' },
               { key: 'symptoms',  num: 2, main: 'ระบุอาการ',   sub: 'กรอกข้อมูล' },
               { key: 'analyzing', num: 3, main: 'วิเคราะห์',   sub: 'AI ประมวลผล' },
               { key: 'result',    num: 4, main: 'ผลลัพธ์',     sub: 'ดูรายงาน' },
@@ -582,10 +788,10 @@ export default function AnalyzePage() {
             {step === 'upload' && (
               <div className="fade-up">
                 <div className="card-section-title">
-                  <div className="cst-icon"><ImageIcon size={17} color="#c2185b" /></div>
+                  <div className="cst-icon"><ImageIcon size={18} color="#c2185b" /></div>
                   <div>
                     <div className="cst-text">อัปโหลดภาพประจำเดือน</div>
-                    <div className="cst-sub">รองรับ JPG, PNG ขนาดไม่เกิน 10MB</div>
+                    <div className="cst-sub">รองรับ JPG, PNG, JPEG ขนาดไม่เกิน 10MB</div>
                   </div>
                 </div>
 
@@ -597,9 +803,9 @@ export default function AnalyzePage() {
                     onDragOver={e => { e.preventDefault(); setDragOver(true) }}
                     onDragLeave={() => setDragOver(false)}
                   >
-                    <div className="upload-zone-icon"><Upload size={24} color="#c2185b" /></div>
+                    <div className="upload-zone-icon"><Upload size={26} color="#c2185b" /></div>
                     <div className="upload-zone-title">ลากไฟล์มาวางหรือคลิกเพื่อเลือก</div>
-                    <div className="upload-zone-sub">ภาพถ่ายผ้าอนามัย หรือรูปที่แสดงลิ่มเลือด<br />คุณภาพดีจะให้ผลแม่นยำกว่า</div>
+                    <div className="upload-zone-sub">รูปที่แสดงถึงเกี่ยวข้องประจำเดือน</div>
                     <div className="upload-chip"><Camera size={13} /> เลือกภาพ</div>
                     <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
                       onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
@@ -618,7 +824,7 @@ export default function AnalyzePage() {
                   </div>
                 )}
 
-                <div className="tip-box" style={{ marginBottom: 20 }}>
+                <div className="tip-box">
                   <Info size={14} className="tip-box-icon" />
                   <div className="tip-box-text">
                     <strong>เคล็ดลับ:</strong> ถ่ายภาพในที่มีแสงสว่างเพียงพอ วางบนพื้นสีขาว และถ่ายให้ชัดเจนเพื่อผลวิเคราะห์ที่แม่นยำที่สุด
@@ -629,7 +835,7 @@ export default function AnalyzePage() {
                   <button className="btn-primary" disabled={!image || imageLoading} onClick={goToSymptoms}>
                     {imageLoading
                       ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> กำลังตรวจสอบ...</>
-                      : <>ถัดไป: ระบุอาการ <ChevronRight size={14} /></>}
+                      : <>ถัดไป: ประมวลผลรูปภาพ <ChevronRight size={14} /></>}
                   </button>
                 </div>
               </div>
@@ -639,7 +845,7 @@ export default function AnalyzePage() {
             {step === 'symptoms' && (
               <div className="fade-up">
                 <div className="card-section-title">
-                  <div className="cst-icon"><Activity size={17} color="#c2185b" /></div>
+                  <div className="cst-icon"><Activity size={18} color="#c2185b" /></div>
                   <div>
                     <div className="cst-text">ระบุอาการ</div>
                     <div className="cst-sub">กรอกข้อมูลให้ครบเพื่อผลที่แม่นยำ</div>
@@ -648,7 +854,7 @@ export default function AnalyzePage() {
 
                 <div style={{ height: 14 }} />
 
-                {!imageResult && !apiError && (
+                {!imageResult && (
                   <div className="ai-loading-badge">
                     <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
                     กำลังวิเคราะห์ภาพ...
@@ -658,16 +864,36 @@ export default function AnalyzePage() {
                   <div className="ai-result-badge">
                     <CheckCircle2 size={13} />
                     ผลภาพ: <strong>{imageResult.detect_label}</strong>
-                    &nbsp;(ความมั่นใจ {imageResult.confidence.toFixed(1)}%)
-                  </div>
-                )}
-                {apiError && (
-                  <div className="error-box">
-                    <AlertCircle size={14} style={{ flexShrink: 0 }} />{apiError}
+                    {hasConfidence(imageResult) && <>&nbsp;(ความมั่นใจ {confidenceText(imageResult)})</>}
                   </div>
                 )}
 
                 <div className="symptom-form">
+                  <div>
+                    <div className="sf-label"><Activity size={14} /> ปริมาณเลือดประจำเดือน</div>
+                    <RadioGroup name="flow" options={FLOW_OPTIONS} value={form.flow}
+                      onChange={v => setForm(f => ({ ...f, flow: v }))} />
+                  </div>
+                  <div>
+                    <div className="sf-label"><Clock size={14} /> ความถี่ของรอบเดือน</div>
+                    <RadioGroup name="cycle" options={CYCLE_OPTIONS} value={form.cycle}
+                      onChange={v => setForm(f => ({ ...f, cycle: v }))} />
+                  </div>
+                  <div>
+                    <div className="sf-label"><Info size={14} /> ลักษณะเลือดออกผิดปกติ</div>
+                    <RadioGroup name="bleeding" options={BLEEDING_OPTIONS} value={form.bleeding}
+                      onChange={v => setForm(f => ({ ...f, bleeding: v }))} />
+                  </div>
+                  <div>
+                    <div className="sf-label"><Activity size={14} /> ปวดอุ้งเชิงกราน</div>
+                    <RadioGroup name="pelvic" options={PELVIC_PAIN_OPTIONS} value={form.pelvic_pain}
+                      onChange={v => setForm(f => ({ ...f, pelvic_pain: v }))} />
+                  </div>
+                  <div>
+                    <div className="sf-label"><Shield size={14} /> ประวัติการมีเพศสัมพันธ์</div>
+                    <RadioGroup name="sex" options={SEX_HISTORY_OPTIONS} value={form.sex_history}
+                      onChange={v => setForm(f => ({ ...f, sex_history: v }))} />
+                  </div>
                   <div>
                     <div className="sf-label"><Activity size={14} /> ระดับอาการปวด</div>
                     <RadioGroup name="pain" options={PAIN_OPTIONS} value={form.pain_level}
@@ -678,21 +904,23 @@ export default function AnalyzePage() {
                     <RadioGroup name="duration" options={DURATION_OPTIONS} value={form.duration}
                       onChange={v => setForm(f => ({ ...f, duration: v }))} />
                   </div>
-                  <div>
+                  {form.sex_history !== 'no_sex' && <div>
                     <div className="sf-label"><Baby size={14} /> มีความเป็นไปได้ว่าตั้งครรภ์?</div>
                     <RadioGroup name="preg"
-                      options={[
-                        { value: 'true',  label: '🤰 มีความเสี่ยงตั้งครรภ์' },
-                        { value: 'false', label: '🙅 ไม่มีความเสี่ยงตั้งครรภ์' },
-                      ]}
+                      options={PREGNANCY_OPTIONS}
                       value={form.is_pregnant}
                       onChange={v => setForm(f => ({ ...f, is_pregnant: v }))} />
-                  </div>
+                  </div>}
                   <div>
+                    <div className="sf-label"><Sparkles size={14} /> อาการร่วม (เลือกได้หลายข้อ / ไม่มีให้ข้าม)</div>
+                    <CheckboxGroup options={ASSOCIATED_SYMPTOM_OPTIONS} values={form.symptoms}
+                      onChange={v => setForm(f => ({ ...f, symptoms: v }))} />
+                  </div>
+                  {imageResult?.ai_result === 'clot' && <div>
                     <div className="sf-label"><Ruler size={14} /> ขนาดลิ่มเลือด</div>
                     <RadioGroup name="size" options={SIZE_OPTIONS} value={form.size}
                       onChange={v => setForm(f => ({ ...f, size: v }))} />
-                  </div>
+                  </div>}
                 </div>
 
                 <div style={{ height: 12 }} />
@@ -702,7 +930,7 @@ export default function AnalyzePage() {
                 </div>
 
                 <div className="card-footer">
-                  <button className="btn-ghost-sm" onClick={() => { setStep('upload'); setImageResult(null); setApiError(null) }}>
+                  <button className="btn-ghost-sm" onClick={() => setStep('upload')}>
                     ← ย้อนกลับ
                   </button>
                   <button className="btn-primary" disabled={!formValid} onClick={runAnalysis}>
@@ -719,25 +947,24 @@ export default function AnalyzePage() {
             {step === 'result' && riskResult && (
               <div className="fade-up">
                 <div className="card-section-title">
-                  <div className="cst-icon"><FlaskConical size={17} color="#c2185b" /></div>
+                  <div className="cst-icon"><FlaskConical size={18} color="#c2185b" /></div>
                   <div>
                     <div className="cst-text">ผลการวิเคราะห์</div>
-                    <div className="cst-sub">
-                      ประมวลผลใน {((imageResult?.processing_time ?? 0) + riskResult.processing_time).toFixed(1)} วินาที
-                    </div>
                   </div>
                 </div>
 
                 {/* Risk banner */}
                 <div className="result-risk-banner" style={{ background: rc.bg, borderColor: rc.border }}>
                   <div style={{ flexShrink: 0 }}>
-                    <ProgressRing score={riskScore} color={rc.text} />
+                    <ProgressRing score={matchPercent ?? 0} color={rc.text} caption="ตรงกับอาการ"
+                      label={matchPercent === null ? '–' : `${Math.round(matchPercent)}%`} />
                   </div>
                   <div className="risk-info">
                     <div className="risk-label-tag" style={{ background: rc.badge, color: rc.text }}>
                       {riskResult.Risk_Level === 'ฉุกเฉิน' ? '🚨' :
                        riskResult.Risk_Level === 'เสี่ยงสูง' ? '⚠️' :
-                       riskResult.Risk_Level === 'เสี่ยงปานกลาง' ? '⚡' : '✅'}
+                       riskResult.Risk_Level === 'เสี่ยงปานกลาง' ? '⚡' :
+                       riskResult.Risk_Level === NO_MATCH_LEVEL ? 'ℹ️' : '✅'}
                       &nbsp;{riskResult.Risk_Level}
                     </div>
                     <div className="risk-title" style={{ color: rc.text }}>{riskResult.Risk_Level}</div>
@@ -746,8 +973,8 @@ export default function AnalyzePage() {
                 </div>
 
                 {/* Details */}
-                <div style={{ padding: '12px 20px 10px' }}>
-                  <div style={{ fontFamily: "'Mitr',sans-serif", fontSize: 13.5, fontWeight: 600, color: '#1a0a14' }}>รายละเอียด</div>
+                <div style={{ padding: '12px 32px 10px' }}>
+                  <div style={{ fontFamily: "'Mitr',sans-serif", fontSize: 14, fontWeight: 600, color: '#1a0a14' }}>รายละเอียด</div>
                 </div>
                 <div className="result-detail">
                   <div className="rd-row">
@@ -761,7 +988,7 @@ export default function AnalyzePage() {
                   {imageResult && (
                     <div className="rd-row">
                       <div className="rd-icon">📊</div>
-                      <div><div className="rd-label">ความมั่นใจของ AI</div><div className="rd-value">{imageResult.confidence.toFixed(1)}%</div></div>
+                      <div><div className="rd-label">ความมั่นใจของ AI</div><div className="rd-value">{confidenceText(imageResult)}</div></div>
                     </div>
                   )}
                   <div className="rd-row">
@@ -771,22 +998,17 @@ export default function AnalyzePage() {
                 </div>
 
                 {/* Recommendation */}
-                <div style={{ padding: '12px 20px 10px' }}>
-                  <div style={{ fontFamily: "'Mitr',sans-serif", fontSize: 13.5, fontWeight: 600, color: '#1a0a14' }}>คำแนะนำ</div>
+                <div style={{ padding: '12px 32px 10px' }}>
+                  <div style={{ fontFamily: "'Mitr',sans-serif", fontSize: 14, fontWeight: 600, color: '#1a0a14' }}>คำแนะนำ</div>
                 </div>
                 <div className="suggestions-list">
-                  {riskResult.Recommendation.split(/[·•]/).filter(Boolean).map((s, i) => (
+                  {/* คำแนะนำข้อเดียวแสดง →  ถ้ามากกว่า 1 ข้อแสดงเลขลำดับ */}
+                  {uniqueSuggestions(riskResult.Recommendation).map((s, i, all) => (
                     <div key={i} className="suggestion-item">
-                      <div className="suggestion-num">{i + 1}</div>
-                      <div className="suggestion-text">{s.trim()}</div>
+                      <div className="suggestion-num">{all.length > 1 ? i + 1 : '→'}</div>
+                      <div className="suggestion-text">{s}</div>
                     </div>
                   ))}
-                  {!riskResult.Recommendation.includes('·') && !riskResult.Recommendation.includes('•') && (
-                    <div className="suggestion-item" style={{ marginTop: -8 }}>
-                      <div className="suggestion-num">→</div>
-                      <div className="suggestion-text">{riskResult.Recommendation}</div>
-                    </div>
-                  )}
                 </div>
 
                 <div className="disclaimer-box">
@@ -810,7 +1032,7 @@ export default function AnalyzePage() {
           <div className="trust-strip">
             {[
               { icon: <Shield size={17} color="#c2185b" />,   label: 'ปลอดภัย', sub: 'ข้อมูลไม่ถูกแชร์' },
-              { icon: <Zap size={17} color="#c2185b" />,      label: 'รวดเร็ว',  sub: 'ผลภายใน 30 วินาที' },
+              { icon: <Zap size={17} color="#c2185b" />,      label: 'รวดเร็ว',  sub: 'รู้ผลภายใน 1 นาที' },
               { icon: <Activity size={17} color="#c2185b" />, label: 'แม่นยำ',  sub: 'วิเคราะห์ด้วย AI' },
             ].map((t, i) => (
               <div key={i} className="trust-item">
@@ -824,44 +1046,7 @@ export default function AnalyzePage() {
           </div>
         )}
 
-        {/* Toasts */}
-        {imageSuccessToast && (
-          <div style={{
-            position: 'fixed', top: 76, left: '50%', transform: 'translateX(-50%)',
-            zIndex: 9999, padding: '11px 18px', borderRadius: 13,
-            background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7',
-            fontSize: 12.5, fontWeight: 500, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-            fontFamily: "'Sarabun',sans-serif", display: 'flex', alignItems: 'center', gap: 8,
-            maxWidth: 'calc(100vw - 32px)', animation: 'fadeSlideDown 0.3s ease',
-          }}>
-            <CheckCircle2 size={14} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{imageSuccessToast}</span>
-            <button onClick={() => setImageSuccessToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#065f46', padding: 0, flexShrink: 0 }}>
-              <X size={13} />
-            </button>
-          </div>
-        )}
-        {imageErrorToast && (
-          <div style={{
-            position: 'fixed', top: 76, left: '50%', transform: 'translateX(-50%)',
-            zIndex: 9999, padding: '11px 18px', borderRadius: 13,
-            background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5',
-            fontSize: 12.5, fontWeight: 500, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-            fontFamily: "'Sarabun',sans-serif", display: 'flex', alignItems: 'center', gap: 8,
-            maxWidth: 'calc(100vw - 32px)', animation: 'fadeSlideDown 0.3s ease',
-          }}>
-            <AlertCircle size={14} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{imageErrorToast}</span>
-            <button onClick={() => setImageErrorToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', padding: 0, flexShrink: 0 }}>
-              <X size={13} />
-            </button>
-          </div>
-        )}
-
-        <footer className="analyze-footer">
-          <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
-          <span>นโยบายความเป็นส่วนตัว · ติดต่อเรา</span>
-        </footer>
+        <Footer />
 
         <LoginToast show={showLoginToast} onClose={() => setShowLoginToast(false)} />
       </div>

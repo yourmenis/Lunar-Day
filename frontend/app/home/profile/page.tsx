@@ -9,6 +9,14 @@ import {
   Calendar, Edit3, X, Check, AlertTriangle
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
+import { MIN_AGE, ageFrom, latestAllowedBirthDate, parseYmd } from '../../lib/birthDate'
+import { parseServerDate } from '../../lib/serverDate'
+import { useToast } from '../../components/Toast'
+import { PRIVACY_TEXT, TERMS_TEXT } from '../../lib/policyText'
+import { USERNAME_MAX, usernameError } from '../../lib/authRules'
+import { avatarUrlFromFile, getCachedAvatar, getMemoryAvatar, setCachedAvatar } from '../../lib/avatarCache'
+import { MSG_NETWORK_ERROR, responseMessage } from '../../lib/postJson'
 
 // ============================================================
 // TYPES
@@ -23,30 +31,15 @@ type EditForm = {
   avatarFile: File | null
 }
 
-// ============================================================
-// STATIC TEXT
-// ============================================================
-const PRIVACY_TEXT = [
-  { title: '1. ข้อมูลที่เราจัดเก็บ', body: 'เราเก็บรวบรวมข้อมูลส่วนบุคคล เช่น ชื่อผู้ใช้ อีเมล วันเกิด และรหัสผ่านในรูปแบบที่ผ่านการเข้ารหัส (Hashing) เพื่อความปลอดภัยสูงสุด ไม่มีการจัดเก็บหรือรับข้อมูลโปรไฟล์จากผู้ให้บริการภายนอก' },
-  { title: '2. การประมวลผลข้อมูล', body: 'เราประมวลผลข้อมูลเพื่ออำนวยความสะดวกในการสร้างบัญชี แสดงโปรไฟล์ และปรับปรุงบริการตามที่ผู้ใช้ร้องขอ' },
-  { title: '3. ฐานทางกฎหมาย', body: 'เราดำเนินการภายใต้ PDPA โดยอาศัยฐานความยินยอม การปฏิบัติตามสัญญา และผลประโยชน์อันชอบธรรม' },
-  { title: '4. การเปิดเผยข้อมูล', body: 'เราไม่มีนโยบายในการขายข้อมูลส่วนบุคคลของท่านให้แก่บุคคลที่สาม อาจมีการแบ่งปันเฉพาะกรณีที่กฎหมายกำหนดเท่านั้น' },
-  { title: '5. ความปลอดภัยของข้อมูล', body: 'เราเข้ารหัสรหัสผ่านด้วยอัลกอริทึมความปลอดภัยสูง มีมาตรการทางเทคนิคและการบริหารจัดการเพื่อปกป้องข้อมูลของท่าน' },
-  { title: '6. การเก็บรักษาข้อมูล', body: 'เราจัดเก็บข้อมูลตลอดระยะเวลาที่ท่านมีบัญชี และจะลบข้อมูลทั้งหมดทันทีเมื่อท่านลบบัญชีผู้ใช้งาน' },
-]
-
-const TERMS_TEXT = [
-  { title: '1. การยอมรับเงื่อนไข', body: 'การใช้งานบริการ Luna Day ถือว่าท่านได้อ่านและยอมรับเงื่อนไขการใช้งานทั้งหมดแล้ว หากท่านไม่ยอมรับเงื่อนไขเหล่านี้ กรุณาหยุดใช้บริการ' },
-  { title: '2. การใช้บริการ', body: 'ท่านตกลงใช้บริการเพื่อวัตถุประสงค์ที่ถูกกฎหมายเท่านั้น และไม่กระทำการใดๆ ที่อาจก่อให้เกิดความเสียหายต่อระบบหรือผู้ใช้รายอื่น' },
-  { title: '3. ข้อมูลสุขภาพ', body: 'ข้อมูลที่ได้จากการวิเคราะห์ในแอปพลิเคชันเป็นเพียงข้อมูลเบื้องต้น ไม่สามารถใช้แทนการวินิจฉัยจากแพทย์ผู้เชี่ยวชาญได้' },
-  { title: '4. ทรัพย์สินทางปัญญา', body: 'เนื้อหา โลโก้ และซอฟต์แวร์ทั้งหมดในแอปพลิเคชันเป็นทรัพย์สินของ Luna Day ห้ามทำซ้ำหรือนำไปใช้โดยไม่ได้รับอนุญาต' },
-  { title: '5. การยกเลิกบริการ', body: 'เราขอสงวนสิทธิ์ในการระงับหรือยกเลิกบัญชีที่ละเมิดเงื่อนไขการใช้งานโดยไม่ต้องแจ้งล่วงหน้า' },
-  { title: '6. การเปลี่ยนแปลงเงื่อนไข', body: 'เราอาจปรับปรุงเงื่อนไขการใช้งานเป็นครั้งคราว การใช้งานต่อเนื่องหลังจากมีการเปลี่ยนแปลงถือว่าท่านยอมรับเงื่อนไขใหม่' },
-]
 
 // ============================================================
 // HELPERS
 // ============================================================
+// backend บันทึกภาพที่วาดกรอบผล AI ไว้เป็น res_<ชื่อไฟล์เดิม> ในโฟลเดอร์เดียวกัน
+function resultImagePath(path: string) {
+  return path.replace(/([^/]+)$/, 'res_$1')
+}
+
 function buddhistDate(iso: string) {
   if (!iso) return '-'
   const [y, m, d] = iso.split('-')
@@ -72,16 +65,19 @@ const DOW_SHORT = ['อา','จ','อ','พ','พฤ','ศ','ส']
 function ThaiDatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const today = new Date()
   const [open, setOpen] = useState(false)
+  // เลือกได้เฉพาะวันเกิดที่ทำให้อายุครบ 13 ปีขึ้นไป
+  const maxBirth = latestAllowedBirthDate()
 
-  const parsed = value ? new Date(value) : null
-  const initYear  = parsed ? parsed.getFullYear()  : today.getFullYear()
-  const initMonth = parsed ? parsed.getMonth()      : today.getMonth()
+  const parsed = parseYmd(value)
+  const initYear  = parsed ? parsed.getFullYear()  : maxBirth.getFullYear()
+  const initMonth = parsed ? parsed.getMonth()      : maxBirth.getMonth()
 
   const [viewYear,  setViewYear]  = useState(initYear)
   const [viewMonth, setViewMonth] = useState(initMonth)
 
-  const currentCE = today.getFullYear()
-  const years = Array.from({ length: 101 }, (_, i) => currentCE - 100 + i)
+  const maxYear = maxBirth.getFullYear()
+  const years = Array.from({ length: 101 }, (_, i) => maxYear - 100 + i)
+  const isTooYoung = (d: number) => new Date(viewYear, viewMonth, d) > maxBirth
 
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
   const firstDow    = new Date(viewYear, viewMonth, 1).getDay()
@@ -90,6 +86,7 @@ function ThaiDatePicker({ value, onChange }: { value: string; onChange: (v: stri
     ? parsed.getDate() : null
 
   const selectDay = (d: number) => {
+    if (isTooYoung(d)) return
     const ce = `${viewYear}-${String(viewMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
     onChange(ce)
     setOpen(false)
@@ -195,14 +192,17 @@ function ThaiDatePicker({ value, onChange }: { value: string; onChange: (v: stri
             {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
               const isSelected = selectedDay === d
               const isToday = d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear()
+              const disabled = isTooYoung(d)
               return (
                 <button
                   key={d}
                   type="button"
                   onClick={() => selectDay(d)}
+                  disabled={disabled}
                   style={{
                     aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 9, borderRadius: 4, cursor: 'pointer', border: 'none',
+                    fontSize: 9, borderRadius: 4, cursor: disabled ? 'not-allowed' : 'pointer', border: 'none',
+                    opacity: disabled ? 0.3 : 1,
                     fontFamily: "'Sarabun', sans-serif",
                     background: isSelected ? 'linear-gradient(135deg, #f06292, #c2185b)' : 'transparent',
                     color: isSelected ? '#fff' : isToday ? '#c2185b' : '#3a2030',
@@ -219,27 +219,64 @@ function ThaiDatePicker({ value, onChange }: { value: string; onChange: (v: stri
 }
 
 // ============================================================
+// SUB-PAGE HEADER (ใช้ร่วมกันทุกหน้าย่อย)
+// ============================================================
+function SubHeader({ title, subtitle, icon, onBack }: {
+  title: string; subtitle?: string; icon?: React.ReactNode; onBack: () => void
+}) {
+  return (
+    <div className="pf-subhero">
+      <div style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)', backgroundSize: '28px 28px', position: 'absolute', inset: 0 }} />
+      <div style={{ position: 'absolute', top: -80, right: -40, width: 260, height: 260, borderRadius: '50%', background: 'radial-gradient(circle, rgba(240,98,146,0.14), transparent 60%)' }} />
+      <div className="pf-container" style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 14 }}>
+        <button onClick={onBack} style={{
+          width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+          background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff',
+        }}><ArrowLeft size={18} /></button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          {icon && (
+            <div style={{
+              width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+              background: 'rgba(240,98,146,0.2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f8bbd0',
+            }}>{icon}</div>
+          )}
+          <div style={{ minWidth: 0 }}>
+            <h1 className="pf-subhero-title">{title}</h1>
+            {subtitle && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{subtitle}</p>}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
 // PROFILE VIEW
 // ============================================================
 function ProfileView({
-  profile, history,
+  profile, avatarUrl, history,
   onEditProfile, onViewHistory, onViewPrivacy, onViewTerms, onLogout, onDeleteAccount,
 }: {
-  profile: any; history: any[]
+  profile: any; avatarUrl: string | null; history: any[]
   onEditProfile: () => void; onViewHistory: () => void
   onViewPrivacy: () => void; onViewTerms: () => void
   onLogout: () => void; onDeleteAccount: () => void
 }) {
+  const sectionLabel: React.CSSProperties = {
+    fontSize: 11, fontWeight: 600, color: '#9e7a8a', letterSpacing: '1px',
+    textTransform: 'uppercase', marginBottom: 10, padding: '0 4px',
+  }
+
   return (
     <div style={{ paddingBottom: 60 }}>
-      <div style={{
-        background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 50%, #6b2646 100%)',
-        padding: '40px 40px 80px', position: 'relative', overflow: 'hidden',
-      }}>
-        <div style={{ position: 'absolute', top: -60, right: -60, width: 240, height: 240, borderRadius: '50%', background: 'radial-gradient(circle, rgba(240,98,146,0.18), transparent 60%)' }} />
-        <div style={{ position: 'absolute', bottom: -40, left: '30%', width: 160, height: 160, borderRadius: '50%', background: 'radial-gradient(circle, rgba(206,147,216,0.12), transparent 60%)' }} />
+      {/* HERO */}
+      <div className="pf-hero">
+        <div style={{ position: 'absolute', top: -60, right: -60, width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(240,98,146,0.18), transparent 60%)' }} />
+        <div style={{ position: 'absolute', bottom: -40, left: '30%', width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(206,147,216,0.12), transparent 60%)' }} />
         <div style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)', backgroundSize: '28px 28px', position: 'absolute', inset: 0 }} />
-        <div style={{ position: 'relative', zIndex: 1 }}>
+        <div className="pf-container" style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -250,76 +287,93 @@ function ProfileView({
               <Sparkles size={10} /> โปรไฟล์ของฉัน
             </div>
           </div>
-          <h1 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 28, fontWeight: 600, color: '#fff', lineHeight: 1.3 }}>
+          <h1 className="pf-hero-title">
             สวัสดี, {profile?.Name} 👋
           </h1>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>@{profile?.Username}</p>
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>@{profile?.Username}</p>
         </div>
       </div>
 
-      <div style={{ maxWidth: 680, margin: '20px auto 0', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ position: 'relative' }}>
+      {/* BODY: การ์ดโปรไฟล์ซ้าย + เมนูขวา */}
+      <div className="pf-container pf-profile-grid">
+        {/* LEFT: profile card */}
+        <aside className="pf-profile-card">
           <div style={{
             width: 150, height: 150, borderRadius: '50%',
-            border: '3px solid #f48fb1', overflow: 'hidden',
+            border: '4px solid #fff', outline: '3px solid #f48fb1', overflow: 'hidden',
             background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 16px rgba(194,24,91,0.25)',
+            boxShadow: '0 6px 20px rgba(194,24,91,0.25)', flexShrink: 0,
           }}>
-            {profile?.Profile_Image
-              ? <img src={`${process.env.NEXT_PUBLIC_API_URL}/static/uploads/profiles/${profile.Profile_Image}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : <User size={36} color="#c2185b" strokeWidth={1.5} />
+            {avatarUrl
+              ? <img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <User size={48} color="#c2185b" strokeWidth={1.5} />
             }
           </div>
-        </div>
-      </div>
 
-      <div style={{ maxWidth: 680, margin: '-75px auto 0', padding: '0 24px' }}>
-        <div style={{
-          background: '#fff', borderRadius: 20, padding: '20px 22px',
-          boxShadow: '0 4px 20px rgba(194,24,91,0.07)', border: '1px solid #f5e6ec',
-          display: 'flex', alignItems: 'center', gap: 16,
-        }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 18, fontWeight: 600, color: '#1a0a14' }}>
+          <div style={{ textAlign: 'center', width: '100%' }}>
+            <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 20, fontWeight: 600, color: '#1a0a14', wordBreak: 'break-word' }}>
               {profile?.Name} {profile?.LastName}
             </p>
             <p style={{ fontSize: 13, color: '#9e7a8a', marginTop: 2 }}>@{profile?.Username}</p>
             {profile?.Birthday && (
-              <p style={{ fontSize: 12, color: '#b09aa8', marginTop: 4 }}>
-                <Calendar size={11} style={{ display: 'inline', marginRight: 4 }} />
+              <p style={{ fontSize: 12.5, color: '#b09aa8', marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Calendar size={12} />
                 {buddhistDate(profile.Birthday)}
               </p>
             )}
           </div>
-          <button onClick={onEditProfile} style={{
-            width: 40, height: 40, borderRadius: 12,
-            border: '1.5px solid rgba(194,24,91,0.2)', background: 'rgba(194,24,91,0.06)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', color: '#c2185b', flexShrink: 0,
-          }}>
-            <Edit3 size={16} />
-          </button>
-        </div>
-      </div>
 
-      <div style={{ maxWidth: 680, margin: '20px auto 0', padding: '0 24px' }}>
-        <p style={{ fontSize: 11, fontWeight: 600, color: '#9e7a8a', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10, padding: '0 4px' }}>บัญชีและข้อมูล</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
-          <MenuItem icon={<Settings size={18} />} label="จัดการโปรไฟล์" desc="แก้ไขข้อมูลส่วนตัวและรูปภาพ" onClick={onEditProfile} />
-          <MenuItem icon={<Droplets size={18} />} label="ประวัติการวิเคราะห์ลิ่มเลือด" desc={`${history.length} รายการ`} onClick={onViewHistory} badge={history.length.toString()} />
-        </div>
+          <div style={{ width: '100%', height: 1, background: '#f5e6ec' }} />
 
-        <p style={{ fontSize: 11, fontWeight: 600, color: '#9e7a8a', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10, padding: '0 4px' }}>กฎหมายและนโยบาย</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
-          <MenuItem icon={<Shield size={18} />} label="ประกาศนโยบายความเป็นส่วนตัว" desc="การใช้งานและการคุ้มครองข้อมูล" onClick={onViewPrivacy} />
-          <MenuItem icon={<FileText size={18} />} label="ข้อตกลงเงื่อนไขการใช้งาน" desc="เงื่อนไขการใช้บริการ Luna day" onClick={onViewTerms} />
-        </div>
+          <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+            <div style={{
+              flex: 1, padding: '12px 14px', borderRadius: 14,
+              background: 'linear-gradient(135deg, #fff5f8, #fce4ec)', border: '1px solid #f8d7e3',
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}>
+              <Activity size={18} color="#c2185b" />
+              <div>
+                <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 18, fontWeight: 600, color: '#c2185b', lineHeight: 1.1 }}>{history.length}</p>
+                <p style={{ fontSize: 11, color: '#9e7a8a' }}>รายการ</p>
+              </div>
+            </div>
+            <button onClick={onEditProfile} style={{
+              width: 56, borderRadius: 14,
+              border: '1.5px solid rgba(194,24,91,0.2)', background: 'rgba(194,24,91,0.06)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: '#c2185b', flexShrink: 0,
+            }}>
+              <Edit3 size={18} />
+            </button>
+          </div>
+        </aside>
 
-        <p style={{ fontSize: 11, fontWeight: 600, color: '#9e7a8a', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 10, padding: '0 4px' }}>บัญชี</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <MenuItem icon={<LogOut size={18} />} label="ออกจากระบบ" onClick={onLogout} />
-          <MenuItem icon={<Trash2 size={18} />} label="ลบบัญชีผู้ใช้" danger onClick={onDeleteAccount} />
+        {/* RIGHT: menu groups */}
+        <div className="pf-menu-area">
+          <section className="pf-menu-section pf-menu-wide">
+            <p style={sectionLabel}>บัญชีและข้อมูล</p>
+            <div className="pf-menu-pair">
+              <MenuItem icon={<Settings size={18} />} label="จัดการโปรไฟล์" desc="แก้ไขข้อมูลส่วนตัวและรูปภาพ" onClick={onEditProfile} />
+              <MenuItem icon={<Droplets size={18} />} label="ประวัติการวิเคราะห์ลิ่มเลือด" desc={`${history.length} รายการ`} onClick={onViewHistory} badge={history.length.toString()} />
+            </div>
+          </section>
+
+          <section className="pf-menu-section">
+            <p style={sectionLabel}>กฎหมายและนโยบาย</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <MenuItem icon={<Shield size={18} />} label="ประกาศนโยบายความเป็นส่วนตัว" desc="การใช้งานและการคุ้มครองข้อมูล" onClick={onViewPrivacy} />
+              <MenuItem icon={<FileText size={18} />} label="ข้อตกลงเงื่อนไขการใช้งาน" desc="เงื่อนไขการใช้บริการ Luna day" onClick={onViewTerms} />
+            </div>
+          </section>
+
+          <section className="pf-menu-section">
+            <p style={sectionLabel}>บัญชี</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <MenuItem icon={<LogOut size={18} />} label="ออกจากระบบ" onClick={onLogout} />
+              <MenuItem icon={<Trash2 size={18} />} label="ลบบัญชีผู้ใช้" danger onClick={onDeleteAccount} />
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -330,10 +384,10 @@ function ProfileView({
 // EDIT PROFILE VIEW
 // ============================================================
 function EditProfileView({
-  profile, editForm, setEditForm, previewUrl,
+  avatarUrl, editForm, setEditForm, previewUrl,
   handleAvatarChange, handleSaveProfile, onBack,
 }: {
-  profile: any; editForm: EditForm
+  avatarUrl: string | null; editForm: EditForm
   setEditForm: React.Dispatch<React.SetStateAction<EditForm>>
   previewUrl: string | null
   handleAvatarChange: (e: React.ChangeEvent<HTMLInputElement>) => void
@@ -341,35 +395,17 @@ function EditProfileView({
 }) {
   return (
     <div style={{ paddingBottom: 60 }}>
-      <div style={{
-        background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%)',
-        padding: '40px 24px 32px', position: 'relative', overflow: 'hidden',
-      }}>
-        <div style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)', backgroundSize: '28px 28px', position: 'absolute', inset: 0 }} />
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={onBack} style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', color: '#fff',
-          }}><ArrowLeft size={18} /></button>
-          <div>
-            <h1 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 20, fontWeight: 600, color: '#fff' }}>จัดการโปรไฟล์</h1>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>แก้ไขข้อมูลส่วนตัวของคุณ</p>
-          </div>
-        </div>
-      </div>
+      <SubHeader title="จัดการโปรไฟล์" subtitle="แก้ไขข้อมูลส่วนตัวของคุณ" onBack={onBack} />
 
-      <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 24px' }}>
+      <div className="pf-container pf-body pf-edit-grid">
         {/* Avatar */}
-        <div style={{
-          background: '#fff', borderRadius: 20, padding: '28px',
-          border: '1px solid #f5e6ec', boxShadow: '0 4px 20px rgba(194,24,91,0.06)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, marginBottom: 16,
+        <div className="pf-card" style={{
+          padding: '36px 28px',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
         }}>
           <div style={{ position: 'relative' }}>
             <div style={{
-              width: 96, height: 96, borderRadius: '50%',
+              width: 140, height: 140, borderRadius: '50%',
               border: '3px solid #f48fb1', overflow: 'hidden',
               background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -377,60 +413,61 @@ function EditProfileView({
             }}>
               {previewUrl
                 ? <img src={previewUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : profile?.Profile_Image
-                  ? <img src={`${process.env.NEXT_PUBLIC_API_URL}/static/uploads/profiles/${profile.Profile_Image}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : <User size={40} color="#c2185b" strokeWidth={1.5} />
+                : avatarUrl
+                  ? <img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <User size={52} color="#c2185b" strokeWidth={1.5} />
               }
             </div>
             <label style={{
-              position: 'absolute', bottom: 0, right: 0,
-              width: 32, height: 32, borderRadius: '50%',
+              position: 'absolute', bottom: 4, right: 4,
+              width: 38, height: 38, borderRadius: '50%',
               background: 'linear-gradient(135deg, #f06292, #c2185b)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', boxShadow: '0 2px 8px rgba(194,24,91,0.4)',
+              border: '3px solid #fff',
             }}>
-              <Camera size={14} color="#fff" />
+              <Camera size={15} color="#fff" />
               <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarChange} />
             </label>
           </div>
           <p style={{ fontSize: 13, color: '#c2185b', fontWeight: 500 }}>แตะเพื่อเปลี่ยนรูปโปรไฟล์</p>
         </div>
 
-        {/* Form */}
-        <div style={{
-          background: '#fff', borderRadius: 20, padding: '24px',
-          border: '1px solid #f5e6ec', boxShadow: '0 4px 20px rgba(194,24,91,0.06)',
-          display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 20,
-        }}>
-          <FormField label="ชื่อ"       value={editForm.name}     onChange={v => setEditForm(f => ({ ...f, name: v }))}     onKeyDown={e => e.key === 'Enter' && handleSaveProfile()} />
-          <FormField label="นามสกุล"   value={editForm.lastname}  onChange={v => setEditForm(f => ({ ...f, lastname: v }))} onKeyDown={e => e.key === 'Enter' && handleSaveProfile()} />
-          <FormField label="ชื่อผู้ใช้" value={editForm.username}  onChange={v => setEditForm(f => ({ ...f, username: v }))} prefix="@" onKeyDown={e => e.key === 'Enter' && handleSaveProfile()} />
+        {/* Form + Buttons */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
+          <div className="pf-card" style={{ padding: 'clamp(20px, 2.4vw, 32px)' }}>
+            <div className="pf-form-grid">
+              <FormField label="ชื่อ"       value={editForm.name}     onChange={v => setEditForm(f => ({ ...f, name: v }))}     onKeyDown={e => e.key === 'Enter' && handleSaveProfile()} />
+              <FormField label="นามสกุล"   value={editForm.lastname}  onChange={v => setEditForm(f => ({ ...f, lastname: v }))} onKeyDown={e => e.key === 'Enter' && handleSaveProfile()} />
+              <FormField label="ชื่อผู้ใช้" value={editForm.username}  onChange={v => setEditForm(f => ({ ...f, username: v }))} prefix="@" maxLength={USERNAME_MAX} onKeyDown={e => e.key === 'Enter' && handleSaveProfile()} />
 
-          {/* Birthday */}
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#9d174d', marginBottom: 6, paddingLeft: 2 }}>
-              วัน-เดือน-ปีเกิด
-            </label>
-            <ThaiDatePicker
-              value={editForm.birthday}
-              onChange={v => setEditForm(f => ({ ...f, birthday: v }))}
-            />
+              {/* Birthday */}
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#9d174d', marginBottom: 6, paddingLeft: 2 }}>
+                  วัน-เดือน-ปีเกิด
+                </label>
+                <ThaiDatePicker
+                  value={editForm.birthday}
+                  onChange={v => setEditForm(f => ({ ...f, birthday: v }))}
+                />
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* Buttons */}
-        <div style={{ display: 'flex', gap: 12 }}>
-          <button onClick={onBack} style={{
-            flex: 1, padding: '14px', borderRadius: 14,
-            border: '1.5px solid rgba(194,24,91,0.25)', background: 'transparent', color: '#c2185b',
-            fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 500,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}>
-            <X size={15} /> ยกเลิก
-          </button>
-          <button onClick={handleSaveProfile} className="btn-primary" style={{ flex: 1, padding: '14px', justifyContent: 'center' }}>
-            <Check size={15} /> บันทึก
-          </button>
+          {/* Buttons */}
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+            <button onClick={onBack} style={{
+              flex: '0 1 200px', padding: '14px', borderRadius: 14,
+              border: '1.5px solid rgba(194,24,91,0.25)', background: 'transparent', color: '#c2185b',
+              fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 500,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}>
+              <X size={15} /> ยกเลิก
+            </button>
+            <button onClick={handleSaveProfile} className="btn-primary" style={{ flex: '0 1 200px', padding: '14px', justifyContent: 'center' }}>
+              <Check size={15} /> บันทึก
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -445,32 +482,16 @@ function HistoryView({ history, onBack, onSelectItem }: {
 }) {
   return (
     <div style={{ paddingBottom: 60 }}>
-      <div style={{
-        background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%)',
-        padding: '40px 24px 32px', position: 'relative', overflow: 'hidden',
-      }}>
-        <div style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)', backgroundSize: '28px 28px', position: 'absolute', inset: 0 }} />
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={onBack} style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff',
-          }}><ArrowLeft size={18} /></button>
-          <div>
-            <h1 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 20, fontWeight: 600, color: '#fff' }}>ประวัติการวิเคราะห์</h1>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>ลิ่มเลือดทั้งหมด {history.length} รายการ</p>
-          </div>
-        </div>
-      </div>
+      <SubHeader title="ประวัติการวิเคราะห์" subtitle={`ลิ่มเลือดทั้งหมด ${history.length} รายการ`} onBack={onBack} />
 
-      <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px' }}>
+      <div className="pf-container pf-body">
         {history.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9e7a8a' }}>
-            <Droplets size={48} color="#f8bbd0" strokeWidth={1} style={{ marginBottom: 16 }} />
+          <div className="pf-card" style={{ textAlign: 'center', padding: '80px 20px', color: '#9e7a8a' }}>
+            <Droplets size={56} color="#f8bbd0" strokeWidth={1} style={{ marginBottom: 16 }} />
             <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 16 }}>ยังไม่มีประวัติการวิเคราะห์</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="pf-history-grid">
             {history.map((item, i) => {
               const levelMap: Record<string, string> = {
                 'ฉุกเฉิน': 'high', 'เสี่ยงสูง': 'high',
@@ -478,11 +499,8 @@ function HistoryView({ history, onBack, onSelectItem }: {
               }
               const cfg = riskConfig[levelMap[item.Risk_Level] || 'low']
               return (
-                <div key={item.AssessmentID} onClick={() => onSelectItem(item)} style={{
-                  background: '#fff', borderRadius: 18, padding: '16px 20px',
-                  border: '1px solid #f5e6ec', boxShadow: '0 2px 12px rgba(194,24,91,0.04)',
-                  display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer',
-                  opacity: 0, animation: `fadeUp 0.4s ease ${i * 0.07}s forwards`,
+                <div key={item.AssessmentID} className="pf-history-card" onClick={() => onSelectItem(item)} style={{
+                  animation: `fadeUp 0.4s ease ${Math.min(i, 12) * 0.05}s forwards`,
                 }}>
                   <div style={{
                     width: 56, height: 56, borderRadius: '50%',
@@ -507,7 +525,7 @@ function HistoryView({ history, onBack, onSelectItem }: {
                     </p>
                     <p style={{ fontSize: 12, color: '#9e7a8a', display: 'flex', alignItems: 'center', gap: 4 }}>
                       <Calendar size={11} />
-                      {item.Create_At ? new Date(item.Create_At).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
+                      {parseServerDate(item.Create_At)?.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) ?? '-'}
                     </p>
                   </div>
                   <ChevronRight size={16} color="#d6b4c4" />
@@ -530,36 +548,13 @@ function DocView({ title, sections, icon, onBack }: {
 }) {
   return (
     <div style={{ paddingBottom: 60 }}>
-      <div style={{
-        background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%)',
-        padding: '40px 24px 32px', position: 'relative', overflow: 'hidden',
-      }}>
-        <div style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)', backgroundSize: '28px 28px', position: 'absolute', inset: 0 }} />
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={onBack} style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff',
-          }}><ArrowLeft size={18} /></button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: 8,
-              background: 'rgba(240,98,146,0.2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f8bbd0',
-            }}>{icon}</div>
-            <h1 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 18, fontWeight: 600, color: '#fff' }}>{title}</h1>
-          </div>
-        </div>
-      </div>
-      <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <SubHeader title={title} icon={icon} onBack={onBack} />
+      <div className="pf-container pf-body">
+        <div className="pf-doc-grid">
           {sections.map((s, i) => (
-            <div key={i} style={{
-              background: '#fff', borderRadius: 18, padding: '20px 22px',
-              border: '1px solid #f5e6ec', boxShadow: '0 2px 12px rgba(194,24,91,0.04)',
-            }}>
-              <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 600, color: '#c2185b', marginBottom: 8 }}>{s.title}</p>
-              <p style={{ fontSize: 13.5, color: '#5a3a4a', lineHeight: 1.75 }}>{s.body}</p>
+            <div key={i} className="pf-card" style={{ padding: 'clamp(20px, 2vw, 28px)' }}>
+              <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 15, fontWeight: 600, color: '#c2185b', marginBottom: 8 }}>{s.title}</p>
+              <p style={{ fontSize: 14, color: '#5a3a4a', lineHeight: 1.8 }}>{s.body}</p>
             </div>
           ))}
         </div>
@@ -579,11 +574,7 @@ export default function ProfilePage() {
   const [history, setHistory] = useState<any[]>([])
   const [selectedHistory, setSelectedHistory] = useState<any>(null)
 
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
-  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
-  }
+  const showToast = useToast()
 
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -595,6 +586,9 @@ export default function ProfilePage() {
     name: '', lastname: '', username: '', birthday: '', avatarFile: null,
   })
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  // รูปโปรไฟล์ที่จำไว้ ใช้แสดงระหว่างรอ API (กันรูปกะพริบ)
+  const [cachedAvatar, setCachedAvatarState] = useState<string | null>(getMemoryAvatar)
+  const avatarUrl = profile ? avatarUrlFromFile(profile.Profile_Image) : cachedAvatar
 
   useEffect(() => {
     if (!editForm.avatarFile) { setPreviewUrl(null); return }
@@ -609,9 +603,16 @@ export default function ProfilePage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/`, {
         headers: { Authorization: `Bearer ${token}`, 'Cache-Control': 'no-cache' },
       })
-      if (!res.ok) { if (res.status === 401) router.replace('/login'); return }
+      if (!res.ok) {
+        if (res.status === 401) { router.replace('/login'); return }
+        showToast(await responseMessage(res, 'ไม่สามารถโหลดข้อมูลโปรไฟล์ได้'), 'error')
+        return
+      }
       const data = await res.json()
-      if (data.data) setProfile(data.data)
+      if (data.data) {
+        setProfile(data.data)
+        setCachedAvatar(avatarUrlFromFile(data.data.Profile_Image))
+      }
     } catch { showToast('ไม่สามารถโหลดข้อมูลโปรไฟล์ได้', 'error') }
   }
 
@@ -621,7 +622,11 @@ export default function ProfilePage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/history/`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) { if (res.status === 401) router.replace('/login'); return }
+      if (!res.ok) {
+        if (res.status === 401) { router.replace('/login'); return }
+        showToast(await responseMessage(res, 'ไม่สามารถโหลดประวัติได้'), 'error')
+        return
+      }
       const data = await res.json()
       if (data.status === 'success') setHistory(data.data)
     } catch { showToast('ไม่สามารถโหลดประวัติได้', 'error') }
@@ -631,14 +636,27 @@ export default function ProfilePage() {
     setMounted(true)
     const token = localStorage.getItem('access_token')
     if (!token) { router.replace('/login'); return }
+    setCachedAvatarState(getCachedAvatar())
     fetchProfile()
     fetchHistory()
   }, [router])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowLogoutModal(false)
+    // แจ้ง backend ให้ blacklist token (ถ้าล้มเหลวก็ยังออกจากระบบฝั่งหน้าเว็บต่อ)
+    let msg = 'ออกจากระบบเรียบร้อยแล้ว'
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) msg = await responseMessage(res, msg)
+    } catch {}
+    showToast(msg, 'success')
     localStorage.removeItem('access_token')
     localStorage.removeItem('user')
+    setCachedAvatar(null)
     router.push('/login')
   }
 
@@ -653,21 +671,36 @@ export default function ProfilePage() {
       })
       const data = await res.json()
       if (!res.ok) return showToast(data.msg || 'รหัสผ่านไม่ถูกต้อง', 'error')
+      showToast(data.msg || 'ลบบัญชีผู้ใช้งานเรียบร้อยแล้ว', 'success')
       setShowDeleteConfirm(false)
       localStorage.removeItem('access_token')
       localStorage.removeItem('user')
+      setCachedAvatar(null)
       router.push('/login')
     } catch { showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error') }
   }
 
   const handleSaveProfile = async () => {
+    const username = editForm.username.trim()
+    const firstName = editForm.name.trim()
+    const lastName = editForm.lastname.trim()
+    if (!username || !firstName || !lastName) {
+      return showToast('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วนก่อนทำการบันทึก', 'error')
+    }
+    const nameErr = usernameError(username)
+    if (nameErr) return showToast(nameErr, 'error')
+    const birth = parseYmd(editForm.birthday || profile?.Birthday || '')
+    if (birth && ageFrom(birth) < MIN_AGE) {
+      return showToast(`ผู้ใช้ต้องมีอายุตั้งแต่ ${MIN_AGE} ปีขึ้นไป`, 'error')
+    }
+
     const token = localStorage.getItem('access_token')
     const form = new FormData()
-    form.append('username', editForm.username)
-    form.append('name', editForm.name)
-    form.append('lastname', editForm.lastname)
-    form.append('birthday', editForm.birthday || profile?.Birthday || '')
-    if (editForm.avatarFile) form.append('profile_img', editForm.avatarFile)
+    form.append('username', username)
+    form.append('firstName', firstName)
+    form.append('lastName', lastName)
+    form.append('birthDate', editForm.birthday || profile?.Birthday || '')
+    if (editForm.avatarFile) {form.append('profileImg', editForm.avatarFile)}
 
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/update`, {
@@ -677,7 +710,7 @@ export default function ProfilePage() {
       })
       const data = await res.json()
       if (res.ok) {
-        showToast('บันทึกข้อมูลเรียบร้อย')
+        showToast(data.msg || 'บันทึกข้อมูลเรียบร้อย', 'success')
         setEditForm(f => ({ ...f, avatarFile: null }))
         setPreviewUrl(null)
         await fetchProfile()
@@ -710,7 +743,135 @@ export default function ProfilePage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=Sarabun:wght@300;400;500;600&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        .profile-root { min-height: 100vh; font-family: 'Sarabun', sans-serif; background: #faf7f5; overflow-x: hidden; }
+        /* flex คอลัมน์สูงเต็มจอ → footer (margin-top: auto) ติดขอบล่างแม้เนื้อหาสั้น */
+        .profile-root { min-height: 100vh; display: flex; flex-direction: column; font-family: 'Sarabun', sans-serif; background: #faf7f5; overflow-x: hidden; }
+
+        /* ── Shared container (เหมือนหน้าบทความ / ติดต่อ) ── */
+        .pf-container {
+          width: 100%;
+          max-width: 1320px;
+          margin: 0 auto;
+          padding-left: clamp(16px, 3vw, 40px);
+          padding-right: clamp(16px, 3vw, 40px);
+        }
+        .pf-body { padding-top: clamp(24px, 3vw, 36px); }
+        .pf-card {
+          background: #fff; border-radius: 20px;
+          border: 1px solid #f5e6ec; box-shadow: 0 4px 20px rgba(194,24,91,0.06);
+        }
+
+        /* ── Hero ── */
+        .pf-hero {
+          background: linear-gradient(135deg, #1a0a14 0%, #3d1a2e 50%, #6b2646 100%);
+          padding: 48px 0 110px; position: relative; overflow: hidden;
+        }
+        .pf-hero-title {
+          font-family: 'Mitr', sans-serif; font-size: clamp(26px, 3.2vw, 38px);
+          font-weight: 600; color: #fff; line-height: 1.3;
+        }
+        .pf-subhero {
+          background: linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%);
+          padding: 40px 0 36px; position: relative; overflow: hidden;
+        }
+        .pf-subhero-title {
+          font-family: 'Mitr', sans-serif; font-size: clamp(18px, 2vw, 24px);
+          font-weight: 600; color: #fff;
+        }
+
+        /* ── Profile layout ── */
+        .pf-profile-grid {
+          display: grid;
+          grid-template-columns: 340px minmax(0, 1fr);
+          gap: clamp(16px, 2vw, 28px);
+          align-items: start;
+          margin-top: -72px;
+          position: relative; z-index: 2;
+        }
+        .pf-profile-card {
+          background: #fff; border-radius: 24px;
+          border: 1px solid #f5e6ec; box-shadow: 0 8px 32px rgba(194,24,91,0.10);
+          padding: 32px 24px 24px;
+          display: flex; flex-direction: column; align-items: center; gap: 18px;
+          position: sticky; top: 88px;
+        }
+        .pf-menu-area {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: clamp(16px, 2vw, 24px);
+          background: #fff; border-radius: 24px;
+          border: 1px solid #f5e6ec; box-shadow: 0 8px 32px rgba(194,24,91,0.08);
+          padding: clamp(20px, 2.4vw, 32px);
+        }
+        .pf-menu-wide { grid-column: 1 / -1; }
+        .pf-menu-pair {
+          display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+        }
+        .pf-menu-section > div > button { background: #fffafc !important; }
+
+        /* ── Edit profile ── */
+        .pf-edit-grid {
+          display: grid;
+          grid-template-columns: 340px minmax(0, 1fr);
+          gap: clamp(16px, 2vw, 28px);
+          align-items: stretch;
+        }
+        .pf-form-grid {
+          display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px;
+        }
+
+        /* ── History ── */
+        .pf-history-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+          gap: clamp(12px, 1.6vw, 20px);
+        }
+        .pf-history-card {
+          background: #fff; border-radius: 18px; padding: 18px 20px;
+          border: 1px solid #f5e6ec; box-shadow: 0 2px 12px rgba(194,24,91,0.04);
+          display: flex; align-items: center; gap: 16px; cursor: pointer;
+          opacity: 0; transition: box-shadow 0.18s, border-color 0.18s;
+        }
+        .pf-history-card:hover { box-shadow: 0 8px 24px rgba(194,24,91,0.12); border-color: #f8bbd0; }
+
+        /* ── Docs ── */
+        .pf-doc-grid {
+          display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: clamp(12px, 1.6vw, 20px);
+        }
+
+        /* ── History detail ── */
+        .pf-detail-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+          gap: clamp(16px, 2vw, 28px);
+          align-items: start;
+        }
+        .pf-detail-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .pf-detail-row { display: flex; gap: 14px; padding: 16px 20px; border-bottom: 1px solid #f5e6ec; }
+        .pf-detail-row:nth-child(odd) { border-right: 1px solid #f5e6ec; }
+        .pf-detail-row:last-child { grid-column: 1 / -1; border-right: none; border-bottom: none; }
+        .pf-reco-grid {
+          display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 1100px) {
+          .pf-menu-area { grid-template-columns: 1fr; }
+          .pf-detail-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 900px) {
+          .pf-profile-grid, .pf-edit-grid { grid-template-columns: 1fr; }
+          .pf-profile-card { position: static; }
+          .pf-doc-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 640px) {
+          .pf-hero { padding: 36px 0 96px; }
+          .pf-subhero { padding: 28px 0 24px; }
+          .pf-menu-pair, .pf-form-grid, .pf-reco-grid, .pf-detail-rows { grid-template-columns: 1fr; }
+          .pf-detail-row:nth-child(odd) { border-right: none; }
+          .pf-history-grid { grid-template-columns: 1fr; }
+        }
+
         .btn-primary {
           display: inline-flex; align-items: center; gap: 8px;
           padding: 13px 28px; border-radius: 14px; border: none;
@@ -741,24 +902,10 @@ export default function ProfilePage() {
       <div className="profile-root">
         <Navbar />
 
-        {/* TOAST */}
-        {toast && (
-          <div style={{
-            position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)',
-            zIndex: 50, padding: '12px 20px', borderRadius: 14,
-            fontSize: 13, fontWeight: 500, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-            border: '1px solid', animation: 'fadeSlideDown 0.3s ease', whiteSpace: 'nowrap',
-            ...(toast.type === 'success' ? { background: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' }
-              : toast.type === 'error' ? { background: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5' }
-              : { background: '#fce4ef', color: '#9d174d', borderColor: '#f9a8d4' })
-          }}>
-            {toast.type === 'success' ? '✓ ' : toast.type === 'error' ? '✕ ' : 'ℹ '}{toast.msg}
-          </div>
-        )}
 
         {view === 'profile' && (
           <ProfileView
-            profile={profile} history={history}
+            profile={profile} avatarUrl={avatarUrl} history={history}
             onEditProfile={handleGoToEditProfile}
             onViewHistory={() => setView('history')}
             onViewPrivacy={() => setView('privacy')}
@@ -770,7 +917,7 @@ export default function ProfilePage() {
 
         {view === 'editProfile' && (
           <EditProfileView
-            profile={profile} editForm={editForm} setEditForm={setEditForm}
+            avatarUrl={avatarUrl} editForm={editForm} setEditForm={setEditForm}
             previewUrl={previewUrl} handleAvatarChange={handleAvatarChange}
             handleSaveProfile={handleSaveProfile} onBack={() => setView('profile')}
           />
@@ -898,6 +1045,8 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
+
+        <Footer />
       </div>
     </>
   )
@@ -950,9 +1099,9 @@ function MenuItem({ icon, label, desc, onClick, danger = false, badge }: {
   )
 }
 
-function FormField({ label, value, onChange, readOnly = false, prefix, icon, onKeyDown }: {
+function FormField({ label, value, onChange, readOnly = false, prefix, icon, onKeyDown, maxLength }: {
   label: string; value: string; onChange?: (v: string) => void;
-  readOnly?: boolean; prefix?: string; icon?: React.ReactNode;
+  readOnly?: boolean; prefix?: string; icon?: React.ReactNode; maxLength?: number;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
 }) {
   return (
@@ -966,7 +1115,7 @@ function FormField({ label, value, onChange, readOnly = false, prefix, icon, onK
           <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: '#9e7a8a' }}>{icon}</span>
         )}
         <input
-          type="text" value={value} readOnly={readOnly}
+          type="text" value={value} readOnly={readOnly} maxLength={maxLength}
           onChange={e => onChange?.(e.target.value)}
           onKeyDown={e => onKeyDown?.(e)}
           style={{
@@ -989,6 +1138,7 @@ function FormField({ label, value, onChange, readOnly = false, prefix, icon, onK
 function HistoryDetailView({ item, onBack }: { item: any; onBack: () => void }) {
   const [detail, setDetail] = useState<any>(item)
   const [loading, setLoading] = useState(true)
+  const showToast = useToast()
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -997,12 +1147,18 @@ function HistoryDetailView({ item, onBack }: { item: any; onBack: () => void }) 
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/history/${item.AssessmentID}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
+        if (!res.ok) {
+          showToast(await responseMessage(res, 'ไม่สามารถโหลดรายละเอียดได้'), 'error')
+          return
+        }
         const data = await res.json()
         if (data.status === 'success') setDetail(data.data)
-      } catch {} finally { setLoading(false) }
+      } catch {
+        showToast(MSG_NETWORK_ERROR, 'error')
+      } finally { setLoading(false) }
     }
     fetchDetail()
-  }, [item.AssessmentID])
+  }, [item.AssessmentID, showToast])
 
   const levelMap: Record<string, string> = {
     'ฉุกเฉิน': 'high', 'เสี่ยงสูง': 'high', 'เสี่ยงปานกลาง': 'medium', 'ปกติ': 'low',
@@ -1014,89 +1170,91 @@ function HistoryDetailView({ item, onBack }: { item: any; onBack: () => void }) 
     { label: 'รายละเอียดที่พบ',         value: detail.Detect2, emoji: '🔬' },
     { label: 'โรคที่อาจเกี่ยวข้อง',    value: detail.Potential_Disease, emoji: '🎯' },
     { label: 'ระดับความเสี่ยง',         value: detail.Risk_Level, emoji: '📊' },
-    { label: 'วันที่วิเคราะห์', value: detail.Create_At
-        ? new Date(detail.Create_At).toLocaleDateString('th-TH', { year:'numeric', month:'long', day:'numeric' })
-        : '-', emoji: '📅' },
+    { label: 'วันที่วิเคราะห์', value:
+        parseServerDate(detail.Create_At)?.toLocaleDateString('th-TH', { year:'numeric', month:'long', day:'numeric' }) ?? '-',
+      emoji: '📅' },
   ]
 
   return (
     <div style={{ paddingBottom: 60 }}>
-      <div style={{
-        background: 'linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%)',
-        padding: '40px 24px 32px', position: 'relative', overflow: 'hidden',
-      }}>
-        <div style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)', backgroundSize: '28px 28px', position: 'absolute', inset: 0 }} />
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={onBack} style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff',
-          }}><ArrowLeft size={18} /></button>
-          <div>
-            <h1 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 20, fontWeight: 600, color: '#fff' }}>รายละเอียดการวิเคราะห์</h1>
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>ผลการวิเคราะห์ครั้งนี้</p>
-          </div>
-        </div>
-      </div>
+      <SubHeader title="รายละเอียดการวิเคราะห์" subtitle="ผลการวิเคราะห์ครั้งนี้" onBack={onBack} />
 
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}>
           <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #fce4ec', borderTopColor: '#c2185b', animation: 'spin 0.7s linear infinite' }} />
         </div>
       ) : (
-        <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px' }}>
-          <div style={{
-            background: cfg.bg, border: `1.5px solid ${cfg.dot}40`,
-            borderRadius: 18, padding: '20px 22px', marginBottom: 16,
-            display: 'flex', alignItems: 'center', gap: 14,
-          }}>
-            <div style={{ width: 52, height: 52, borderRadius: '50%', background: cfg.bg, border: `2px solid ${cfg.dot}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Droplets size={24} color={cfg.color} strokeWidth={1.5} />
+        <div className="pf-container pf-body">
+          <div className="pf-detail-grid">
+            {/* LEFT: ภาพที่วิเคราะห์ */}
+            <div style={{ background: '#fff', borderRadius: 18, border: '1px solid #f5e6ec', overflow: 'hidden', boxShadow: '0 4px 20px rgba(194,24,91,0.06)' }}>
+              <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 13, fontWeight: 600, color: '#9e7a8a', padding: '14px 20px 12px' }}>ภาพที่วิเคราะห์</p>
+              {detail.Image_Path ? (
+                <img
+                  src={`${process.env.NEXT_PUBLIC_API_URL}/${resultImagePath(detail.Image_Path)}`}
+                  alt="Analyzed"
+                  onError={e => {
+                    const img = e.currentTarget
+                    if (img.dataset.fallback !== '1') {
+                      img.dataset.fallback = '1'
+                      img.src = `${process.env.NEXT_PUBLIC_API_URL}/${detail.Image_Path}`
+                    } else {
+                      img.style.display = 'none'
+                    }
+                  }}
+                  style={{
+                    width: '100%', display: 'block', objectFit: 'contain', background: '#fdf6f9',
+                    // สูงไม่เกิน 360px และไม่เกินครึ่งจอ (จอเล็ก/มือถือไม่ต้องเลื่อนนาน)
+                    height: 'min(360px, 50vh)',
+                  }}
+                />
+              ) : (
+                <div style={{ textAlign: 'center', padding: '60px 20px', color: '#9e7a8a', fontSize: 13 }}>ไม่มีรูปภาพสำหรับการวิเคราะห์นี้</div>
+              )}
             </div>
-            <div>
-              <p style={{ fontSize: 12, color: cfg.color, fontWeight: 600, marginBottom: 4 }}>ระดับความเสี่ยง</p>
-              <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 20, fontWeight: 600, color: cfg.color }}>{detail.Risk_Level}</p>
-            </div>
-          </div>
 
-          <div style={{ background: '#fff', borderRadius: 18, border: '1px solid #f5e6ec', overflow: 'hidden', marginBottom: 16 }}>
-            <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 13, fontWeight: 600, color: '#9e7a8a', padding: '14px 20px 0' }}>ภาพที่วิเคราะห์</p>
-            {detail.Image_Path ? (
-              <img
-                src={`${process.env.NEXT_PUBLIC_API_URL}/${detail.Image_Path}`}
-                alt="Analyzed"
-                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-                style={{ width: '100%', display: 'block' }}
-              />
-            ) : (
-              <div style={{ textAlign: 'center', padding: '20px', color: '#9e7a8a', fontSize: 13 }}>ไม่มีรูปภาพสำหรับการวิเคราะห์นี้</div>
-            )}
-          </div>
-
-          <div style={{ background: '#fff', borderRadius: 18, border: '1px solid #f5e6ec', overflow: 'hidden', marginBottom: 16 }}>
-            {rows.map((row, i) => (
-              <div key={i} style={{ display: 'flex', gap: 14, padding: '16px 20px', borderBottom: i < rows.length - 1 ? '1px solid #f5e6ec' : 'none' }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{row.emoji}</div>
+            {/* RIGHT: ระดับความเสี่ยง + ข้อมูล */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+              <div style={{
+                background: cfg.bg, border: `1.5px solid ${cfg.dot}40`,
+                borderRadius: 18, padding: '20px 22px',
+                display: 'flex', alignItems: 'center', gap: 14,
+              }}>
+                <div style={{ width: 52, height: 52, borderRadius: '50%', background: cfg.bg, border: `2px solid ${cfg.dot}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Droplets size={24} color={cfg.color} strokeWidth={1.5} />
+                </div>
                 <div>
-                  <p style={{ fontSize: 11.5, color: '#9e7a8a', marginBottom: 3 }}>{row.label}</p>
-                  <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 500, color: '#1a0a14' }}>{row.value || '-'}</p>
+                  <p style={{ fontSize: 12, color: cfg.color, fontWeight: 600, marginBottom: 4 }}>ระดับความเสี่ยง</p>
+                  <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 22, fontWeight: 600, color: cfg.color }}>{detail.Risk_Level}</p>
                 </div>
               </div>
-            ))}
+
+              <div className="pf-detail-rows" style={{ background: '#fff', borderRadius: 18, border: '1px solid #f5e6ec', overflow: 'hidden' }}>
+                {rows.map((row, i) => (
+                  <div key={i} className="pf-detail-row">
+                    <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{row.emoji}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: 11.5, color: '#9e7a8a', marginBottom: 3 }}>{row.label}</p>
+                      <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 500, color: '#1a0a14', wordBreak: 'break-word' }}>{row.value || '-'}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           {detail.Recommendation && (
-            <>
-              <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 600, color: '#1a0a14', marginBottom: 10 }}>คำแนะนำ</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ marginTop: 'clamp(20px, 2.4vw, 32px)' }}>
+              <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 15, fontWeight: 600, color: '#1a0a14', marginBottom: 12 }}>คำแนะนำ</p>
+              <div className="pf-reco-grid">
                 {detail.Recommendation.split(/[·•]/).filter(Boolean).map((s: string, i: number) => (
-                  <div key={i} style={{ display: 'flex', gap: 10, padding: '12px 16px', background: '#fff', borderRadius: 14, border: '1px solid #f5e6ec' }}>
+                  <div key={i} style={{ display: 'flex', gap: 10, padding: '14px 16px', background: '#fff', borderRadius: 14, border: '1px solid #f5e6ec' }}>
                     <div style={{ width: 22, height: 22, borderRadius: 7, flexShrink: 0, background: 'linear-gradient(135deg, #f06292, #c2185b)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Mitr', sans-serif", fontSize: 11, color: '#fff', fontWeight: 600 }}>{i + 1}</div>
                     <p style={{ fontSize: 13.5, color: '#4a2a3a', lineHeight: 1.6 }}>{s.trim()}</p>
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           )}
         </div>
       )}

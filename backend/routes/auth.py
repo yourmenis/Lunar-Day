@@ -89,6 +89,8 @@ def register():
         hashed_pw = bcrypt.generate_password_hash(password).decode("utf-8")
         consent_value = 1 if consent else 0
 
+        consent_value = 1 if consent else 0
+
         # บันทึกข้อมูล
         sql = "INSERT INTO User (Username, Password, Name, LastName, Birthday, Email, Is_Consent) VALUES (%s, %s, %s, %s, %s, %s, %s)"
         values = (username, hashed_pw, name, lastname, birthday_obj, email, consent_value)

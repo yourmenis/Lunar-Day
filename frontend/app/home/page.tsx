@@ -1,11 +1,47 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { TrendingUp, BookOpen, ArrowRight, ChevronRight, Sparkles, Activity } from 'lucide-react'
 import Navbar from './components/Navbar'
+import Footer from './components/Footer'
 import api from '../lib/api'
+import { useToast } from '../components/Toast'
+import { axiosErrorMessage } from '../lib/postJson'
 import LoginToast from './components/LoginToast'
+
+// ── ดึง URL ภาพปกจากข้อมูลบทความ (ปรับชื่อ field ให้ตรงกับ API ของคุณ) ──
+const getCoverUrl = (article: any): string | null => {
+  const raw =
+    article?.CoverImage ||
+    article?.ImageURL ||
+    article?.ImageUrl ||
+    article?.Image ||
+    article?.Thumbnail ||
+    null
+  if (!raw) return null
+  if (/^(https?:)?\/\//.test(raw) || raw.startsWith('data:')) return raw
+  const base = (api as any)?.defaults?.baseURL || ''
+  return `${base.replace(/\/$/, '')}/${String(raw).replace(/^\//, '')}`
+}
+
+function ArticleCover({ article, fallback }: { article: any; fallback: string }) {
+  const [failed, setFailed] = useState(false)
+  const url = getCoverUrl(article)
+
+  if (!url || failed) {
+    return <span className="article-cover-fallback">{fallback}</span>
+  }
+  return (
+    <img
+      src={url}
+      alt={article.Title || 'ภาพปกบทความ'}
+      className="article-cover-img"
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  )
+}
 
 export default function HomePage() {
   const [showLoginToast, setShowLoginToast] = useState(false)
@@ -13,55 +49,43 @@ export default function HomePage() {
   const [mounted, setMounted] = useState(false)
   const [waveBars, setWaveBars] = useState<number[]>([])
   const [articles, setArticles] = useState<any[]>([])
+  const showToast = useToast()
 
   const fetchArticles = async () => {
     try {
       const res = await api.get('/articles')
       setArticles(res.data)
-    } catch {
-      console.error('โหลดบทความไม่สำเร็จ')
+    } catch (err) {
+      showToast(axiosErrorMessage(err, 'โหลดบทความไม่สำเร็จ'), 'error')
     }
   }
 
   useEffect(() => {
     setMounted(true)
     setWaveBars(
-      Array.from({ length: 16 }, (_, i) =>
+      Array.from({ length: 20 }, (_, i) =>
         20 + Math.sin(i * 0.8) * 14 + Math.random() * 10
       )
     )
     fetchArticles()
   }, [])
 
-  const topArticles = [...articles]
+  const topArticles = [...articles].slice(0, 4)
+  const fallbackEmojis = ['🔬', '💊', '🌸', '📊']
 
   // ── ตรวจ token ก่อนไปหน้าวิเคราะห์ ──
-  // const goToAnalyze = () => {
-  //   const token = localStorage.getItem('access_token')
-  //   if (!token) {
-  //     setShowLoginToast(true)
-  //     return
-  //   }
-  //   console.log('go analyze')
-  //   router.push('/home/analyze')
-  // }
-
   const goToAnalyze = () => {
     const token = localStorage.getItem('access_token')
-    console.log('TOKEN:', token)
 
     if (!token) {
-      console.log('BLOCKED: no token')
       setShowLoginToast(true)
       return
     }
 
-    console.log('GO TO ANALYZE')
     router.push('/home/analyze')
   }
 
   return (
-    
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
@@ -69,6 +93,8 @@ export default function HomePage() {
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         .home-root {
+          --page-max: 1440px;
+          --page-pad: clamp(20px, 5vw, 72px);
           min-height: 100vh;
           font-family: 'Sarabun', sans-serif;
           background: #faf7f5;
@@ -78,12 +104,23 @@ export default function HomePage() {
         /* ── Hero ── */
         .hero {
           position: relative;
-          min-height: 480px;
+          min-height: 520px;
           display: flex;
           align-items: center;
           overflow: hidden;
           background: linear-gradient(135deg, #1a0a14 0%, #3d1a2e 50%, #6b2646 100%);
-          padding: 60px 40px;
+          padding: 72px var(--page-pad);
+        }
+        .hero-inner {
+          position: relative;
+          z-index: 2;
+          width: 100%;
+          max-width: var(--page-max);
+          margin: 0 auto;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 48px;
         }
         .hero-bg-circles {
           position: absolute;
@@ -97,14 +134,14 @@ export default function HomePage() {
           opacity: 0.12;
         }
         .hero-circle-1 {
-          width: 500px; height: 500px;
-          top: -200px; right: -100px;
+          width: 600px; height: 600px;
+          top: -220px; right: -120px;
           background: radial-gradient(circle, #f48fb1, transparent 60%);
           opacity: 0.2;
         }
         .hero-circle-2 {
-          width: 300px; height: 300px;
-          bottom: -100px; left: 20%;
+          width: 380px; height: 380px;
+          bottom: -120px; left: 20%;
           background: radial-gradient(circle, #ce93d8, transparent 60%);
           opacity: 0.15;
         }
@@ -117,7 +154,8 @@ export default function HomePage() {
         .hero-content {
           position: relative;
           z-index: 2;
-          max-width: 560px;
+          flex: 1 1 auto;
+          max-width: 680px;
           opacity: 0;
           transform: translateY(24px);
           transition: opacity 0.8s ease, transform 0.8s ease;
@@ -140,18 +178,18 @@ export default function HomePage() {
         .hero-title {
           font-family: 'Mitr', sans-serif;
           font-weight: 600;
-          font-size: clamp(28px, 4vw, 42px);
+          font-size: clamp(30px, 4.6vw, 54px);
           color: #fff;
           line-height: 1.3;
-          margin-bottom: 14px;
+          margin-bottom: 16px;
           letter-spacing: 0.3px;
         }
         .hero-desc {
-          font-size: 15px;
+          font-size: 16px;
           color: rgba(255,255,255,0.65);
-          line-height: 1.7;
+          line-height: 1.75;
           margin-bottom: 32px;
-          max-width: 440px;
+          max-width: 520px;
         }
         .hero-actions {
           display: flex;
@@ -202,63 +240,69 @@ export default function HomePage() {
         }
         .btn-ghost:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.35); }
 
-        /* Hero graphic */
-        .hero-graphic {
-          position: absolute;
-          right: 40px;
-          top: 50%;
-          transform: translateY(-50%);
-          z-index: 2;
-          opacity: 0;
-          transition: opacity 0.9s ease 0.3s;
-        }
-        .hero-graphic.visible { opacity: 1; }
-        .cycle-ring {
-          width: 280px; height: 280px;
-          border-radius: 50%;
-          border: 2px solid rgba(240,98,146,0.25);
-          position: relative;
+        /* Hero graphic (วงโคจร + ลิ่มเลือดตรงกลาง) */
+        .ih-right {
+          position: relative; z-index: 2; flex: 1 1 auto;
           display: flex; align-items: center; justify-content: center;
-          animation: slowSpin 18s linear infinite;
+          opacity: 0; transform: translateY(20px) scale(0.95);
+          transition: opacity 0.9s ease 0.25s, transform 0.9s ease 0.25s;
         }
-        @keyframes slowSpin { to { transform: rotate(360deg); } }
-        .cycle-inner {
-          width: 200px; height: 200px;
-          border-radius: 50%;
-          border: 1.5px solid rgba(240,98,146,0.15);
-          background: rgba(240,98,146,0.05);
+        .ih-right.visible { opacity: 1; transform: translateY(0) scale(1); }
+        .hero-orb-wrap {
+          width: 320px; height: 320px; position: relative;
           display: flex; align-items: center; justify-content: center;
-          animation: slowSpin 12s linear infinite reverse;
         }
-        .cycle-core {
-          width: 120px; height: 120px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, rgba(240,98,146,0.2), rgba(194,24,91,0.3));
-          border: 1px solid rgba(240,98,146,0.3);
+        .hero-ring {
+          position: absolute; inset: 0; border-radius: 50%;
+          border: 1.5px solid rgba(240,98,146,0.22);
+          animation: spinRing 20s linear infinite;
+        }
+        .hero-ring-2 {
+          position: absolute; inset: 36px; border-radius: 50%;
+          border: 1px dashed rgba(240,98,146,0.14);
+          animation: spinRing 14s linear infinite reverse;
+        }
+        @keyframes spinRing { to { transform: rotate(360deg); } }
+        .hero-core {
+          width: 160px; height: 160px; border-radius: 50%;
+          background: linear-gradient(135deg, rgba(240,98,146,0.18), rgba(194,24,91,0.28));
+          border: 1.5px solid rgba(240,98,146,0.35);
           display: flex; align-items: center; justify-content: center;
-          font-size: 40px;
-          animation: pulse 3s ease-in-out infinite;
+          font-size: 64px;
+          animation: corePulse 3.5s ease-in-out infinite;
+          box-shadow: 0 0 48px rgba(240,98,146,0.2);
         }
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(240,98,146,0.3); }
-          50% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(240,98,146,0); }
+        @keyframes corePulse {
+          0%,100% { transform: scale(1); box-shadow: 0 0 40px rgba(240,98,146,0.2); }
+          50% { transform: scale(1.06); box-shadow: 0 0 64px rgba(240,98,146,0.35); }
         }
-        .cycle-dot {
-          position: absolute;
-          width: 10px; height: 10px;
-          border-radius: 50%;
-          background: #f06292;
-          box-shadow: 0 0 8px rgba(240,98,146,0.8);
+        .hero-orbit-dot {
+          position: absolute; width: 14px; height: 14px; border-radius: 50%;
+          box-shadow: 0 0 10px currentColor;
         }
-        .cycle-dot:nth-child(1) { top: -5px; left: 50%; transform: translateX(-50%); }
-        .cycle-dot:nth-child(2) { bottom: -5px; left: 50%; transform: translateX(-50%); background: #f48fb1; }
-        .cycle-dot:nth-child(3) { left: -5px; top: 50%; transform: translateY(-50%); background: #ce93d8; }
+        /* จุด 4 จุดเป็นลูกทั้งหมดของ .hero-ring → nth-child(1-4) */
+        .hero-orbit-dot:nth-child(1) { top: 10px; left: 50%; transform: translateX(-50%); background: #f06292; color: #f06292; }
+        .hero-orbit-dot:nth-child(2) { bottom: 10px; left: 50%; transform: translateX(-50%); background: #f48fb1; color: #f48fb1; }
+        .hero-orbit-dot:nth-child(3) { left: 10px; top: 50%; transform: translateY(-50%); background: #ce93d8; color: #ce93d8; }
+        .hero-orbit-dot:nth-child(4) { right: 10px; top: 50%; transform: translateY(-50%); background: #f06292; color: #f06292; }
+        .float-em {
+          position: absolute; font-size: 24px;
+          animation: floatEm 4s ease-in-out infinite;
+        }
+        .float-em-1 { top: 14px; right: 26px; animation-delay: 0s; }
+        .float-em-2 { bottom: 26px; left: 14px; animation-delay: 1.4s; font-size: 20px; }
+        .float-em-3 { top: 55%; right: -5px; animation-delay: 0.7s; font-size: 18px; }
+        @keyframes floatEm {
+          0%,100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-10px) rotate(6deg); }
+        }
 
         /* ── Section ── */
         .section {
-          padding: 56px 40px;
-          max-width: 1100px;
+          padding: 64px var(--page-pad);
+          max-width: var(--page-max);
           margin: 0 auto;
+          width: 100%;
         }
         .section-header {
           display: flex;
@@ -272,7 +316,7 @@ export default function HomePage() {
           gap: 10px;
         }
         .section-icon {
-          width: 32px; height: 32px;
+          width: 34px; height: 34px;
           border-radius: 10px;
           background: linear-gradient(135deg, #fce4ec, #f8bbd0);
           display: flex; align-items: center; justify-content: center;
@@ -280,11 +324,11 @@ export default function HomePage() {
         .section-title {
           font-family: 'Mitr', sans-serif;
           font-weight: 600;
-          font-size: 20px;
+          font-size: 22px;
           color: #1a0a14;
         }
         .section-subtitle {
-          font-size: 13px;
+          font-size: 13.5px;
           color: #9e7a8a;
           margin-top: 2px;
         }
@@ -304,48 +348,58 @@ export default function HomePage() {
         }
         .see-all-btn:hover { background: rgba(194,24,91,0.06); }
 
-        /* ── Article cards ── */
+        /* ── Article cards (4 อันดับ ขนาดเท่ากัน) ── */
         .articles-grid {
           display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 20px;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 24px;
         }
-        .article-featured {
-          grid-column: 1 / -1;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 0;
-          border-radius: 20px;
-          overflow: hidden;
+        .article-card {
           background: #fff;
+          border-radius: 18px;
           border: 1px solid #f5e6ec;
-          box-shadow: 0 4px 24px rgba(194,24,91,0.08);
+          box-shadow: 0 2px 12px rgba(194,24,91,0.05);
+          overflow: hidden;
           cursor: pointer;
           transition: transform 0.22s, box-shadow 0.22s;
+          display: flex;
+          flex-direction: column;
+          height: 100%;
         }
-        .article-featured:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(194,24,91,0.15); }
-        .article-featured-img {
-          background: linear-gradient(135deg, #fce4ec, #f8bbd0, #f48fb1);
-          min-height: 240px;
+        .article-card:hover { transform: translateY(-4px); box-shadow: 0 12px 34px rgba(194,24,91,0.14); }
+
+        .article-cover {
           position: relative;
+          width: 100%;
+          aspect-ratio: 16 / 10;
+          background: linear-gradient(135deg, #fce4ec, #f8bbd0, #f48fb1);
           overflow: hidden;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 80px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
-        .article-featured-img::after {
+        .article-cover-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+          transition: transform 0.4s ease;
+        }
+        .article-card:hover .article-cover-img { transform: scale(1.05); }
+        .article-cover-fallback { font-size: 56px; }
+        .article-cover::after {
           content: '';
           position: absolute;
           inset: 0;
-          background: linear-gradient(135deg, rgba(194,24,91,0.15), transparent);
+          background: linear-gradient(to top, rgba(26,10,20,0.28), transparent 55%);
+          pointer-events: none;
         }
-        .article-featured-body {
-          padding: 32px 28px;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          gap: 12px;
-        }
+
+        /* ── ป้ายอันดับ 1-4 (สีต่างกัน) ── */
         .article-rank {
+          position: absolute;
+          top: 12px; left: 12px;
+          z-index: 2;
           display: inline-flex;
           align-items: center;
           gap: 5px;
@@ -354,145 +408,73 @@ export default function HomePage() {
           font-size: 11px;
           font-family: 'Mitr', sans-serif;
           font-weight: 500;
+          backdrop-filter: blur(6px);
         }
-        .article-rank.hot {
+        .article-rank.rank-1 {
           background: linear-gradient(135deg, #fff3e0, #ffe0b2);
           color: #e65100;
-          border: 1px solid rgba(230,81,0,0.2);
+          border: 1px solid rgba(230,81,0,0.25);
         }
-        .article-rank.trending {
-          background: linear-gradient(135deg, #fce4ec, #f8bbd0);
+        .article-rank.rank-2 {
+          background: linear-gradient(135deg, #f1f3f5, #dee2e6);
+          color: #495057;
+          border: 1px solid rgba(73,80,87,0.25);
+        }
+        .article-rank.rank-3 {
+          background: linear-gradient(135deg, #fdeee0, #f3c9a0);
+          color: #a1590f;
+          border: 1px solid rgba(161,89,15,0.25);
+        }
+        .article-rank.rank-4 {
+          background: rgba(255,255,255,0.88);
           color: #c2185b;
           border: 1px solid rgba(194,24,91,0.2);
         }
-        .article-category-tag {
-          display: inline-block;
-          padding: 3px 10px;
-          border-radius: 6px;
-          background: rgba(194,24,91,0.08);
-          color: #c2185b;
-          font-size: 11.5px;
-          font-weight: 500;
+
+        .article-card-body {
+          padding: 18px 20px 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          flex: 1;
         }
-        .article-featured-title {
+        .article-card-title {
           font-family: 'Mitr', sans-serif;
-          font-weight: 600;
-          font-size: 18px;
+          font-weight: 500;
+          font-size: 15px;
           color: #1a0a14;
-          line-height: 1.4;
-        }
-        .article-featured-excerpt {
-          font-size: 13.5px;
-          color: #7a5a6a;
-          line-height: 1.65;
+          line-height: 1.5;
           display: -webkit-box;
           -webkit-line-clamp: 3;
           -webkit-box-orient: vertical;
           overflow: hidden;
-        }
-        .article-meta {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          font-size: 12px;
-          color: #9e7a8a;
-        }
-        .article-meta-item {
-          display: flex;
-          align-items: center;
-          gap: 4px;
+          min-height: calc(1.5em * 3);
         }
         .read-more {
           display: inline-flex;
           align-items: center;
           gap: 5px;
           color: #c2185b;
-          font-size: 13px;
+          font-size: 13.5px;
           font-weight: 500;
-          cursor: pointer;
-          margin-top: 4px;
+          margin-top: auto;
+          padding-top: 12px;
+          border-top: 1px solid #f5e6ec;
           transition: gap 0.18s;
         }
-        .read-more:hover { gap: 8px; }
-
-        .article-card {
-          background: #fff;
-          border-radius: 16px;
-          border: 1px solid #f5e6ec;
-          box-shadow: 0 2px 12px rgba(194,24,91,0.05);
-          overflow: hidden;
-          cursor: pointer;
-          transition: transform 0.22s, box-shadow 0.22s;
-          display: flex;
-          flex-direction: column;
-        }
-        .article-card:hover { transform: translateY(-3px); box-shadow: 0 10px 32px rgba(194,24,91,0.12); }
-        .article-card-img {
-          height: 160px;
-          background: linear-gradient(135deg, #fce4ec, #f8bbd0);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 52px;
-          position: relative;
-          overflow: hidden;
-        }
-        .article-card-img::after {
-          content: '';
-          position: absolute;
-          bottom: 0; left: 0; right: 0;
-          height: 60px;
-          background: linear-gradient(to top, rgba(255,255,255,0.5), transparent);
-        }
-        .article-card-body {
-          padding: 18px;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          flex: 1;
-        }
-        .article-card-title {
-          font-family: 'Mitr', sans-serif;
-          font-weight: 500;
-          font-size: 14.5px;
-          color: #1a0a14;
-          line-height: 1.45;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-        .article-card-excerpt {
-          font-size: 12.5px;
-          color: #9e7a8a;
-          line-height: 1.6;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-        .article-card-footer {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-top: auto;
-          padding-top: 10px;
-          border-top: 1px solid #f5e6ec;
-          font-size: 11.5px;
-          color: #b09aa8;
-        }
-        .views-badge {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          color: #c2185b;
-          font-weight: 500;
-        }
+        .article-card:hover .read-more { gap: 9px; }
 
         /* ── CTA ── */
+        .cta-wrap {
+          padding: 0 var(--page-pad) 64px;
+          max-width: var(--page-max);
+          margin: 0 auto;
+          width: 100%;
+        }
         .cta-section {
-          margin: 0 40px 56px;
-          border-radius: 24px;
+          border-radius: 26px;
           background: linear-gradient(135deg, #1a0a14 0%, #3d1a2e 100%);
-          padding: 48px 56px;
+          padding: 56px clamp(24px, 5vw, 72px);
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -504,7 +486,7 @@ export default function HomePage() {
           content: '';
           position: absolute;
           top: -60px; right: -60px;
-          width: 240px; height: 240px;
+          width: 300px; height: 300px;
           border-radius: 50%;
           background: radial-gradient(circle, rgba(240,98,146,0.2), transparent 60%);
         }
@@ -512,7 +494,7 @@ export default function HomePage() {
           content: '';
           position: absolute;
           bottom: -40px; left: 20%;
-          width: 160px; height: 160px;
+          width: 200px; height: 200px;
           border-radius: 50%;
           background: radial-gradient(circle, rgba(206,147,216,0.15), transparent 60%);
         }
@@ -528,12 +510,12 @@ export default function HomePage() {
         .cta-title {
           font-family: 'Mitr', sans-serif;
           font-weight: 600;
-          font-size: 26px;
+          font-size: clamp(24px, 3vw, 32px);
           color: #fff;
           line-height: 1.3;
           margin-bottom: 12px;
         }
-        .cta-desc { font-size: 14px; color: rgba(255,255,255,0.55); }
+        .cta-desc { font-size: 14.5px; color: rgba(255,255,255,0.55); }
         .cta-graphic {
           position: relative;
           z-index: 1;
@@ -547,9 +529,9 @@ export default function HomePage() {
           display: flex;
           align-items: flex-end;
           gap: 3px;
-          height: 48px;
-          margin-right: 35px;
-        }
+          height: 56px;
+          transform: translateX(-20px);
+      }
         .wave-bar {
           width: 4px;
           border-radius: 2px;
@@ -561,28 +543,24 @@ export default function HomePage() {
           50% { transform: scaleY(1); }
         }
 
-        /* ── Footer ── */
-        .home-footer {
-          background: #fff;
-          border-top: 1px solid #f5e6ec;
-          padding: 28px 40px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          font-size: 12.5px;
-          color: #b09aa8;
-        }
-
         /* ── Responsive ── */
+        @media (max-width: 1200px) {
+          .articles-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 1024px) {
+          .hero-orb-wrap { width: 260px; height: 260px; }
+          .hero-core { width: 130px; height: 130px; font-size: 52px; }
+        }
         @media (max-width: 768px) {
-          .hero { padding: 48px 20px; min-height: auto; }
-          .hero-graphic { display: none; }
-          .section { padding: 40px 20px; }
-          .articles-grid { grid-template-columns: 1fr; }
-          .article-featured { grid-template-columns: 1fr; }
-          .article-featured-img { min-height: 180px; }
-          .cta-section { margin: 0 20px 40px; padding: 32px 24px; flex-direction: column; }
+          .hero { padding: 48px var(--page-pad); min-height: auto; }
+          .ih-right { display: none; }
+          .section { padding: 40px var(--page-pad); }
+          .cta-wrap { padding-bottom: 40px; }
+          .cta-section { padding: 32px 24px; flex-direction: column; align-items: flex-start; }
           .cta-graphic { display: none; }
+        }
+        @media (max-width: 560px) {
+          .articles-grid { grid-template-columns: 1fr; }
         }
       `}</style>
 
@@ -597,37 +575,41 @@ export default function HomePage() {
             <div className="hero-dots" />
           </div>
 
-          <div className={`hero-content ${mounted ? 'visible' : ''}`}>
-            <div className="hero-badge">
-              <Sparkles size={11} /> เทคโนโลยีวิเคราะห์ขั้นสูง
+          <div className="hero-inner">
+            <div className={`hero-content ${mounted ? 'visible' : ''}`}>
+              <div className="hero-badge">
+                <Sparkles size={11} /> เทคโนโลยีวิเคราะห์ขั้นสูง
+              </div>
+              <h1 className="hero-title">
+                ดูแลสุขภาพสตรี<br />
+                ด้วย AI วิเคราะห์ลิ่มเลือด<br />
+              </h1>
+              <p className="hero-desc">
+                วิเคราะห์ผลเลือดประจำเดือนอย่างแม่นยำด้วย AI
+                พร้อมคำแนะนำเฉพาะบุคคล เพื่อสุขภาพที่ดีกว่า
+              </p>
+              <div className="hero-actions">
+                <button className="btn-primary" onClick={goToAnalyze}>
+                  <Activity size={15} /> เริ่มวิเคราะห์เลย
+                </button>
+                <button className="btn-ghost" onClick={() => router.push('/home/articles')}>
+                  <BookOpen size={15} /> อ่านบทความ
+                </button>
+              </div>
             </div>
-            <h1 className="hero-title">
-              ดูแลสุขภาพสตรี<br />
-              ด้วยการวิเคราะห์<br />
-              ลิ่มเลือด
-            </h1>
-            <p className="hero-desc">
-              วิเคราะห์ผลเลือดประจำเดือนอย่างแม่นยำด้วย AI
-              พร้อมคำแนะนำเฉพาะบุคคล เพื่อสุขภาพที่ดีกว่า
-            </p>
-            <div className="hero-actions">
-              {/* <button className="btn-primary" onClick={() => router.push('/home/analyze')}> */}
-              <button className="btn-primary" onClick={goToAnalyze}>
-                <Activity size={15} /> เริ่มวิเคราะห์เลย
-              </button>
-              <button className="btn-ghost" onClick={() => router.push('/home/articles')}>
-                <BookOpen size={15} /> อ่านบทความ
-              </button>
-            </div>
-          </div>
-
-          <div className={`hero-graphic ${mounted ? 'visible' : ''}`}>
-            <div className="cycle-ring">
-              <div className="cycle-dot" />
-              <div className="cycle-dot" />
-              <div className="cycle-dot" />
-              <div className="cycle-inner">
-                <div className="cycle-core">🩸</div>
+            <div className={`ih-right ${mounted ? 'visible' : ''}`}>
+              <div className="hero-orb-wrap">
+                <div className="hero-ring">
+                  <div className="hero-orbit-dot" />
+                  <div className="hero-orbit-dot" />
+                  <div className="hero-orbit-dot" />
+                  <div className="hero-orbit-dot" />
+                </div>
+                <div className="hero-ring-2" />
+                <div className="hero-core">🩸</div>
+                <span className="float-em float-em-1">🔬</span>
+                <span className="float-em float-em-2">💊</span>
+                <span className="float-em float-em-3">📋</span>
               </div>
             </div>
           </div>
@@ -641,9 +623,9 @@ export default function HomePage() {
                 <div className="section-icon">
                   <TrendingUp size={16} color="#c2185b" />
                 </div>
-                <h2 className="section-title">บทความแนะนำ</h2>
+                <h2 className="section-title">บทความสุขภาพสตรี</h2>
               </div>
-              <p className="section-subtitle">คัดสรรจากบทความที่มีผู้เข้าชมสูงสุด</p>
+              <p className="section-subtitle">บทความแนะนำเพื่อการดูแลสุขภาพสตรี</p>
             </div>
             <button className="see-all-btn" onClick={() => router.push('/home/articles')}>
               ดูทั้งหมด <ChevronRight size={14} />
@@ -651,79 +633,65 @@ export default function HomePage() {
           </div>
 
           <div className="articles-grid">
-            {topArticles.length > 0 && (
+            {topArticles.map((article, i) => (
               <div
-                className="article-featured"
-                onClick={() => router.push(`/home/articles/${topArticles[0].ArticleID}`)}
+                key={article.ArticleID}
+                className="article-card"
+                onClick={() => router.push(`/home/articles/${article.ArticleID}`)}
               >
-                <div className="article-featured-img">🔬</div>
-                <div className="article-featured-body">
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <span className="article-rank hot">🔥 อันดับ 1</span>
-                  </div>
-                  <h3 className="article-featured-title">{topArticles[0].Title}</h3>
-                  <span className="read-more">อ่านต่อ <ArrowRight size={14} /></span>
+                <div className="article-cover">
+                  <ArticleCover article={article} fallback={fallbackEmojis[i % fallbackEmojis.length]} />
+                </div>
+                <div className="article-card-body">
+                  <h3 className="article-card-title">{article.Title}</h3>
+                  <span className="read-more">
+                    อ่านต่อ <ArrowRight size={14} />
+                  </span>
                 </div>
               </div>
-            )}
-
-            {topArticles.slice(1, 4).map((article, i) => {
-              const emojis = ['💊', '🌸', '📊']
-              return (
-                <div
-                  key={article.ArticleID}
-                  className="article-card"
-                  onClick={() => router.push(`/home/articles/${article.ArticleID}`)}
-                >
-                  <div className="article-card-img">{emojis[i]}</div>
-                  <div className="article-card-body">
-                    <h3 className="article-card-title">{article.Title}</h3>
-                  </div>
-                </div>
-              )
-            })}
+            ))}
           </div>
         </div>
 
         {/* ── CTA ── */}
-        <div className="cta-section">
-          <div className="cta-content">
-            <p className="cta-label">✦ เริ่มต้นวันนี้</p>
-            <h2 className="cta-title">
-              วิเคราะห์ผลเลือด<br />
-              เพื่อสุขภาพที่ดีกว่า
-            </h2>
-            <p className="cta-desc">รับผลวิเคราะห์ละเอียดพร้อมคำแนะนำเฉพาะบุคคลภายในไม่กี่นาที</p>
-            <button className="btn-primary" style={{ marginTop: 24 }} onClick={goToAnalyze}>
-              เริ่มวิเคราะห์ฟรี <ArrowRight size={15} />
-            </button>
-          </div>
-
-          <div className="cta-graphic">
-            <div className="waveform">
-              {waveBars.map((h, i) => (
-                <div key={i} className="wave-bar" style={{ height: `${h}px`, animationDelay: `${i * 0.09}s` }} />
-              ))}
+        <div className="cta-wrap">
+          <div className="cta-section">
+            <div className="cta-content">
+              <p className="cta-label">✦ เริ่มต้นวันนี้</p>
+              <h2 className="cta-title">
+                วิเคราะห์ผลเลือด<br />
+                เพื่อสุขภาพที่ดีกว่า
+              </h2>
+              <p className="cta-desc">รับผลวิเคราะห์ละเอียดพร้อมคำแนะนำเฉพาะบุคคลภายในไม่กี่นาที</p>
+              <button className="btn-primary" style={{ marginTop: 24 }} onClick={goToAnalyze}>
+                เริ่มวิเคราะห์ฟรี <ArrowRight size={15} />
+              </button>
             </div>
-            <div style={{
-              background: 'rgba(240,98,146,0.12)',
-              border: '1px solid rgba(240,98,146,0.25)',
-              borderRadius: 14,
-              padding: '14px 20px',
-              color: '#f48fb1',
-              fontFamily: "'Mitr', sans-serif",
-              fontSize: 13,
-              textAlign: 'center',
-            }}>
-              🩸 ผลวิเคราะห์พร้อมแล้ว<br />
+
+            <div className="cta-graphic">
+              <div className="waveform">
+                {waveBars.map((h, i) => (
+                  <div key={i} className="wave-bar" style={{ height: `${h}px`, animationDelay: `${i * 0.09}s` }} />
+                ))}
+              </div>
+              <div style={{
+                background: 'rgba(240,98,146,0.12)',
+                border: '1px solid rgba(240,98,146,0.25)',
+                borderRadius: 14,
+                padding: '14px 20px',
+                color: '#f48fb1',
+                fontFamily: "'Mitr', sans-serif",
+                fontSize: 13,
+                textAlign: 'center',
+              }}>
+                🩸 ผลวิเคราะห์พร้อมแล้ว
+              </div>
             </div>
           </div>
         </div>
 
         {/* ── Footer ── */}
-        <footer className="home-footer">
-          <span>© 2568 Lunar Day — ดูแลสุขภาพสตรีด้วยเทคโนโลยี</span>
-        </footer>
+        <Footer />
       </div>
       <LoginToast show={showLoginToast} onClose={() => setShowLoginToast(false)} />
     </>

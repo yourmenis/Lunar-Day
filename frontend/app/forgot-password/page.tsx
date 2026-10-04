@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { Mail, Lock, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react'
 import './forgot-password.css'
 import Image from 'next/image'
+import { useToast } from '../components/Toast'
+import { postJson } from '../lib/postJson'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const OTP_LENGTH = 6
@@ -179,10 +181,12 @@ export default function ForgotPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPw,          setShowPw]          = useState(false)
   const [showConfirm,     setShowConfirm]     = useState(false)
-  const [pwError,         setPwError]         = useState('')
+  const [pwError,         setPwError]         = useState('')  // ใช้ทำกรอบแดง ข้อความแสดงเป็น toast
 
   // Step 4 (success)
   const [done, setDone] = useState(false)
+
+  const showToast = useToast()
 
   useEffect(() => {
     setMounted(true)
@@ -196,63 +200,78 @@ export default function ForgotPasswordPage() {
   }
 
 
-  const handleSendOTP = async () => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/forgot-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    })
-    const data = await res.json()
-    if (res.ok) {
-    
-      setStep(2)
-    } else {
-      alert(data.msg)
+  // ส่ง (หรือส่งซ้ำ) OTP ไปที่อีเมล — คืน true เมื่อสำเร็จ
+  const requestOtp = async () => {
+    setLoading(true)
+    const result = await postJson('/auth/forgot-password', { email })
+    setLoading(false)
+    if (result.data && result.ok) {
+      showToast(result.data.msg ?? 'ส่งรหัส OTP ไปยังอีเมลของคุณเรียบร้อยแล้ว', 'success')
+      return true
     }
-  }
-  
-  const handleVerifyOtp = () => {
-    const code = otp.join('')
-    if (code.length < OTP_LENGTH) return
-    goTo(3)
+    showToast(result.data ? (result.data.msg ?? 'ส่งรหัส OTP ไม่สำเร็จ') : result.error, 'error')
+    return false
   }
 
-  const handleResend = () => {
-    if (!expired) return
+  const handleSendOTP = async () => {
+    if (!email || loading) return
+    if (await requestOtp()) setStep(2)
+  }
+
+  const handleVerifyOtp = async () => {
+    const code = otp.join('')
+    if (code.length < OTP_LENGTH) return
+    setOtpError(false)
+    setLoading(true)
+    const result = await postJson('/auth/verify-otp', { email, otp: code })
+    setLoading(false)
+    if (result.data && result.ok) {
+      showToast(result.data.msg ?? 'รหัส OTP ถูกต้อง', 'success')
+      goTo(3)
+      return
+    }
+    if (result.data) setOtpError(true)
+    showToast(result.data ? (result.data.msg ?? 'รหัส OTP ไม่ถูกต้อง') : result.error, 'error')
+  }
+
+  const handleResend = async () => {
+    if (!expired || loading) return
+    if (!(await requestOtp())) return
     setOtp(Array(OTP_LENGTH).fill(''))
+    setOtpError(false)
     setExpired(false)
     setTimerKey(k => k + 1)
   }
-  
+
+  // แสดงข้อความเป็น toast และทำกรอบช่องรหัสผ่านเป็นสีแดง
+  const failPassword = (msg: string) => {
+    setPwError(msg)
+    showToast(msg, 'error')
+  }
+
   const handleSetPassword = async () => {
-    if (password.length < 8) { setPwError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
-    if (password !== confirmPassword) { setPwError('รหัสผ่านไม่ตรงกัน'); return }
+    // หน้า login ตัดช่องว่างหัว-ท้ายรหัสผ่านเสมอ จึงต้องตัดแบบเดียวกันตอนตั้งรหัสใหม่
+    const newPassword = password.trim()
+    const newConfirm = confirmPassword.trim()
+    if (newPassword.length < 8) { failPassword('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
+    if (newPassword !== newConfirm) { failPassword('รหัสผ่านไม่ตรงกัน'); return }
     setPwError('')
     setLoading(true)
 
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          Email: email,
-          OTP: otp.join(''),
-          NewPassword: password,
-          ConfirmPassword: confirmPassword,
-        }),
-      })
-      const data = await res.json()
+    const result = await postJson('/auth/reset-password', {
+      email: email,
+      otp: otp.join(''),
+      newPassword: newPassword,
+      confirmPassword: newConfirm,
+    })
+    setLoading(false)
 
-      if (res.ok) {
-        setDone(true)
-      } else {
-        setPwError(data.msg)
-      }
-    } catch {
-      setPwError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
-    } finally {
-      setLoading(false)
+    if (result.data && result.ok) {
+      showToast(result.data.msg ?? 'เปลี่ยนรหัสผ่านสำเร็จ', 'success')
+      setDone(true)
+      return
     }
+    failPassword(result.data ? (result.data.msg ?? 'เปลี่ยนรหัสผ่านไม่สำเร็จ') : result.error)
   }
 
   const canSubmitOtp = otp.join('').length === OTP_LENGTH && !expired
@@ -437,7 +456,6 @@ export default function ForgotPasswordPage() {
                 <button type="button" className="pw-toggle" onClick={() => setShowConfirm(v => !v)} tabIndex={-1}>
                   {showConfirm ? <Eye size={16} /> : <EyeOff size={16} />}
                 </button>
-                {pwError && <p className="field-hint err">{pwError}</p>}
               </div>
 
               <div className="btn-row" style={{ marginTop: 8 }}>

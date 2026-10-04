@@ -4,6 +4,8 @@ import { useRouter, usePathname } from 'next/navigation'
 import { Activity, BookOpen, Phone, User, LogOut, Menu, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import api from '../../lib/api'
+import { useToast } from '../../components/Toast'
+import { avatarUrlFromFile, getCachedAvatar, getMemoryAvatar, setCachedAvatar } from '../../lib/avatarCache'
 import Image from 'next/image'
 
 const NAV_LINKS = [
@@ -16,15 +18,11 @@ export default function Navbar() {
   const router   = useRouter()
   const pathname = usePathname()
 
-  const [profileImage,    setProfileImage]    = useState<string | null>(null)
+  // เริ่มจากรูปที่จำไว้ → เปลี่ยนหน้าแล้วรูปไม่กะพริบ
+  const [profileImage,    setProfileImage]    = useState<string | null>(getMemoryAvatar)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [drawerOpen,      setDrawerOpen]      = useState(false)
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
-
-  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
-  }
+  const showToast = useToast()
 
   // ล็อก scroll เมื่อ drawer เปิด
   useEffect(() => {
@@ -40,27 +38,33 @@ export default function Navbar() {
   useEffect(() => {
     const fetchAvatar = async () => {
       const token = localStorage.getItem('access_token')
-      if (!token) return
+      if (!token) { setCachedAvatar(null); setProfileImage(null); return }
+      // แสดงรูปที่จำไว้ก่อน (กรณีรีเฟรชหน้า) แล้วค่อยอัปเดตจาก API
+      const cached = getCachedAvatar()
+      if (cached) setProfileImage(cached)
       try {
         const res = await api.get('/profile/')
-        const img = res.data?.data?.Profile_Image
-        if (img) {
-          setProfileImage(
-            img.startsWith('http')
-              ? img
-              : `${process.env.NEXT_PUBLIC_API_URL}/static/uploads/profiles/${img}`
-          )
+        const url = avatarUrlFromFile(res.data?.data?.Profile_Image)
+        setCachedAvatar(url)
+        setProfileImage(url)
+      } catch (err) {
+        if ((err as { response?: { status?: number } })?.response?.status === 401) {
+          setCachedAvatar(null)
+          setProfileImage(null)
         }
-      } catch {}
+      }
     }
     fetchAvatar()
   }, [pathname])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowLogoutModal(false)
     setDrawerOpen(false)
+    // แจ้ง backend ให้ blacklist token (ถ้าล้มเหลวก็ยังออกจากระบบฝั่งหน้าเว็บต่อ)
+    try { await api.post('/profile/logout') } catch {}
     localStorage.removeItem('access_token')
     localStorage.removeItem('user')
+    setCachedAvatar(null)
     showToast('ออกจากระบบเรียบร้อยแล้ว')
     setTimeout(() => router.push('/login'), 1000)
   }
@@ -327,25 +331,6 @@ export default function Navbar() {
         }
       `}</style>
 
-      {/* TOAST */}
-      {toast && (
-        <div style={{
-          position: 'fixed', top: 80, left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 9999, padding: '12px 20px', borderRadius: 14,
-          fontSize: 13, fontWeight: 500,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-          border: '1px solid', animation: 'fadeSlideDown 0.3s ease',
-          whiteSpace: 'nowrap', fontFamily: "'Sarabun', sans-serif",
-          ...(toast.type === 'success'
-            ? { background: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7' }
-            : toast.type === 'error'
-            ? { background: '#fee2e2', color: '#991b1b', borderColor: '#fca5a5' }
-            : { background: '#fce4ef', color: '#9d174d', borderColor: '#f9a8d4' })
-        }}>
-          {toast.type === 'success' ? '✓ ' : toast.type === 'error' ? '✕ ' : 'ℹ '}{toast.msg}
-        </div>
-      )}
 
       {/* ── Navbar ── */}
       <nav className="navbar">
@@ -377,7 +362,7 @@ export default function Navbar() {
             {profileImage ? (
               <img src={profileImage} alt="avatar"
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={() => setProfileImage(null)} />
+                onError={() => { setProfileImage(null); setCachedAvatar(null) }} />
             ) : (
               <User size={18} color="#c2185b" strokeWidth={1.5} />
             )}
@@ -422,7 +407,7 @@ export default function Navbar() {
             {profileImage ? (
               <img src={profileImage} alt="avatar"
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={() => setProfileImage(null)} />
+                onError={() => { setProfileImage(null); setCachedAvatar(null) }} />
             ) : (
               <User size={20} color="#c2185b" strokeWidth={1.5} />
             )}

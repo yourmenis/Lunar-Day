@@ -4,7 +4,27 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { BookOpen, Search, ChevronRight } from 'lucide-react'
 import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
 import api from '../../lib/api'
+import { useToast } from '../../components/Toast'
+import { axiosErrorMessage } from '../../lib/postJson'
+
+// ความกว้างเนื้อหา + ระยะขอบข้าง (ปรับตามขนาดจอ) ใช้ร่วมกันทั้ง Header และรายการบทความ
+const CONTAINER: React.CSSProperties = {
+  width: '100%',
+  maxWidth: 1320,
+  margin: '0 auto',
+  paddingLeft: 'clamp(16px, 3vw, 40px)',
+  paddingRight: 'clamp(16px, 3vw, 40px)',
+  boxSizing: 'border-box',
+}
+
+// กริดแบบแน่นขึ้น: การ์ดกว้างขั้นต่ำ 240px → จอใหญ่ได้ 4-5 คอลัมน์
+const GRID: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(min(240px, 100%), 1fr))',
+  gap: 'clamp(14px, 1.6vw, 22px)',
+}
 
 export default function ArticlesPage() {
   const router = useRouter()
@@ -12,12 +32,14 @@ export default function ArticlesPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
+  const showToast = useToast()
+
   useEffect(() => {
     api.get('/articles')
       .then(res => setArticles(res.data))
-      .catch(() => {})
+      .catch(err => showToast(axiosErrorMessage(err, 'โหลดบทความไม่สำเร็จ'), 'error'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [showToast])
 
   const filtered = articles.filter(a =>
     a.Title?.toLowerCase().includes(search.toLowerCase())
@@ -32,21 +54,33 @@ export default function ArticlesPage() {
       {/* Header */}
       <div style={{
         background: 'linear-gradient(135deg,#1a0a14,#3d1a2e,#6b2646)',
-        padding: '48px 40px 40px',
+        padding: '40px 0 36px',
       }}>
-        <div style={{ maxWidth: 900, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <BookOpen size={20} color="#f48fb1" />
-            <h1 style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 600, fontSize: 26, color: '#fff' }}>
-              บทความสุขภาพ
-            </h1>
+        <div style={{
+          ...CONTAINER,
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'flex-end',
+          justifyContent: 'space-between',
+          gap: 20,
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <BookOpen size={22} color="#f48fb1" />
+              <h1 style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 600, fontSize: 28, color: '#fff', margin: 0 }}>
+                บทความสุขภาพ
+              </h1>
+            </div>
+            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 14, margin: 0 }}>
+              ความรู้เกี่ยวกับสุขภาพสตรีและการดูแลตัวเอง
+              {!loading && articles.length > 0 && (
+                <span style={{ marginLeft: 8, color: '#f48fb1' }}>· {articles.length} บทความ</span>
+              )}
+            </p>
           </div>
-          <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 14, marginBottom: 24 }}>
-            ความรู้เกี่ยวกับสุขภาพสตรีและการดูแลตัวเอง
-          </p>
 
           {/* Search */}
-          <div style={{ position: 'relative', maxWidth: 480 }}>
+          <div style={{ position: 'relative', flex: '1 1 320px', maxWidth: 520 }}>
             <Search size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }} />
             <input
               value={search}
@@ -54,6 +88,7 @@ export default function ArticlesPage() {
               placeholder="ค้นหาบทความ..."
               style={{
                 width: '100%',
+                boxSizing: 'border-box',
                 padding: '12px 16px 12px 40px',
                 borderRadius: 12,
                 border: '1.5px solid rgba(255,255,255,0.15)',
@@ -69,15 +104,15 @@ export default function ArticlesPage() {
       </div>
 
       {/* Articles List */}
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '40px 40px' }}>
+      <div style={{ ...CONTAINER, paddingTop: 32, paddingBottom: 48 }}>
 
-        {/* Skeleton */}
+        {/* Skeleton (ใช้กริดเดียวกับรายการจริง) */}
         {loading && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-            {[...Array(4)].map((_, i) => (
+          <div style={GRID}>
+            {[...Array(8)].map((_, i) => (
               <div key={i} style={{ background: '#fff', borderRadius: 16, border: '1px solid #f5e6ec', overflow: 'hidden' }}>
-                <div style={{ height: 160, background: '#f5e6ec' }} />
-                <div style={{ padding: 18 }}>
+                <div style={{ height: 150, background: '#f5e6ec' }} />
+                <div style={{ padding: 16 }}>
                   <div style={{ height: 16, borderRadius: 6, background: '#f5e6ec', marginBottom: 10, width: '80%' }} />
                   <div style={{ height: 12, borderRadius: 6, background: '#f5e6ec', width: '60%' }} />
                 </div>
@@ -96,7 +131,7 @@ export default function ArticlesPage() {
 
         {/* Grid */}
         {!loading && filtered.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
+          <div style={GRID}>
             {filtered.map((article, i) => (
               <div
                 key={article.ArticleID}
@@ -108,6 +143,8 @@ export default function ArticlesPage() {
                   boxShadow: '0 2px 12px rgba(194,24,91,0.05)',
                   overflow: 'hidden',
                   cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
                   transition: 'transform 0.22s, box-shadow 0.22s',
                 }}
                 onMouseEnter={e => {
@@ -121,25 +158,25 @@ export default function ArticlesPage() {
               >
                 {/* Image */}
                 <div style={{
-                  height: 160,
+                  height: 150,
                   background: article.ImageURL
                     ? `url(${article.ImageURL}) center/cover no-repeat`
                     : 'linear-gradient(135deg,#fce4ec,#f8bbd0)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 52,
+                  fontSize: 48,
                 }}>
                   {!article.ImageURL && emojis[i % emojis.length]}
                 </div>
 
                 {/* Body */}
-                <div style={{ padding: '18px 18px 20px' }}>
+                <div style={{ padding: '16px 16px 18px', display: 'flex', flexDirection: 'column', flex: 1 }}>
                   <h3 style={{
                     fontFamily: 'Mitr, sans-serif',
                     fontWeight: 500,
                     fontSize: 15,
                     color: '#1a0a14',
                     lineHeight: 1.5,
-                    marginBottom: 12,
+                    margin: '0 0 12px',
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
@@ -148,6 +185,7 @@ export default function ArticlesPage() {
                     {article.Title}
                   </h3>
                   <div style={{
+                    marginTop: 'auto',
                     display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
                     color: '#c2185b', fontSize: 13, fontWeight: 500,
                   }}>
@@ -159,6 +197,8 @@ export default function ArticlesPage() {
           </div>
         )}
       </div>
+
+      <Footer />
     </div>
   )
 }
