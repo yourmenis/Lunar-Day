@@ -2,6 +2,8 @@
 export default function Footer() {
   return (
     <footer style={{
+      // ถ้าหน้าครอบด้วย flex คอลัมน์ footer จะถูกดันไปติดขอบล่าง (หน้าปกติไม่มีผล)
+      marginTop: 'auto',
       background: '#fff',
       borderTop: '1px solid #f5e6ec',
       padding: '28px clamp(20px, 5vw, 72px)',
