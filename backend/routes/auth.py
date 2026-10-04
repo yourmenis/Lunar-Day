@@ -112,7 +112,7 @@ def register():
             db.close()
 
 # ==========================================
-# 🔑 เข้าสู่ระบบ (Login) พร้อมระบบ Lockout
+# 🔑 เข้าสู่ระบบ (Login) 
 # ==========================================
 @auth_bp.route("/login", methods=["POST"])
 def login():
@@ -172,7 +172,7 @@ def login():
                 
                 if failed_count >= 3:
                     # ถ้าผิดครบ 3 ครั้ง -> ล็อคบัญชี 30 นาที
-                    lockout_time = datetime.now() + timedelta(minutes=1)
+                    lockout_time = datetime.now() + timedelta(minutes=30)
                     update_sql = "UPDATE User SET FailedAttempts = %s, LockedUntil = %s WHERE UserID = %s"
                     cursor.execute(update_sql, (failed_count, lockout_time, user["UserID"]))
                     db.commit()
@@ -373,9 +373,11 @@ def reset_password():
             return jsonify({"msg": "รหัสผ่านไม่ตรงกัน"}), 400
 
         # เช็คความยาว
-        if len(new_password) < 8:
+        if len(new_password) < 8 :
             return jsonify({"msg": "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร"}), 400
-
+        
+        if len(new_password) > 128 :
+            return jsonify({"msg": "รหัสผ่านต้องมีความยาวไม่เกิน 128 ตัวอักษร"}), 400
         db = get_db_connection()
         cursor = db.cursor(dictionary=True, buffered=True)
 
