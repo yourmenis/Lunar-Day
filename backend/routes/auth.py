@@ -44,7 +44,12 @@ def register():
         # ---ตรวจสอบความยาวรหัสผ่าน---
         if len(password) < 8:
             return jsonify({"msg": "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร"}), 400
-
+        if len(username)> 32:
+            return jsonify({"msg": "ชื่อผู้ใช้งานต้องมีความยาวไม่เกิน 32 ตัวอักษร"}), 400
+        if " " in username:
+            return jsonify({"msg": "ห้ามมีช่องว่างระหว่างชื่อผู้ใช้งาน"}), 400
+        if len(password) >128:
+            return jsonify({"msg": "รหัสผ่านต้องมีความยาวไม่เกิน 128 ตัวอักษร"}), 400
         # ---ตรวจสอบรหัสผ่านตรงกัน---
         if password != confirm_pw:
             return jsonify({"msg": "โปรดระบุรหัสผ่านทั้งสองช่องให้ตรงกัน"}), 400
