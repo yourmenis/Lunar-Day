@@ -110,7 +110,7 @@ def register():
             db.close()
 
 # ==========================================
-# 🔑 เข้าสู่ระบบ (Login)
+# 🔑 เข้าสู่ระบบ (Login) พร้อมระบบ Lockout
 # ==========================================
 @auth_bp.route("/login", methods=["POST"])
 def login():
@@ -127,34 +127,77 @@ def login():
 
         db = get_db_connection()
         cursor = db.cursor(dictionary=True)
+        
+        # ดึงข้อมูลผู้ใช้จากฐานข้อมูล
         sql = "SELECT * FROM User WHERE Username = %s"
         cursor.execute(sql, (username,))
         user = cursor.fetchone()
         
-        # กรณีรหัสผ่านหรือชื่อผู้ใช้ถูกต้อง
-        if user and bcrypt.check_password_hash(user["Password"], password):
-            access_token = create_access_token(identity=str(user["UserID"]))
-            return (
-                jsonify(
-                    {
-                        "access_token": access_token,
-                        "user": {
-                            "id": user["UserID"],
-                            "firstName": user["Name"],
-                            "lastName": user["LastName"],
-                        },
-                    }
-                ),
-                200,
-            )
-        # กรณีรหัสผิดหรือไม่มีผู้ใช้นี้
+        if user:
+            # 🛡️ ด่านที่ 1: เช็คว่าบัญชีโดนระงับอยู่หรือไม่
+            if user.get("LockedUntil") and user["LockedUntil"] > datetime.now():
+                # ถ้าเวลาปัจจุบันยังไม่เลยเวลาที่โดนล็อค
+                return jsonify({
+                    "status": "error",
+                    "error_code": "A11",
+                    "msg": "บัญชีของคุณถูกระงับชั่วคราวเนื่องจากเข้าสู่ระบบผิดพลาดเกิน 3 ครั้ง กรุณาลองใหม่ในอีก 30 นาที"
+                }), 403 # HTTP 403 Forbidden
+
+            # 🛡️ ด่านที่ 2: ตรวจสอบรหัสผ่าน
+            if bcrypt.check_password_hash(user["Password"], password):
+                # ✅ กรณีรหัสถูกต้อง: รีเซ็ตค่าการกรอกผิดเป็น 0 และปลดล็อคบัญชี
+                reset_sql = "UPDATE User SET FailedAttempts = 0, LockedUntil = NULL WHERE UserID = %s"
+                cursor.execute(reset_sql, (user["UserID"],))
+                db.commit()
+
+                access_token = create_access_token(identity=str(user["UserID"]))
+                return (
+                    jsonify(
+                        {
+                            "access_token": access_token,
+                            "user": {
+                                "id": user["UserID"],
+                                "firstName": user["Name"],
+                                "lastName": user["LastName"],
+                            },
+                        }
+                    ),
+                    200,
+                )
+            else:
+                #  กรณีรหัสผิด
+                failed_count = user.get("FailedAttempts", 0) + 1
+                
+                if failed_count >= 3:
+                    # ถ้าผิดครบ 3 ครั้ง -> ล็อคบัญชี 30 นาที
+                    lockout_time = datetime.now() + timedelta(minutes=1)
+                    update_sql = "UPDATE User SET FailedAttempts = %s, LockedUntil = %s WHERE UserID = %s"
+                    cursor.execute(update_sql, (failed_count, lockout_time, user["UserID"]))
+                    db.commit()
+                    
+                    return jsonify({
+                        "status": "error",
+                        "error_code": "A11",
+                        "msg": "บัญชีของคุณถูกระงับชั่วคราวเนื่องจากเข้าสู่ระบบผิดพลาดเกิน 3 ครั้ง กรุณาลองใหม่ในอีก 30 นาที"
+                    }), 403
+                else:
+                    # ถ้ายังไม่ครบ 3 ครั้ง 
+                    update_sql = "UPDATE User SET FailedAttempts = %s WHERE UserID = %s"
+                    cursor.execute(update_sql, (failed_count, user["UserID"]))
+                    db.commit()
+                    
+                    return jsonify({"msg": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
+                    
         else:
+            # กรณีไม่มีชื่อผู้ใช้นี้ในระบบ
             return jsonify({"msg": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
 
-    except mysql.connector.Error:
+    except mysql.connector.Error as err:
+        print(f"[DB Error] in login: {err}")
         return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
-    except Exception:
+    except Exception as e:
+        print(f"[Error] in login: {e}")
         return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
         
     finally:
