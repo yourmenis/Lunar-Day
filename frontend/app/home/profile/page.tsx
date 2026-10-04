@@ -15,6 +15,7 @@ import { parseServerDate } from '../../lib/serverDate'
 import { useToast } from '../../components/Toast'
 import { PRIVACY_TEXT, TERMS_TEXT } from '../../lib/policyText'
 import { USERNAME_MAX, usernameError } from '../../lib/authRules'
+import { avatarUrlFromFile, getCachedAvatar, getMemoryAvatar, setCachedAvatar } from '../../lib/avatarCache'
 import { MSG_NETWORK_ERROR, responseMessage } from '../../lib/postJson'
 
 // ============================================================
@@ -255,10 +256,10 @@ function SubHeader({ title, subtitle, icon, onBack }: {
 // PROFILE VIEW
 // ============================================================
 function ProfileView({
-  profile, history,
+  profile, avatarUrl, history,
   onEditProfile, onViewHistory, onViewPrivacy, onViewTerms, onLogout, onDeleteAccount,
 }: {
-  profile: any; history: any[]
+  profile: any; avatarUrl: string | null; history: any[]
   onEditProfile: () => void; onViewHistory: () => void
   onViewPrivacy: () => void; onViewTerms: () => void
   onLogout: () => void; onDeleteAccount: () => void
@@ -304,8 +305,8 @@ function ProfileView({
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 6px 20px rgba(194,24,91,0.25)', flexShrink: 0,
           }}>
-            {profile?.Profile_Image
-              ? <img src={`${process.env.NEXT_PUBLIC_API_URL}/static/uploads/profiles/${profile.Profile_Image}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            {avatarUrl
+              ? <img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : <User size={48} color="#c2185b" strokeWidth={1.5} />
             }
           </div>
@@ -383,10 +384,10 @@ function ProfileView({
 // EDIT PROFILE VIEW
 // ============================================================
 function EditProfileView({
-  profile, editForm, setEditForm, previewUrl,
+  avatarUrl, editForm, setEditForm, previewUrl,
   handleAvatarChange, handleSaveProfile, onBack,
 }: {
-  profile: any; editForm: EditForm
+  avatarUrl: string | null; editForm: EditForm
   setEditForm: React.Dispatch<React.SetStateAction<EditForm>>
   previewUrl: string | null
   handleAvatarChange: (e: React.ChangeEvent<HTMLInputElement>) => void
@@ -412,8 +413,8 @@ function EditProfileView({
             }}>
               {previewUrl
                 ? <img src={previewUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : profile?.Profile_Image
-                  ? <img src={`${process.env.NEXT_PUBLIC_API_URL}/static/uploads/profiles/${profile.Profile_Image}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : avatarUrl
+                  ? <img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : <User size={52} color="#c2185b" strokeWidth={1.5} />
               }
             </div>
@@ -585,6 +586,9 @@ export default function ProfilePage() {
     name: '', lastname: '', username: '', birthday: '', avatarFile: null,
   })
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  // รูปโปรไฟล์ที่จำไว้ ใช้แสดงระหว่างรอ API (กันรูปกะพริบ)
+  const [cachedAvatar, setCachedAvatarState] = useState<string | null>(getMemoryAvatar)
+  const avatarUrl = profile ? avatarUrlFromFile(profile.Profile_Image) : cachedAvatar
 
   useEffect(() => {
     if (!editForm.avatarFile) { setPreviewUrl(null); return }
@@ -605,7 +609,10 @@ export default function ProfilePage() {
         return
       }
       const data = await res.json()
-      if (data.data) setProfile(data.data)
+      if (data.data) {
+        setProfile(data.data)
+        setCachedAvatar(avatarUrlFromFile(data.data.Profile_Image))
+      }
     } catch { showToast('ไม่สามารถโหลดข้อมูลโปรไฟล์ได้', 'error') }
   }
 
@@ -629,6 +636,7 @@ export default function ProfilePage() {
     setMounted(true)
     const token = localStorage.getItem('access_token')
     if (!token) { router.replace('/login'); return }
+    setCachedAvatarState(getCachedAvatar())
     fetchProfile()
     fetchHistory()
   }, [router])
@@ -648,6 +656,7 @@ export default function ProfilePage() {
     showToast(msg, 'success')
     localStorage.removeItem('access_token')
     localStorage.removeItem('user')
+    setCachedAvatar(null)
     router.push('/login')
   }
 
@@ -666,6 +675,7 @@ export default function ProfilePage() {
       setShowDeleteConfirm(false)
       localStorage.removeItem('access_token')
       localStorage.removeItem('user')
+      setCachedAvatar(null)
       router.push('/login')
     } catch { showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error') }
   }
@@ -894,7 +904,7 @@ export default function ProfilePage() {
 
         {view === 'profile' && (
           <ProfileView
-            profile={profile} history={history}
+            profile={profile} avatarUrl={avatarUrl} history={history}
             onEditProfile={handleGoToEditProfile}
             onViewHistory={() => setView('history')}
             onViewPrivacy={() => setView('privacy')}
@@ -906,7 +916,7 @@ export default function ProfilePage() {
 
         {view === 'editProfile' && (
           <EditProfileView
-            profile={profile} editForm={editForm} setEditForm={setEditForm}
+            avatarUrl={avatarUrl} editForm={editForm} setEditForm={setEditForm}
             previewUrl={previewUrl} handleAvatarChange={handleAvatarChange}
             handleSaveProfile={handleSaveProfile} onBack={() => setView('profile')}
           />

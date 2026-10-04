@@ -5,6 +5,7 @@ import { Activity, BookOpen, Phone, User, LogOut, Menu, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import api from '../../lib/api'
 import { useToast } from '../../components/Toast'
+import { avatarUrlFromFile, getCachedAvatar, getMemoryAvatar, setCachedAvatar } from '../../lib/avatarCache'
 import Image from 'next/image'
 
 const NAV_LINKS = [
@@ -17,7 +18,8 @@ export default function Navbar() {
   const router   = useRouter()
   const pathname = usePathname()
 
-  const [profileImage,    setProfileImage]    = useState<string | null>(null)
+  // เริ่มจากรูปที่จำไว้ → เปลี่ยนหน้าแล้วรูปไม่กะพริบ
+  const [profileImage,    setProfileImage]    = useState<string | null>(getMemoryAvatar)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [drawerOpen,      setDrawerOpen]      = useState(false)
   const showToast = useToast()
@@ -36,18 +38,21 @@ export default function Navbar() {
   useEffect(() => {
     const fetchAvatar = async () => {
       const token = localStorage.getItem('access_token')
-      if (!token) return
+      if (!token) { setCachedAvatar(null); setProfileImage(null); return }
+      // แสดงรูปที่จำไว้ก่อน (กรณีรีเฟรชหน้า) แล้วค่อยอัปเดตจาก API
+      const cached = getCachedAvatar()
+      if (cached) setProfileImage(cached)
       try {
         const res = await api.get('/profile/')
-        const img = res.data?.data?.Profile_Image
-        if (img) {
-          setProfileImage(
-            img.startsWith('http')
-              ? img
-              : `${process.env.NEXT_PUBLIC_API_URL}/static/uploads/profiles/${img}`
-          )
+        const url = avatarUrlFromFile(res.data?.data?.Profile_Image)
+        setCachedAvatar(url)
+        setProfileImage(url)
+      } catch (err) {
+        if ((err as { response?: { status?: number } })?.response?.status === 401) {
+          setCachedAvatar(null)
+          setProfileImage(null)
         }
-      } catch {}
+      }
     }
     fetchAvatar()
   }, [pathname])
@@ -59,6 +64,7 @@ export default function Navbar() {
     try { await api.post('/profile/logout') } catch {}
     localStorage.removeItem('access_token')
     localStorage.removeItem('user')
+    setCachedAvatar(null)
     showToast('ออกจากระบบเรียบร้อยแล้ว')
     setTimeout(() => router.push('/login'), 1000)
   }
@@ -356,7 +362,7 @@ export default function Navbar() {
             {profileImage ? (
               <img src={profileImage} alt="avatar"
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={() => setProfileImage(null)} />
+                onError={() => { setProfileImage(null); setCachedAvatar(null) }} />
             ) : (
               <User size={18} color="#c2185b" strokeWidth={1.5} />
             )}
@@ -401,7 +407,7 @@ export default function Navbar() {
             {profileImage ? (
               <img src={profileImage} alt="avatar"
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={() => setProfileImage(null)} />
+                onError={() => { setProfileImage(null); setCachedAvatar(null) }} />
             ) : (
               <User size={20} color="#c2185b" strokeWidth={1.5} />
             )}
