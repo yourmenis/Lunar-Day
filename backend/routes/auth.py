@@ -50,6 +50,9 @@ def register():
             return jsonify({"msg": "ห้ามมีช่องว่างระหว่างชื่อผู้ใช้งาน"}), 400
         if len(password) >128:
             return jsonify({"msg": "รหัสผ่านต้องมีความยาวไม่เกิน 128 ตัวอักษร"}), 400
+        password_pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).+$"
+        if not re.match(password_pattern, password):
+            return jsonify({"msg": "รหัสผ่านต้องประกอบด้วยตัวอักษรพิมพ์ใหญ่ อักษรพิมพ์เล็ก และอักษรพิเศษอย่างน้อย 1 ตัว"}), 400
         # ---ตรวจสอบรหัสผ่านตรงกัน---
         if password != confirm_pw:
             return jsonify({"msg": "โปรดระบุรหัสผ่านทั้งสองช่องให้ตรงกัน"}), 400
@@ -85,11 +88,10 @@ def register():
         cursor.execute(check_sql, (email,))
         if cursor.fetchone():
             return jsonify({"msg": "อีเมลนี้ถูกใช้แล้ว กรุณาระบุอีเมลใหม่"}), 400
-
         hashed_pw = bcrypt.generate_password_hash(password).decode("utf-8")
         consent_value = 1 if consent else 0
 
-        consent_value = 1 if consent else 0
+        
 
         # บันทึกข้อมูล
         sql = "INSERT INTO User (Username, Password, Name, LastName, Birthday, Email, Is_Consent) VALUES (%s, %s, %s, %s, %s, %s, %s)"
