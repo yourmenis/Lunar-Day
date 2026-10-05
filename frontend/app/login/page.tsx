@@ -7,6 +7,8 @@ import './login.css'
 import Image from 'next/image'
 import { SIGNUP_SUCCESS_KEY, useToast } from '../components/Toast'
 import { postJson } from '../lib/postJson'
+import { setCachedAvatar } from '../lib/avatarCache'
+import { clearProfileCache } from '../lib/profileCache'
 import { PASSWORD_MAX, USERNAME_MAX } from '../lib/authRules'
 
 export default function LoginPage() {
@@ -83,6 +85,8 @@ export default function LoginPage() {
       '/auth/login', { username: name, password },
     )
     if (result.data && result.ok) {
+      setCachedAvatar(null)
+      clearProfileCache()
       localStorage.setItem('access_token', result.data.access_token)
       localStorage.setItem('user', JSON.stringify(result.data.user))
       router.replace('/home')

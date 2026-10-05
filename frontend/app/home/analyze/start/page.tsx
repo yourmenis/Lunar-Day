@@ -334,6 +334,7 @@ export default function AnalyzePage() {
   const [imageFile,  setImageFile] = useState<File | null>(null)
   const [dragOver,   setDragOver]  = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const uploadSeq = useRef(0)  // นับรอบการเลือกรูป กันผลของรูปเก่ามาทับรูปใหม่
   const [showLoginToast,    setShowLoginToast]    = useState(false)
   const [imageValidated,    setImageValidated]    = useState(false)
   // ข้อความจาก backend ทั้งหมดแสดงผ่าน toast กลาง (components/Toast)
@@ -354,8 +355,12 @@ export default function AnalyzePage() {
     setImageFile(file)
     setImageValidated(false)
     setImageResult(null)
+    const seq = ++uploadSeq.current
+    let showingVisual = false  // แสดงภาพผล AI แล้ว → ภาพตัวอย่างจากเครื่องไม่ต้องทับ
     const reader = new FileReader()
-    reader.onload = e => setImage(e.target?.result as string)
+    reader.onload = e => {
+      if (uploadSeq.current === seq && !showingVisual) setImage(e.target?.result as string)
+    }
     reader.readAsDataURL(file)
 
     const token = localStorage.getItem('access_token')
@@ -387,8 +392,16 @@ export default function AnalyzePage() {
       } else {
         setImageResult(data); setImageValidated(true)
         if (data.visual_path) {
-          reader.abort()  // กันภาพตัวอย่างเดิมโหลดเสร็จทีหลังแล้วทับภาพผล
-          setImage(`${BASE_URL}/${data.visual_path}`)
+          // โหลดภาพผล AI ให้เสร็จก่อนค่อยสลับ ถ้าโหลดไม่ได้ให้คงภาพตัวอย่างจากเครื่องไว้
+          // (ไม่สลับไปที่ URL ตรง ๆ เพราะถ้าโหลดพลาดจะเหลือกรอบรูปเสีย)
+          const visualUrl = `${BASE_URL}/${data.visual_path}`
+          const probe = new window.Image()
+          probe.onload = () => {
+            if (uploadSeq.current !== seq) return
+            showingVisual = true
+            setImage(visualUrl)
+          }
+          probe.src = visualUrl
         }
         flashSuccess(hasConfidence(data)
           ? `ผลภาพ: ${data.detect_label} (ความมั่นใจ ${confidenceText(data)})`

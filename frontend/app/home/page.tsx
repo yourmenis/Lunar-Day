@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { TrendingUp, BookOpen, ArrowRight, ChevronRight, Sparkles, Activity } from 'lucide-react'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
+import HeroCharacter from './components/HeroCharacter'
 import api from '../lib/api'
 import { useToast } from '../components/Toast'
 import { axiosErrorMessage } from '../lib/postJson'
@@ -240,7 +241,7 @@ export default function HomePage() {
         }
         .btn-ghost:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.35); }
 
-        /* Hero graphic (วงโคจร + ลิ่มเลือดตรงกลาง) */
+        /* Hero graphic (ภาพประกอบเคลื่อนไหว — components/HeroCharacter) */
         .ih-right {
           position: relative; z-index: 2; flex: 1 1 auto;
           display: flex; align-items: center; justify-content: center;
@@ -249,52 +250,8 @@ export default function HomePage() {
         }
         .ih-right.visible { opacity: 1; transform: translateY(0) scale(1); }
         .hero-orb-wrap {
-          width: 320px; height: 320px; position: relative;
+          width: 380px; height: 380px; position: relative;
           display: flex; align-items: center; justify-content: center;
-        }
-        .hero-ring {
-          position: absolute; inset: 0; border-radius: 50%;
-          border: 1.5px solid rgba(240,98,146,0.22);
-          animation: spinRing 20s linear infinite;
-        }
-        .hero-ring-2 {
-          position: absolute; inset: 36px; border-radius: 50%;
-          border: 1px dashed rgba(240,98,146,0.14);
-          animation: spinRing 14s linear infinite reverse;
-        }
-        @keyframes spinRing { to { transform: rotate(360deg); } }
-        .hero-core {
-          width: 160px; height: 160px; border-radius: 50%;
-          background: linear-gradient(135deg, rgba(240,98,146,0.18), rgba(194,24,91,0.28));
-          border: 1.5px solid rgba(240,98,146,0.35);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 64px;
-          animation: corePulse 3.5s ease-in-out infinite;
-          box-shadow: 0 0 48px rgba(240,98,146,0.2);
-        }
-        @keyframes corePulse {
-          0%,100% { transform: scale(1); box-shadow: 0 0 40px rgba(240,98,146,0.2); }
-          50% { transform: scale(1.06); box-shadow: 0 0 64px rgba(240,98,146,0.35); }
-        }
-        .hero-orbit-dot {
-          position: absolute; width: 14px; height: 14px; border-radius: 50%;
-          box-shadow: 0 0 10px currentColor;
-        }
-        /* จุด 4 จุดเป็นลูกทั้งหมดของ .hero-ring → nth-child(1-4) */
-        .hero-orbit-dot:nth-child(1) { top: 10px; left: 50%; transform: translateX(-50%); background: #f06292; color: #f06292; }
-        .hero-orbit-dot:nth-child(2) { bottom: 10px; left: 50%; transform: translateX(-50%); background: #f48fb1; color: #f48fb1; }
-        .hero-orbit-dot:nth-child(3) { left: 10px; top: 50%; transform: translateY(-50%); background: #ce93d8; color: #ce93d8; }
-        .hero-orbit-dot:nth-child(4) { right: 10px; top: 50%; transform: translateY(-50%); background: #f06292; color: #f06292; }
-        .float-em {
-          position: absolute; font-size: 24px;
-          animation: floatEm 4s ease-in-out infinite;
-        }
-        .float-em-1 { top: 14px; right: 26px; animation-delay: 0s; }
-        .float-em-2 { bottom: 26px; left: 14px; animation-delay: 1.4s; font-size: 20px; }
-        .float-em-3 { top: 55%; right: -5px; animation-delay: 0.7s; font-size: 18px; }
-        @keyframes floatEm {
-          0%,100% { transform: translateY(0) rotate(0deg); }
-          50% { transform: translateY(-10px) rotate(6deg); }
         }
 
         /* ── Section ── */
@@ -548,8 +505,7 @@ export default function HomePage() {
           .articles-grid { grid-template-columns: repeat(2, 1fr); }
         }
         @media (max-width: 1024px) {
-          .hero-orb-wrap { width: 260px; height: 260px; }
-          .hero-core { width: 130px; height: 130px; font-size: 52px; }
+          .hero-orb-wrap { width: 300px; height: 300px; }
         }
         @media (max-width: 768px) {
           .hero { padding: 48px var(--page-pad); min-height: auto; }
@@ -599,17 +555,7 @@ export default function HomePage() {
             </div>
             <div className={`ih-right ${mounted ? 'visible' : ''}`}>
               <div className="hero-orb-wrap">
-                <div className="hero-ring">
-                  <div className="hero-orbit-dot" />
-                  <div className="hero-orbit-dot" />
-                  <div className="hero-orbit-dot" />
-                  <div className="hero-orbit-dot" />
-                </div>
-                <div className="hero-ring-2" />
-                <div className="hero-core">🩸</div>
-                <span className="float-em float-em-1">🔬</span>
-                <span className="float-em float-em-2">💊</span>
-                <span className="float-em float-em-3">📋</span>
+                <HeroCharacter />
               </div>
             </div>
           </div>
