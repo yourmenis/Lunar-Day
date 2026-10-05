@@ -654,6 +654,7 @@ def analyze_image():
                 os.remove(filepath)
             except:
                 pass 
+        logger.error(f"System Error: {e}")
         return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดขณะประมวลผลรูปภาพ โปรดลองอีกครั้ง"}), 500
 
 
@@ -794,11 +795,11 @@ def analyze_risk():
     except mysql.connector.Error as err:
         if db is not None:
             db.rollback()
-        print(f"[DB Error] in analyze_risk: {err}") 
+        logger.error(f"Database Error: {err}")
         return jsonify({"status": "error", "msg": "บันทึกผลวิเคราะห์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"}), 500
         
     except Exception as e:
-        print(f"[Error] in analyze_risk: {e}")
+        logger.error(f"System Error: {e}")
         return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
         
     finally:
@@ -846,11 +847,11 @@ def get_assessment_result(assessment_id):
         return jsonify({"status": "success", "data": row}), 200
 
     except mysql.connector.Error as err:
-        logger.error(f"ดึงข้อมูลประวัติล้มเหลว: {err}")
-        return (
-            jsonify({"status": "error", "msg": "ระบบไม่สามารถดึงข้อมูลประวัติได้"}),
-            500,
-        )
+        logger.error(f"Database Error: {err}")
+        return jsonify({"status": "error", "msg": "ระบบไม่สามารถดึงข้อมูลประวัติได้"}), 500
+    except Exception as e:
+        logger.error(f"System Error: {e}")
+        return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
         if cursor is not None:
             cursor.close()
