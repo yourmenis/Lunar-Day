@@ -4,9 +4,13 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Mail, Lock, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react'
 import './forgot-password.css'
+import Image from 'next/image'
+import { useToast } from '../components/Toast'
+import { postJson } from '../lib/postJson'
+import { PASSWORD_HINT, PASSWORD_PLACEHOLDER, passwordRuleError } from '../lib/authRules'
 
 // ── Constants ──────────────────────────────────────────────────────────────
-const OTP_LENGTH = 5
+const OTP_LENGTH = 6
 const OTP_EXPIRE_SECONDS = 5 * 60  // 5 minutes
 const CIRCUMFERENCE = 2 * Math.PI * 14  // r=14
 
@@ -19,11 +23,12 @@ const STEPS = [
 // ── Password strength helper ───────────────────────────────────────────────
 function getStrength(pw: string): { score: number; label: string } {
   if (!pw) return { score: 0, label: '' }
+  // นับตามเงื่อนไขรหัสผ่าน (lib/authRules): ครบ 4 ข้อ = แข็งแกร่ง
   let s = 0
-  if (pw.length >= 8)   s++
-  if (/[A-Z]/.test(pw)) s++
-  if (/[0-9]/.test(pw)) s++
-  if (/[^A-Za-z0-9]/.test(pw)) s++
+  if (pw.trim().length >= 8)        s++
+  if (/[a-z]/.test(pw))             s++
+  if (/[A-Z]/.test(pw))             s++
+  if (/[^A-Za-z0-9\s]/.test(pw))    s++
   const labels = ['', 'อ่อน', 'พอใช้', 'ดี', 'แข็งแกร่ง']
   return { score: s, label: labels[s] }
 }
@@ -178,14 +183,20 @@ export default function ForgotPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPw,          setShowPw]          = useState(false)
   const [showConfirm,     setShowConfirm]     = useState(false)
-  const [pwError,         setPwError]         = useState('')
+  const [pwError,         setPwError]         = useState('')  // ใช้ทำกรอบแดง ข้อความแสดงเป็น toast
 
   // Step 4 (success)
   const [done, setDone] = useState(false)
 
+  const showToast = useToast()
+
   useEffect(() => {
-    setMounted(true)
-    setStars(makeStars(28))
+    // ตั้งค่าในเฟรมถัดไป (ไม่ setState ตรง ๆ ใน effect) — ผลที่ผู้ใช้เห็นเหมือนเดิม
+    const raf = requestAnimationFrame(() => {
+      setMounted(true)
+      setStars(makeStars(28))
+    })
+    return () => cancelAnimationFrame(raf)
   }, [])
 
   // ── Transitions ──────────────────────────────────────────────────────────
@@ -194,52 +205,80 @@ export default function ForgotPasswordPage() {
     setTimeout(() => { setStep(target); setAnimating(false) }, 220)
   }
 
-  // ── Step 1: send OTP ─────────────────────────────────────────────────────
-  const handleSendOtp = async () => {
-    const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRx.test(email)) {
-      setEmailError('กรุณากรอกอีเมลให้ถูกต้อง')
-      return
-    }
-    setEmailError('')
+
+  // ส่ง (หรือส่งซ้ำ) OTP ไปที่อีเมล — คืน true เมื่อสำเร็จ
+  const requestOtp = async () => {
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1000))
+    const result = await postJson('/auth/forgot-password', { email })
     setLoading(false)
-    goTo(2)
+    if (result.data && result.ok) {
+      showToast(result.data.msg ?? 'ส่งรหัส OTP ไปยังอีเมลของคุณเรียบร้อยแล้ว', 'success')
+      return true
+    }
+    showToast(result.data ? (result.data.msg ?? 'ส่งรหัส OTP ไม่สำเร็จ') : result.error, 'error')
+    return false
   }
 
-  // ── Step 2: verify OTP ────────────────────────────────────────────────────
+  const handleSendOTP = async () => {
+    if (!email || loading) return
+    if (await requestOtp()) setStep(2)
+  }
+
   const handleVerifyOtp = async () => {
     const code = otp.join('')
     if (code.length < OTP_LENGTH) return
+    setOtpError(false)
     setLoading(true)
-    await new Promise(r => setTimeout(r, 900))
+    const result = await postJson('/auth/verify-otp', { email, otp: code })
     setLoading(false)
-    // Simulate wrong OTP with "00000"
-    if (code === '00000') {
-      setOtpError(true)
-      setTimeout(() => setOtpError(false), 600)
+    if (result.data && result.ok) {
+      showToast(result.data.msg ?? 'รหัส OTP ถูกต้อง', 'success')
+      goTo(3)
       return
     }
-    goTo(3)
+    if (result.data) setOtpError(true)
+    showToast(result.data ? (result.data.msg ?? 'รหัส OTP ไม่ถูกต้อง') : result.error, 'error')
   }
 
-  const handleResend = () => {
-    if (!expired) return
+  const handleResend = async () => {
+    if (!expired || loading) return
+    if (!(await requestOtp())) return
     setOtp(Array(OTP_LENGTH).fill(''))
+    setOtpError(false)
     setExpired(false)
     setTimerKey(k => k + 1)
   }
 
-  // ── Step 3: set new password ──────────────────────────────────────────────
+  // แสดงข้อความเป็น toast และทำกรอบช่องรหัสผ่านเป็นสีแดง
+  const failPassword = (msg: string) => {
+    setPwError(msg)
+    showToast(msg, 'error')
+  }
+
   const handleSetPassword = async () => {
-    if (password.length < 8) { setPwError('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
-    if (password !== confirmPassword) { setPwError('รหัสผ่านไม่ตรงกัน'); return }
+    // หน้า login ตัดช่องว่างหัว-ท้ายรหัสผ่านเสมอ จึงต้องตัดแบบเดียวกันตอนตั้งรหัสใหม่
+    const newPassword = password.trim()
+    const newConfirm = confirmPassword.trim()
+    const ruleErr = passwordRuleError(password)
+    if (ruleErr) { failPassword(ruleErr); return }
+    if (newPassword !== newConfirm) { failPassword('รหัสผ่านไม่ตรงกัน'); return }
     setPwError('')
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1100))
+
+    const result = await postJson('/auth/reset-password', {
+      email: email,
+      otp: otp.join(''),
+      newPassword: newPassword,
+      confirmPassword: newConfirm,
+    })
     setLoading(false)
-    setDone(true)
+
+    if (result.data && result.ok) {
+      showToast(result.data.msg ?? 'เปลี่ยนรหัสผ่านสำเร็จ', 'success')
+      setDone(true)
+      return
+    }
+    failPassword(result.data ? (result.data.msg ?? 'เปลี่ยนรหัสผ่านไม่สำเร็จ') : result.error)
   }
 
   const canSubmitOtp = otp.join('').length === OTP_LENGTH && !expired
@@ -258,9 +297,15 @@ export default function ForgotPasswordPage() {
 
       <div className={`card-wrap ${mounted ? 'visible' : ''}`}>
         {/* Moon */}
-        <div className="moon-motif">
-          <div className="moon-circle">🌙</div>
-        </div>
+        <div className="moon-motif" style={{ display: 'flex', justifyContent: 'center' }}>
+            <Image 
+              src="/logolunar.png" 
+              alt="Lunar Day Logo" 
+              width={80} 
+              height={80}
+              style={{ borderRadius: '50%' }}
+            />
+          </div>
 
         <p className="app-name">Lunar Day</p>
 
@@ -322,13 +367,13 @@ export default function ForgotPasswordPage() {
                   placeholder="example@email.com"
                   value={email}
                   onChange={e => { setEmail(e.target.value); setEmailError('') }}
-                  onKeyDown={e => e.key === 'Enter' && handleSendOtp()}
+                  onKeyDown={e => e.key === 'Enter' && handleSendOTP()}
                 />
                 {emailError && <p className="field-hint err">{emailError}</p>}
               </div>
 
               <div className="btn-row" style={{ marginTop: 20 }}>
-                <button type="button" className="btn-primary" onClick={handleSendOtp} disabled={loading || !email}>
+                <button type="button" className="btn-primary" onClick={handleSendOTP} disabled={loading || !email}>
                   {loading ? <><div className="spinner" /> กำลังส่ง...</> : <>ส่งรหัส OTP <ChevronRight size={16} /></>}
                 </button>
               </div>
@@ -392,7 +437,7 @@ export default function ForgotPasswordPage() {
                 <input
                   type={showPw ? 'text' : 'password'}
                   className={`field-input${pwError ? ' error' : ''}`}
-                  placeholder="อย่างน้อย 8 ตัวอักษร"
+                  placeholder={PASSWORD_PLACEHOLDER}
                   value={password}
                   onChange={e => { setPassword(e.target.value); setPwError('') }}
                   style={{ paddingRight: 44 }}
@@ -401,7 +446,7 @@ export default function ForgotPasswordPage() {
                   {showPw ? <Eye size={16} /> : <EyeOff size={16} />}
                 </button>
                 <StrengthBar password={password} />
-                <p className="field-hint">รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร</p>
+                <p className="field-hint">{PASSWORD_HINT}</p>
               </div>
 
               <div className="field-wrap">
@@ -418,7 +463,6 @@ export default function ForgotPasswordPage() {
                 <button type="button" className="pw-toggle" onClick={() => setShowConfirm(v => !v)} tabIndex={-1}>
                   {showConfirm ? <Eye size={16} /> : <EyeOff size={16} />}
                 </button>
-                {pwError && <p className="field-hint err">{pwError}</p>}
               </div>
 
               <div className="btn-row" style={{ marginTop: 8 }}>

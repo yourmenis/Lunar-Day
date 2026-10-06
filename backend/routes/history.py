@@ -60,7 +60,7 @@ def get_history_detail(assessment_id):
         detail = cursor.fetchone()
 
         if not detail:
-            return jsonify({"msg": "ไม่พบข้อมูลที่ต้องการ"}), 404
+            return jsonify({"msg": "ไม่พบประวัติการใช้งาน"}), 404
 
         return jsonify({"status": "success", "data": detail}), 200
     finally:
@@ -85,7 +85,7 @@ def delete_history(assessment_id):
         db.commit()
 
         if cursor.rowcount == 0:
-            return jsonify({"msg": "ไม่พบข้อมูล"}), 404
+            return jsonify({"msg": "ไม่พบประวัติการใช้งาน"}), 404
 
         return jsonify({"status": "success", "msg": "ลบรายการประวัติเรียบร้อยแล้ว"}), 200
     finally:

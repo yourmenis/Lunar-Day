@@ -4,7 +4,13 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
 import './login.css'
-
+import Image from 'next/image'
+import { SIGNUP_SUCCESS_KEY, useToast } from '../components/Toast'
+import { postJson } from '../lib/postJson'
+import { setCachedAvatar } from '../lib/avatarCache'
+import { clearProfileCache } from '../lib/profileCache'
+import { PASSWORD_MAX, USERNAME_MAX } from '../lib/authRules'
+import { apiBase } from '../lib/apiBase'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -13,29 +19,85 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const [focusedField, setFocusedField] = useState<string | null>(null)
   const [stars, setStars] = useState<Array<React.CSSProperties>>([])
+  const showToast = useToast()
 
   useEffect(() => {
-    setMounted(true)
-    setStars(
-      Array.from({ length: 28 }).map(() => ({
-        left: `${Math.random() * 100}%`,
-        top: `${Math.random() * 100}%`,
-        '--dur': `${2.5 + Math.random() * 4}s`,
-        '--delay': `${Math.random() * 4}s`,
-        '--bright': `${0.4 + Math.random() * 0.6}`,
-        width: `${Math.random() > 0.7 ? 4 : 2}px`,
-        height: `${Math.random() > 0.7 ? 4 : 2}px`,
-      } as React.CSSProperties))
-    )
-  }, [])
+    // ตั้งค่าในเฟรมถัดไป (ไม่ setState ตรง ๆ ใน effect) — ผลที่ผู้ใช้เห็นเหมือนเดิม
+    requestAnimationFrame(() => {
+      setMounted(true)
+      setStars(
+        Array.from({ length: 28 }).map(() => ({
+          left: `${Math.random() * 100}%`,
+          top: `${Math.random() * 100}%`,
+          '--dur': `${2.5 + Math.random() * 4}s`,
+          '--delay': `${Math.random() * 4}s`,
+          '--bright': `${0.4 + Math.random() * 0.6}`,
+          width: `${Math.random() > 0.7 ? 4 : 2}px`,
+          height: `${Math.random() > 0.7 ? 4 : 2}px`,
+        } as React.CSSProperties))
+      )
+    })
+    // มาจากหน้าสมัครสมาชิกที่สำเร็จแล้ว
+    try {
+      if (sessionStorage.getItem(SIGNUP_SUCCESS_KEY)) {
+        sessionStorage.removeItem(SIGNUP_SUCCESS_KEY)
+        showToast('สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ', 'success')
+      }
+    } catch {}
+
+    // มี token อยู่แล้ว → เช็กกับ backend ก่อนว่ายังใช้ได้ ค่อยพาไปหน้า home
+    // (token หมดอายุ/ถูก logout แล้ว → ลบทิ้งและอยู่หน้า login ต่อ)
+    const token = localStorage.getItem('access_token')
+    if (!token) return
+    fetch(`${apiBase()}/profile/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => {
+        if (res.ok) router.replace('/home')
+        else if (res.status === 401 || res.status === 422) {
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('user')
+        }
+      })
+      .catch(() => {})
+  }, [router, showToast])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (loading) return
+    const name = username.trim()
+    if (!name || !password.trim()) {
+      showToast('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน', 'error')
+      return
+    }
+    if (/\s/.test(name)) {
+      showToast('ชื่อผู้ใช้ห้ามมีช่องว่าง', 'error')
+      return
+    }
+    if (name.length > USERNAME_MAX) {
+      showToast(`ชื่อผู้ใช้ต้องมีความยาวไม่เกิน ${USERNAME_MAX} ตัวอักษร`, 'error')
+      return
+    }
+    if (password.length > PASSWORD_MAX) {
+      showToast(`รหัสผ่านต้องมีความยาวไม่เกิน ${PASSWORD_MAX} ตัวอักษร`, 'error')
+      return
+    }
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1000))
-    router.push('/home')
+
+    const result = await postJson<{ access_token: string; user: unknown }>(
+      '/auth/login', { username: name, password },
+    )
+    if (result.data && result.ok) {
+      setCachedAvatar(null)
+      clearProfileCache()
+      localStorage.setItem('access_token', result.data.access_token)
+      localStorage.setItem('user', JSON.stringify(result.data.user))
+      router.replace('/home')
+      return
+    }
+    showToast(result.data ? (result.data.msg ?? 'เข้าสู่ระบบไม่สำเร็จ') : result.error, 'error')
+    setLoading(false)
   }
 
   return (
@@ -57,11 +119,15 @@ export default function LoginPage() {
         </div>
 
         <div className={`card-wrap ${mounted ? 'visible' : ''}`}>
-
-          <div className="moon-motif">
-            <div className="moon-circle">🌙</div>
+          <div className="moon-motif" style={{ display: 'flex', justifyContent: 'center' }}>
+            <Image 
+              src="/logolunar.png" 
+              alt="Lunar Day Logo" 
+              width={80} 
+              height={80}
+              style={{ borderRadius: '50%' }}
+            />
           </div>
-
           <p className="app-name">Lunar Day</p>
           <h1 className="headline">เข้าสู่ระบบ</h1>
 
@@ -81,8 +147,7 @@ export default function LoginPage() {
                   placeholder="กรอกชื่อผู้ใช้ของคุณ"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
-                  onFocus={() => setFocusedField('username')}
-                  onBlur={() => setFocusedField(null)}
+                  maxLength={USERNAME_MAX}
                   autoComplete="username"
                 />
               </div>
@@ -96,8 +161,7 @@ export default function LoginPage() {
                     placeholder="กรอกรหัสผ่านของคุณ"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    onFocus={() => setFocusedField('password')}
-                    onBlur={() => setFocusedField(null)}
+                    maxLength={PASSWORD_MAX}
                     style={{ paddingRight: '44px' }}
                     autoComplete="current-password"
                   />
