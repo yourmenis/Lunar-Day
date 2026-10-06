@@ -1,5 +1,19 @@
+import { apiBase } from './apiBase'
+
 export const MSG_NETWORK_ERROR = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'
 export const MSG_SERVER_ERROR = 'ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง'
+
+// token หมดอายุ/ถูกยกเลิก (401) หรือ token ผิดรูปแบบ (422 จาก flask-jwt-extended)
+export const isAuthError = (status: number) => status === 401 || status === 422
+
+// อ่าน JSON แบบไม่พัง: ถ้า backend ตอบเป็นหน้า HTML (เช่น error 500) จะได้ {} แทน
+export async function readJson(res: Response) {
+  try {
+    return await res.json()
+  } catch {
+    return {}
+  }
+}
 
 // อ่านข้อความ msg ที่ backend ส่งมากับ response (ถ้าไม่ใช่ JSON หรือไม่มี msg → ใช้ fallback)
 export async function responseMessage(res: Response, fallback = MSG_SERVER_ERROR): Promise<string> {
@@ -31,7 +45,7 @@ export async function postJson<T = Record<string, unknown>>(
 ): Promise<PostJsonResult<T>> {
   let res: Response
   try {
-    res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
+    res = await fetch(`${apiBase()}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

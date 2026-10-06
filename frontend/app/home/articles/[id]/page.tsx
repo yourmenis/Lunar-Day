@@ -2,25 +2,25 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Heart, Bookmark, Share2, AlertCircle, Calendar } from 'lucide-react'
+import { ArrowLeft, AlertCircle, Calendar } from 'lucide-react'
 import Navbar from '../../components/Navbar'
-import Footer from '../../components/Footer'
 import api from '../../../lib/api'
 import { useToast } from '../../../components/Toast'
 import { axiosErrorMessage } from '../../../lib/postJson'
 import { parseServerDate } from '../../../lib/serverDate'
+import { apiBase, fixBackendUrl } from '../../../lib/apiBase'
+import type { Article, ContentBlock } from '../../../lib/types'
 
 export default function ArticleDetailPage() {
   const { id } = useParams()
   const router = useRouter()
-  const [data, setData]       = useState<any>(null)
+  const [data, setData]       = useState<Article | null>(null)
   const [lines, setLines]     = useState<string[]>([])
   const [links, setLinks]     = useState<{ text: string; url?: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
   const showToast = useToast()
-  const [liked, setLiked]     = useState(false)
-  const [saved, setSaved]     = useState(false)
 
   useEffect(() => {
     if (!id || typeof id !== 'string') return
@@ -33,7 +33,7 @@ export default function ArticleDetailPage() {
         try {
           const parsed = JSON.parse(raw)
           if (Array.isArray(parsed)) {
-            raw = parsed.map((b: any) =>
+            raw = parsed.map((b: ContentBlock) =>
               b.type === 'image' ? `[IMG:${b.value}]` : (b.value ?? '')
             ).join('\n')
           }
@@ -51,7 +51,7 @@ export default function ArticleDetailPage() {
         showToast(axiosErrorMessage(err, 'ไม่สามารถโหลดเนื้อหาได้'), 'error')
       })
       .finally(() => setLoading(false))
-  }, [id, showToast])
+  }, [id, showToast, reloadKey])
 
   const formatDate = (value?: string) =>
     parseServerDate(value)?.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) ?? ''
@@ -59,6 +59,17 @@ export default function ArticleDetailPage() {
   const extractUrl = (text: string) => {
     const match = text.match(/https?:\/\/[^\s]+/)
     return match ? match[0] : null
+  }
+
+  // รับเฉพาะลิงก์ http(s) เท่านั้น (กัน javascript: / data: ที่อาจแฝงมาในข้อมูล)
+  const safeUrl = (raw?: string | null) => {
+    if (!raw) return null
+    try {
+      const u = new URL(raw)
+      return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : null
+    } catch {
+      return null
+    }
   }
 
   return (
@@ -89,24 +100,6 @@ export default function ArticleDetailPage() {
       </div>
 
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '40px 32px' }}>
-        {/* <div style={{ display: 'flex', gap: 10, marginBottom: 32 }}>
-          {[
-            { icon: <Heart size={14} fill={liked ? 'currentColor' : 'none'} />, label: 'ถูกใจ', active: liked, fn: () => setLiked(p => !p) },
-            { icon: <Bookmark size={14} fill={saved ? 'currentColor' : 'none'} />, label: saved ? 'บันทึกแล้ว' : 'บันทึก', active: saved, fn: () => setSaved(p => !p) },
-            { icon: <Share2 size={14} />, label: 'แชร์', active: false, fn: () => {} }
-          ].map((btn, i) => (
-            <button key={i} onClick={btn.fn} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '9px 18px', borderRadius: 12,
-              border: `1.5px solid ${btn.active ? '#f06292' : '#f5e6ec'}`,
-              background: btn.active ? '#fce4ec' : '#fff',
-              color: btn.active ? '#c2185b' : '#7a5a6a',
-              cursor: 'pointer', fontSize: 13, fontFamily: 'Sarabun, sans-serif'
-            }}>
-              {btn.icon} {btn.label}
-            </button>
-          ))}
-        </div> */}
 
         <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #f5e6ec', padding: 40, boxShadow: '0 4px 24px rgba(194,24,91,.06)' }}>
           {loading && [...Array(8)].map((_, i) => (
@@ -114,15 +107,19 @@ export default function ArticleDetailPage() {
           ))}
 
           {!loading && error && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderRadius: 14, background: '#fff8e1', border: '1px solid #ffe082', fontSize: 13, color: '#7b5800' }}>
-              <AlertCircle size={16} color="#f59e0b" /> ไม่สามารถโหลดเนื้อหาได้ กรุณาลองใหม่
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderRadius: 14, background: '#fff8e1', border: '1px solid #ffe082', fontSize: 13, color: '#7b5800', flexWrap: 'wrap' }}>
+              <AlertCircle size={16} color="#f59e0b" /> ยังแสดงเนื้อหาบทความไม่ได้
+              <button
+                onClick={() => { setLoading(true); setError(false); setReloadKey(k => k + 1) }}
+                style={{ marginLeft: 'auto', padding: '6px 14px', borderRadius: 10, border: '1px solid #f5c26b', background: '#fff', color: '#7b5800', fontFamily: 'Mitr, sans-serif', fontSize: 12.5, cursor: 'pointer' }}
+              >ลองใหม่</button>
             </div>
           )}
 
           {!loading && !error && lines.map((line, i) => {
             if (line.startsWith('[IMG:')) {
               const src = line.slice(5, -1)
-              return <img key={i} src={src.startsWith('http') ? src : `${process.env.NEXT_PUBLIC_API_URL}${src}`} alt="" style={{ width: '100%', borderRadius: 14, margin: '16px 0', display: 'block' }} onError={e => (e.currentTarget.style.display = 'none')} />
+              return <img key={i} src={src.startsWith('http') ? fixBackendUrl(src) : `${apiBase()}${src}`} alt="" style={{ width: '100%', borderRadius: 14, margin: '16px 0', display: 'block' }} onError={e => (e.currentTarget.style.display = 'none')} />
             }
             if (line.startsWith('**') && line.endsWith('**'))
               return <strong key={i} style={{ display: 'block', color: '#c2185b', fontSize: 17, margin: '28px 0 10px', fontFamily: 'Mitr, sans-serif' }}>{line.slice(2, -2)}</strong>
@@ -142,7 +139,7 @@ export default function ArticleDetailPage() {
               <p style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 600, color: '#c2185b', marginBottom: 10, fontSize: 14 }}>แหล่งอ้างอิง</p>
               {links.map((l, i) => {
                 const text = typeof l === 'string' ? l : l.text
-                const url = (typeof l === 'object' && l.url) ? l.url : extractUrl(text)
+                const url = safeUrl((typeof l === 'object' && l.url) ? l.url : extractUrl(text))
                 return (
                   <a key={i}
                     href={url ?? '#'}
@@ -158,7 +155,6 @@ export default function ArticleDetailPage() {
         </div>
       </div>
 
-      <Footer />
     </div>
   )
 }

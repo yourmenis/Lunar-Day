@@ -3,13 +3,16 @@
 import { useState, useEffect } from 'react'
 import { MapPin, Mail, ExternalLink } from 'lucide-react'
 import Navbar from '../components/Navbar'
-import Footer from '../components/Footer'
 
 export default function ContactPage() {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
+    // ตั้งค่าในเฟรมถัดไป (ไม่ setState ตรง ๆ ใน effect) — ผลที่ผู้ใช้เห็นเหมือนเดิม
+    const raf = requestAnimationFrame(() => {
+      setMounted(true)
+    })
+    return () => cancelAnimationFrame(raf)
   }, [])
 
   return (
@@ -675,8 +678,6 @@ export default function ContactPage() {
           </div>
         </main>
 
-        {/* ── Footer ── */}
-        <Footer />
       </div>
     </>
   )

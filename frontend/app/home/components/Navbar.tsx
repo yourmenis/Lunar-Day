@@ -8,6 +8,7 @@ import { useToast } from '../../components/Toast'
 import { avatarUrlFromFile, getCachedAvatar, getMemoryAvatar, setCachedAvatar } from '../../lib/avatarCache'
 import { clearProfileCache } from '../../lib/profileCache'
 import Image from 'next/image'
+import { clickable } from '../../lib/a11y'
 
 const NAV_LINKS = [
   { href: '/home/analyze',  label: 'วิเคราะห์ลิ่มเลือด', icon: Activity },
@@ -37,10 +38,12 @@ export default function Navbar() {
     return () => { document.body.style.overflow = '' }
   }, [drawerOpen])
 
-  // ปิด drawer เมื่อเปลี่ยนหน้า
-  useEffect(() => {
+  // ปิด drawer เมื่อเปลี่ยนหน้า (เทียบ pathname ระหว่าง render ตามแนวทางของ React แทนการใช้ effect)
+  const [lastPath, setLastPath] = useState(pathname)
+  if (lastPath !== pathname) {
+    setLastPath(pathname)
     setDrawerOpen(false)
-  }, [pathname])
+  }
 
   useEffect(() => {
     const fetchAvatar = async () => {
@@ -347,7 +350,7 @@ export default function Navbar() {
       {/* ── Navbar ── */}
       <nav className="navbar">
         {/* Logo */}
-        <div className="nav-logo" onClick={() => navigate('/home')}>
+        <div className="nav-logo" {...clickable(() => navigate('/home'))} aria-label="ไปหน้าแรก">
           <div className="nav-logo-icon">
             <Image src="/logolunar.png" alt="Lunar Day Logo" width={48} height={48} style={{ borderRadius: '50%' }} />
           </div>
@@ -370,7 +373,7 @@ export default function Navbar() {
         {/* Right */}
         <div className="nav-right">
           {/* Avatar (desktop + mobile) */}
-          <div className="nav-avatar" onClick={() => navigate('/home/profile')}>
+          <div className="nav-avatar" {...clickable(() => navigate('/home/profile'))} aria-label="โปรไฟล์ของฉัน">
             {profileImage ? (
               <img src={profileImage} alt="avatar"
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -416,7 +419,7 @@ export default function Navbar() {
         </div>
 
         {/* User info */}
-        <div className="drawer-user" onClick={() => navigate('/home/profile')}>
+        <div className="drawer-user" {...clickable(() => navigate('/home/profile'))} aria-label="โปรไฟล์ของฉัน">
           <div className="drawer-user-avatar">
             {profileImage ? (
               <img src={profileImage} alt="avatar"
@@ -465,7 +468,7 @@ export default function Navbar() {
       {/* ── Logout Modal ── */}
       {showLogoutModal && (
         <div className="modal-overlay" onClick={() => setShowLogoutModal(false)}>
-          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+          <div className="modal-sheet" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
             <div className="modal-handle" />
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
               <div style={{

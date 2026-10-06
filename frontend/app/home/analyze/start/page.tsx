@@ -1,17 +1,18 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { Fragment } from 'react'
 import {
   Upload, Camera, ChevronRight, AlertCircle, CheckCircle2,
-  Info, Sparkles, Activity, ArrowRight, X, ImageIcon, Loader2,
+  Info, Sparkles, Activity, X, ImageIcon, Loader2,
   Shield, Zap, FlaskConical, Baby, Clock, Ruler
 } from 'lucide-react'
 import Navbar from '../../components/Navbar'
-import Footer from '../../components/Footer'
-import LoginToast from '../../components/LoginToast'
 import { useToast } from '../../../components/Toast'
+import RiskLegend from '../../../components/RiskLegend'
+import { getRiskLevel } from '../../../lib/riskLevels'
+import { apiBase } from '../../../lib/apiBase'
+import { visuallyHidden } from '../../../lib/a11y'
 
 // ─────────────────────────────────────────────
 // Types
@@ -52,11 +53,9 @@ interface RiskResult {
   Risk_Level: string
   Potential_Disease: string
   Recommendation: string
-  Match_Percent: number | null  // % ความตรงของอาการกับโรคที่กำหนดระดับความเสี่ยง
   saved: boolean
 }
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
 // value ตรงกับ ALLOWED_VALUES ใน backend/routes/analysis.py
 const PAIN_OPTIONS = [
@@ -115,14 +114,6 @@ const SEX_HISTORY_OPTIONS = [
   { value: 'failure',     label: '❗ ป้องกันแต่การป้องกันล้มเหลว' },
 ]
 
-const RISK_COLORS: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-  ปกติ:          { bg: '#f0fdf4', border: '#86efac', text: '#15803d', badge: '#dcfce7' },
-  เสี่ยงปานกลาง: { bg: '#fffbeb', border: '#fcd34d', text: '#b45309', badge: '#fef3c7' },
-  เสี่ยงสูง:     { bg: '#fff1f2', border: '#fda4af', text: '#be123c', badge: '#ffe4e6' },
-  ฉุกเฉิน:       { bg: '#fdf2f8', border: '#f0abfc', text: '#86198f', badge: '#fae8ff' },
-  ไม่พบโรค:      { bg: '#f8fafc', border: '#cbd5e1', text: '#475569', badge: '#e2e8f0' },
-}
-
 // backend ตอบ A7 เมื่อกรอกครบแต่ไม่ตรงกับโรคใดในฐานข้อมูล → แสดงเป็นผลลัพธ์แทน error
 const NO_MATCH_LEVEL = 'ไม่พบโรค'
 const NO_MATCH_DISEASE = 'ไม่พบโรคที่สอดคล้องกับอาการของท่านในฐานข้อมูลปัจจุบัน'
@@ -153,47 +144,24 @@ function uniqueSuggestions(text: string): string[] {
   }
   return items
 }
-const DEFAULT_RC = { bg: '#f0fdf4', border: '#86efac', text: '#15803d', badge: '#dcfce7' }
-
-// ─────────────────────────────────────────────
-// Progress ring
-// ─────────────────────────────────────────────
-function ProgressRing({ score, color, label, caption }: { score: number; color: string; label?: string; caption: string }) {
-  const r    = 46
-  const circ = 2 * Math.PI * r
-  const [dash, setDash] = useState(circ)
-  useEffect(() => {
-    const t = setTimeout(() => setDash(circ - (score / 100) * circ), 300)
-    return () => clearTimeout(t)
-  }, [score, circ])
-  return (
-    <svg width="110" height="110" viewBox="0 0 110 110">
-      <circle cx="55" cy="55" r={r} fill="none" stroke="#f5e6ec" strokeWidth="9" />
-      <circle cx="55" cy="55" r={r} fill="none" stroke={color} strokeWidth="9"
-        strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={dash}
-        transform="rotate(-90 55 55)"
-        style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)' }} />
-      <text x="55" y="50" textAnchor="middle" fontSize="20" fontWeight="700" fill={color}
-        fontFamily="'Mitr', sans-serif">{label ?? score}</text>
-      <text x="55" y="67" textAnchor="middle" fontSize="9.5" fill="#9e7a8a"
-        fontFamily="'Sarabun', sans-serif">{caption}</text>
-    </svg>
-  )
-}
+// สีของผล "ไม่พบโรค" (ไม่อยู่ในตารางระดับความเสี่ยง)
+const NO_MATCH_STYLE = { tint: '#f8fafc', solid: '#94a3b8', ink: '#475569', icon: 'ℹ️', meaning: '' }
 
 // ─────────────────────────────────────────────
 // Analyzing screen
 // ─────────────────────────────────────────────
+const ANALYZING_STEPS = [
+  { label: 'ประมวลผลภาพ',        icon: '🔬' },
+  { label: 'วิเคราะห์ลิ่มเลือด', icon: '🩸' },
+  { label: 'ประเมินความเสี่ยง',  icon: '📊' },
+  { label: 'สรุปผลการวิเคราะห์', icon: '✅' },
+]
+
 function AnalyzingScreen() {
-  const steps = [
-    { label: 'ประมวลผลภาพ',        icon: '🔬' },
-    { label: 'วิเคราะห์ลิ่มเลือด', icon: '🩸' },
-    { label: 'ประเมินความเสี่ยง',  icon: '📊' },
-    { label: 'สรุปผลการวิเคราะห์', icon: '✅' },
-  ]
+  const steps = ANALYZING_STEPS
   const [active, setActive] = useState(0)
   useEffect(() => {
-    const t = setInterval(() => setActive(a => Math.min(a + 1, steps.length - 1)), 1200)
+    const t = setInterval(() => setActive(a => Math.min(a + 1, ANALYZING_STEPS.length - 1)), 1200)
     return () => clearInterval(t)
   }, [])
   return (
@@ -238,12 +206,15 @@ function AnalyzingScreen() {
 // Radio group
 // ─────────────────────────────────────────────
 function RadioGroup({
-  options, value, onChange, name,
-}: { options: { value: string; label: string }[]; value: string; onChange: (v: string) => void; name: string }) {
+  options, value, onChange, name, disabled = false,
+}: { options: { value: string; label: string }[]; value: string; onChange: (v: string) => void; name: string; disabled?: boolean }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div aria-disabled={disabled} style={{
+      display: 'flex', flexDirection: 'column', gap: 8,
+      opacity: disabled ? 0.45 : 1, pointerEvents: disabled ? 'none' : 'auto', transition: 'opacity 0.2s',
+    }}>
       {options.map(opt => (
-        <label key={opt.value} style={{
+        <label key={opt.value} className="opt-label" style={{
           display: 'flex', alignItems: 'center', gap: 12,
           padding: '11px 14px', borderRadius: 12, cursor: 'pointer',
           border: `1.5px solid ${value === opt.value ? '#f06292' : '#f5e6ec'}`,
@@ -254,8 +225,9 @@ function RadioGroup({
         }}>
           <input type="radio" name={name} value={opt.value}
             checked={value === opt.value}
+            disabled={disabled}
             onChange={() => onChange(opt.value)}
-            style={{ display: 'none' }} />
+            style={visuallyHidden} />
           <div style={{
             width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
             border: `2px solid ${value === opt.value ? '#f06292' : '#f5c6d8'}`,
@@ -285,11 +257,11 @@ function CheckboxGroup({
   const toggle = (v: string) =>
     onChange(values.includes(v) ? values.filter(x => x !== v) : [...values, v])
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(230px, 100%), 1fr))', gap: 8 }}>
       {options.map(opt => {
         const checked = values.includes(opt.value)
         return (
-          <label key={opt.value} style={{
+          <label key={opt.value} className="opt-label" style={{
             display: 'flex', alignItems: 'center', gap: 12,
             padding: '11px 14px', borderRadius: 12, cursor: 'pointer',
             border: `1.5px solid ${checked ? '#f06292' : '#f5e6ec'}`,
@@ -301,7 +273,7 @@ function CheckboxGroup({
             <input type="checkbox" value={opt.value}
               checked={checked}
               onChange={() => toggle(opt.value)}
-              style={{ display: 'none' }} />
+              style={visuallyHidden} />
             <div style={{
               width: 18, height: 18, borderRadius: 5, flexShrink: 0,
               border: `2px solid ${checked ? '#f06292' : '#f5c6d8'}`,
@@ -327,15 +299,12 @@ function CheckboxGroup({
 // Main page
 // ─────────────────────────────────────────────
 export default function AnalyzePage() {
-  const router = useRouter()
   const [mounted,    setMounted]   = useState(false)
   const [step,       setStep]      = useState<Step>('upload')
   const [image,      setImage]     = useState<string | null>(null)
-  const [imageFile,  setImageFile] = useState<File | null>(null)
   const [dragOver,   setDragOver]  = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const uploadSeq = useRef(0)  // นับรอบการเลือกรูป กันผลของรูปเก่ามาทับรูปใหม่
-  const [showLoginToast,    setShowLoginToast]    = useState(false)
   const [imageValidated,    setImageValidated]    = useState(false)
   // ข้อความจาก backend ทั้งหมดแสดงผ่าน toast กลาง (components/Toast)
   const showToast = useToast()
@@ -352,7 +321,6 @@ export default function AnalyzePage() {
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) return
-    setImageFile(file)
     setImageValidated(false)
     setImageResult(null)
     const seq = ++uploadSeq.current
@@ -364,17 +332,17 @@ export default function AnalyzePage() {
     reader.readAsDataURL(file)
 
     const token = localStorage.getItem('access_token')
-    if (!token) { setShowLoginToast(true); return }
+    if (!token) { showToast('กรุณาเข้าสู่ระบบก่อนใช้งานฟีเจอร์นี้', 'info'); return }
     setImageLoading(true)
     try {
       const fd = new FormData()
       fd.append('image', file)
-      const res  = await fetch(`${BASE_URL}/analysis/image`, {
+      const res  = await fetch(`${apiBase()}/analysis/image`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
       })
       if (res.status === 401 || res.status === 422) {
         localStorage.removeItem('access_token')
-        setImage(null); setImageFile(null)
+        setImage(null)
         flashError('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่')
         return
       }
@@ -388,13 +356,13 @@ export default function AnalyzePage() {
         // เอารูปเดิมออก และล้าง input เพื่อให้เลือกรูปใหม่ (หรือไฟล์เดิม) ได้ทันที
         reader.abort()
         if (fileRef.current) fileRef.current.value = ''
-        setImage(null); setImageFile(null); setImageValidated(false)
+        setImage(null); setImageValidated(false)
       } else {
         setImageResult(data); setImageValidated(true)
         if (data.visual_path) {
           // โหลดภาพผล AI ให้เสร็จก่อนค่อยสลับ ถ้าโหลดไม่ได้ให้คงภาพตัวอย่างจากเครื่องไว้
           // (ไม่สลับไปที่ URL ตรง ๆ เพราะถ้าโหลดพลาดจะเหลือกรอบรูปเสีย)
-          const visualUrl = `${BASE_URL}/${data.visual_path}`
+          const visualUrl = `${apiBase()}/${data.visual_path}`
           const probe = new window.Image()
           probe.onload = () => {
             if (uploadSeq.current !== seq) return
@@ -410,9 +378,9 @@ export default function AnalyzePage() {
       }
     } catch {
       flashError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
-      setImage(null); setImageFile(null)
+      setImage(null)
     } finally { setImageLoading(false) }
-  }, [flashError, flashSuccess])
+  }, [flashError, flashSuccess, showToast])
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false)
@@ -437,7 +405,7 @@ export default function AnalyzePage() {
 
   const runAnalysis = async () => {
     const token = localStorage.getItem('access_token')
-    if (!token) { setShowLoginToast(true); return }
+    if (!token) { showToast('กรุณาเข้าสู่ระบบก่อนใช้งานฟีเจอร์นี้', 'info'); return }
     if (!formValid) return
     setStep('analyzing')
     try {
@@ -455,7 +423,7 @@ export default function AnalyzePage() {
       fd.append('q8', form.sex_history)
       if (form.sex_history !== 'no_sex' && form.is_pregnant) fd.append('q9', form.is_pregnant)
       if (imageResult?.ai_result === 'clot' && form.size) fd.append('q10', form.size)
-      const res  = await fetch(`${BASE_URL}/analysis/risk`, {
+      const res  = await fetch(`${apiBase()}/analysis/risk`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
       })
       if (res.status === 401 || res.status === 422) {
@@ -476,7 +444,6 @@ export default function AnalyzePage() {
           Risk_Level:        NO_MATCH_LEVEL,
           Potential_Disease: NO_MATCH_DISEASE,
           Recommendation:    NO_MATCH_RECOMMENDATION,
-          Match_Percent:     null,
           saved:             false,
         })
         setStep('result')
@@ -487,9 +454,6 @@ export default function AnalyzePage() {
       } else {
         // backend ส่งผลมาใน data.data (snake_case) → แปลงเป็นรูปแบบที่หน้าจอใช้
         const d = data.data
-        // % ความตรงสูงสุดของโรคที่อยู่ในระดับความเสี่ยงที่ backend สรุปมา
-        const scores: { risk_level: string; match_percent: number }[] = d.disease_scores ?? []
-        const levelScores = scores.filter(x => x.risk_level === d.risk_level).map(x => x.match_percent)
         setRiskResult({
           status:            data.status,
           Detect1:           d.detect1,
@@ -497,7 +461,6 @@ export default function AnalyzePage() {
           Risk_Level:        d.risk_level,
           Potential_Disease: d.potential_disease,
           Recommendation:    d.recommendation ?? '',
-          Match_Percent:     levelScores.length ? Math.max(...levelScores) : null,
           saved:             true,
         })
         setStep('result')
@@ -505,11 +468,10 @@ export default function AnalyzePage() {
     } catch { flashError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้'); setStep('symptoms') }
   }
 
-  const rc = riskResult ? (RISK_COLORS[riskResult.Risk_Level] ?? DEFAULT_RC) : DEFAULT_RC
-  const matchPercent = riskResult?.Match_Percent ?? null
+  const rc = getRiskLevel(riskResult?.Risk_Level) ?? NO_MATCH_STYLE
 
   const resetAll = () => {
-    setStep('upload'); setImage(null); setImageFile(null)
+    setStep('upload'); setImage(null)
     setImageResult(null); setRiskResult(null); setImageLoading(false)
     setForm(EMPTY_FORM)
     setImageValidated(false)
@@ -622,7 +584,6 @@ export default function AnalyzePage() {
         .tip-box-icon { color: #f06292; flex-shrink: 0; margin-top: 2px; }
         .tip-box-text { font-size: 13px; color: #7a5a6a; line-height: 1.6; }
         .tip-box-text strong { color: #c2185b; font-weight: 600; }
-        .error-box { margin: 0 32px 18px; padding: 13px 16px; border-radius: 13px; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.25); display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: #b91c1c; }
 
         /* Card footer */
         .card-footer { padding: 18px 32px 26px; display: flex; gap: 12px; justify-content: flex-end; border-top: 1px solid #f5e6ec; flex-wrap: wrap; }
@@ -635,19 +596,26 @@ export default function AnalyzePage() {
         .btn-ghost-sm:hover { background: rgba(194,24,91,0.06); }
 
         /* Symptom form */
-        .symptom-form { padding: 0 32px 8px; display: grid; grid-template-columns: 1fr; gap: 26px; }
+        .symptom-form { padding: 0 32px 8px; display: grid; grid-template-columns: 1fr; gap: 26px; align-items: start; }
+        .sf-full { grid-column: 1 / -1; }
         .sf-label { display: flex; align-items: center; gap: 8px; font-family: 'Mitr', sans-serif; font-size: 14px; font-weight: 600; color: #1a0a14; margin-bottom: 10px; }
         .sf-label svg { color: #c2185b; }
+        /* กรอบโฟกัสเมื่อใช้คีย์บอร์ด (Tab / ลูกศร) เลือกคำตอบ */
+        .opt-label { position: relative; }
+        .opt-label:has(input:focus-visible) { outline: 3px solid rgba(240,98,146,0.5); outline-offset: 2px; }
 
         /* Status badges */
         .ai-loading-badge, .ai-result-badge { display: inline-flex; align-items: center; gap: 7px; padding: 7px 16px; border-radius: 999px; background: rgba(194,24,91,0.08); border: 1px solid rgba(194,24,91,0.2); font-family: 'Mitr', sans-serif; font-size: 12.5px; color: #c2185b; margin: 0 32px 18px; flex-wrap: wrap; }
 
         /* Result */
-        .result-risk-banner { margin: 24px 32px; border-radius: 18px; padding: 24px; display: flex; align-items: center; gap: 20px; border: 1.5px solid; flex-wrap: wrap; }
+        .result-risk-banner { margin: 24px 32px; border-radius: 18px; padding: 22px 24px; display: flex; align-items: center; gap: 20px; border: 1.5px solid; border-left-width: 7px; flex-wrap: wrap; }
+        .risk-icon { width: 68px; height: 68px; border-radius: 22px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 32px; box-shadow: inset 0 -5px 0 rgba(0,0,0,0.12), 0 8px 18px rgba(0,0,0,0.12); }
         .risk-info { flex: 1; min-width: 200px; }
-        .risk-label-tag { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 999px; font-family: 'Mitr', sans-serif; font-size: 11.5px; font-weight: 500; margin-bottom: 8px; }
-        .risk-title { font-family: 'Mitr', sans-serif; font-size: 19px; font-weight: 600; margin-bottom: 5px; }
+        .risk-label-tag { display: inline-flex; align-items: center; padding: 3px 11px; border-radius: 999px; border: 1.5px solid; background: #fff; font-family: 'Mitr', sans-serif; font-size: 11.5px; font-weight: 500; margin-bottom: 6px; }
+        .risk-title { font-family: 'Mitr', sans-serif; font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+        .risk-meaning { font-size: 13.5px; color: #3a2030; line-height: 1.6; margin-bottom: 4px; }
         .risk-desc  { font-size: 13px; color: #7a5a6a; line-height: 1.6; }
+        .result-legend { margin: 22px 32px 6px; }
 
         .result-detail { margin: 0 32px 20px; background: #faf7f5; border-radius: 15px; border: 1px solid #f5e6ec; overflow: hidden; display: grid; grid-template-columns: 1fr; }
         .rd-row { display: flex; align-items: flex-start; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #f5e6ec; }
@@ -658,13 +626,10 @@ export default function AnalyzePage() {
 
         .suggestions-list { margin: 0 32px 24px; display: flex; flex-direction: column; gap: 10px; }
         .suggestion-item { display: flex; gap: 12px; padding: 14px 16px; border-radius: 13px; background: #faf7f5; border: 1px solid #f5e6ec; align-items: flex-start; }
-        .suggestion-num  { width: 24px; height: 24px; border-radius: 8px; flex-shrink: 0; background: linear-gradient(135deg, #f06292, #c2185b); display: flex; align-items: center; justify-content: center; font-family: 'Mitr', sans-serif; font-size: 11.5px; color: #fff; font-weight: 600; }
         .suggestion-text { font-size: 13.5px; color: #4a2a3a; line-height: 1.6; }
 
         .disclaimer-box { margin: 0 32px 24px; padding: 13px 16px; border-radius: 12px; background: rgba(240,98,146,0.05); border: 1px solid rgba(240,98,146,0.15); display: flex; gap: 9px; align-items: flex-start; font-size: 12px; color: #9e7a8a; line-height: 1.6; }
         .result-actions { margin: 0 32px 28px; display: flex; gap: 12px; flex-wrap: wrap; }
-        .btn-outline-full { flex: 1; min-width: 140px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 14px 14px; border-radius: 14px; border: 1.5px solid #f5c6d8; background: transparent; font-family: 'Mitr', sans-serif; font-size: 13.5px; color: #c2185b; cursor: pointer; transition: background 0.18s; }
-        .btn-outline-full:hover { background: rgba(194,24,91,0.06); }
         .btn-primary-full { flex: 1; min-width: 160px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 14px 14px; border-radius: 14px; border: none; background: linear-gradient(135deg, #f06292, #c2185b); font-family: 'Mitr', sans-serif; font-size: 13.5px; color: #fff; cursor: pointer; font-weight: 500; box-shadow: 0 6px 20px rgba(194,24,91,0.35); transition: transform 0.18s, box-shadow 0.18s; text-decoration: none; }
         .btn-primary-full:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(194,24,91,0.5); }
 
@@ -674,8 +639,6 @@ export default function AnalyzePage() {
         .trust-icon  { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #fce4ec, #f8bbd0); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .trust-label { font-family: 'Mitr', sans-serif; font-size: 13px; color: #1a0a14; line-height: 1.4; }
         .trust-sub   { font-size: 11px; color: #9e7a8a; }
-
-        /* Footer */
 
         /* Animations */
         @keyframes analyzePulse {
@@ -717,7 +680,7 @@ export default function AnalyzePage() {
           .upload-zone { margin: 14px 16px; min-height: 180px; padding: 20px 12px; }
           .upload-zone-icon { width: 48px; height: 48px; }
           .img-preview { margin: 14px 16px; }
-          .tip-box, .error-box { margin-left: 16px; margin-right: 16px; }
+          .tip-box { margin-left: 16px; margin-right: 16px; }
           .card-footer { padding: 14px 16px 18px; flex-direction: column; }
           .btn-primary, .btn-ghost-sm { width: 100%; }
 
@@ -725,11 +688,13 @@ export default function AnalyzePage() {
           .ai-loading-badge, .ai-result-badge { margin: 0 16px 14px; font-size: 11.5px; }
 
           .result-risk-banner { margin: 14px 16px; padding: 16px; gap: 12px; }
+          .risk-icon { width: 54px; height: 54px; border-radius: 18px; font-size: 26px; }
+          .result-legend { margin: 18px 16px 4px; }
           .result-detail { margin: 0 16px 14px; }
           .suggestions-list { margin: 0 16px 16px; }
           .disclaimer-box { margin: 0 16px 16px; }
           .result-actions { margin: 0 16px 20px; flex-direction: column; }
-          .btn-outline-full, .btn-primary-full { width: 100%; min-width: unset; }
+          .btn-primary-full { width: 100%; min-width: unset; }
 
           .trust-strip { grid-template-columns: 1fr; padding: 0 12px; gap: 8px; }
         }
@@ -831,7 +796,7 @@ export default function AnalyzePage() {
                         <CheckCircle2 size={12} color="#c2185b" /> ภาพพร้อมวิเคราะห์
                       </div>
                     </div>
-                    <button className="img-remove-btn" onClick={() => { setImage(null); setImageFile(null) }}>
+                    <button className="img-remove-btn" onClick={() => { setImage(null) }}>
                       <X size={13} color="#fff" />
                     </button>
                   </div>
@@ -903,11 +868,6 @@ export default function AnalyzePage() {
                       onChange={v => setForm(f => ({ ...f, pelvic_pain: v }))} />
                   </div>
                   <div>
-                    <div className="sf-label"><Shield size={14} /> ประวัติการมีเพศสัมพันธ์</div>
-                    <RadioGroup name="sex" options={SEX_HISTORY_OPTIONS} value={form.sex_history}
-                      onChange={v => setForm(f => ({ ...f, sex_history: v }))} />
-                  </div>
-                  <div>
                     <div className="sf-label"><Activity size={14} /> ระดับอาการปวด</div>
                     <RadioGroup name="pain" options={PAIN_OPTIONS} value={form.pain_level}
                       onChange={v => setForm(f => ({ ...f, pain_level: v }))} />
@@ -917,14 +877,25 @@ export default function AnalyzePage() {
                     <RadioGroup name="duration" options={DURATION_OPTIONS} value={form.duration}
                       onChange={v => setForm(f => ({ ...f, duration: v }))} />
                   </div>
-                  {form.sex_history !== 'no_sex' && <div>
+                  <div>
+                    <div className="sf-label"><Shield size={14} /> ประวัติการมีเพศสัมพันธ์</div>
+                    <RadioGroup name="sex" options={SEX_HISTORY_OPTIONS} value={form.sex_history}
+                      onChange={v => setForm(f => ({ ...f, sex_history: v, is_pregnant: v === 'no_sex' ? '' : f.is_pregnant }))} />
+                  </div>
+                  {/* แสดงตลอด (ไม่ซ่อน/โผล่) เพื่อไม่ให้คำถามอื่นเลื่อนตำแหน่ง — ปิดไว้เมื่อไม่มีเพศสัมพันธ์ */}
+                  <div>
                     <div className="sf-label"><Baby size={14} /> มีความเป็นไปได้ว่าตั้งครรภ์?</div>
                     <RadioGroup name="preg"
                       options={PREGNANCY_OPTIONS}
                       value={form.is_pregnant}
+                      disabled={form.sex_history === 'no_sex'}
                       onChange={v => setForm(f => ({ ...f, is_pregnant: v }))} />
-                  </div>}
-                  <div>
+                    {form.sex_history === 'no_sex' && (
+                      <div style={{ fontSize: 12, color: '#9e7a8a', marginTop: 8 }}>ไม่ต้องตอบข้อนี้ เนื่องจากไม่มีเพศสัมพันธ์</div>
+                    )}
+                  </div>
+                  {/* อาการร่วม: เต็มความกว้าง ตัวเลือกเรียงเป็นตาราง */}
+                  <div className="sf-full">
                     <div className="sf-label"><Sparkles size={14} /> อาการร่วม (เลือกได้หลายข้อ / ไม่มีให้ข้าม)</div>
                     <CheckboxGroup options={ASSOCIATED_SYMPTOM_OPTIONS} values={form.symptoms}
                       onChange={v => setForm(f => ({ ...f, symptoms: v }))} />
@@ -967,20 +938,12 @@ export default function AnalyzePage() {
                 </div>
 
                 {/* Risk banner */}
-                <div className="result-risk-banner" style={{ background: rc.bg, borderColor: rc.border }}>
-                  <div style={{ flexShrink: 0 }}>
-                    <ProgressRing score={matchPercent ?? 0} color={rc.text} caption="ตรงกับอาการ"
-                      label={matchPercent === null ? '–' : `${Math.round(matchPercent)}%`} />
-                  </div>
+                <div className="result-risk-banner" style={{ background: rc.tint, borderColor: rc.solid }}>
+                  <div className="risk-icon" style={{ background: rc.solid }}>{rc.icon}</div>
                   <div className="risk-info">
-                    <div className="risk-label-tag" style={{ background: rc.badge, color: rc.text }}>
-                      {riskResult.Risk_Level === 'ฉุกเฉิน' ? '🚨' :
-                       riskResult.Risk_Level === 'เสี่ยงสูง' ? '⚠️' :
-                       riskResult.Risk_Level === 'เสี่ยงปานกลาง' ? '⚡' :
-                       riskResult.Risk_Level === NO_MATCH_LEVEL ? 'ℹ️' : '✅'}
-                      &nbsp;{riskResult.Risk_Level}
-                    </div>
-                    <div className="risk-title" style={{ color: rc.text }}>{riskResult.Risk_Level}</div>
+                    <div className="risk-label-tag" style={{ color: rc.ink, borderColor: rc.solid }}>ระดับความเสี่ยง</div>
+                    <div className="risk-title" style={{ color: rc.ink }}>{riskResult.Risk_Level}</div>
+                    {rc.meaning && <div className="risk-meaning">{rc.meaning}</div>}
                     <div className="risk-desc">{riskResult.Potential_Disease}</div>
                   </div>
                 </div>
@@ -1010,15 +973,18 @@ export default function AnalyzePage() {
                   </div>
                 </div>
 
+                {/* Risk legend */}
+                <div className="result-legend">
+                  <RiskLegend current={riskResult.Risk_Level} />
+                </div>
+
                 {/* Recommendation */}
                 <div style={{ padding: '12px 32px 10px' }}>
                   <div style={{ fontFamily: "'Mitr',sans-serif", fontSize: 14, fontWeight: 600, color: '#1a0a14' }}>คำแนะนำ</div>
                 </div>
                 <div className="suggestions-list">
-                  {/* คำแนะนำข้อเดียวแสดง →  ถ้ามากกว่า 1 ข้อแสดงเลขลำดับ */}
-                  {uniqueSuggestions(riskResult.Recommendation).map((s, i, all) => (
+                  {uniqueSuggestions(riskResult.Recommendation).map((s, i) => (
                     <div key={i} className="suggestion-item">
-                      <div className="suggestion-num">{all.length > 1 ? i + 1 : '→'}</div>
                       <div className="suggestion-text">{s}</div>
                     </div>
                   ))}
@@ -1030,10 +996,7 @@ export default function AnalyzePage() {
                 </div>
 
                 <div className="result-actions">
-                  <button className="btn-outline-full" onClick={resetAll}>วิเคราะห์ใหม่</button>
-                  <a href="/home/articles" className="btn-primary-full">
-                    อ่านบทความที่เกี่ยวข้อง <ArrowRight size={14} />
-                  </a>
+                  <button className="btn-primary-full" onClick={resetAll}>วิเคราะห์ใหม่</button>
                 </div>
               </div>
             )}
@@ -1059,9 +1022,6 @@ export default function AnalyzePage() {
           </div>
         )}
 
-        <Footer />
-
-        <LoginToast show={showLoginToast} onClose={() => setShowLoginToast(false)} />
       </div>
     </>
   )

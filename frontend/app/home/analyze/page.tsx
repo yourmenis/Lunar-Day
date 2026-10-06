@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Image from 'next/image'
 import { ArrowRight, Sparkles, ChevronRight, Shield, Zap, Activity } from 'lucide-react'
 import Navbar from '../components/Navbar'
-import Footer from '../components/Footer'
-import LoginToast from '../components/LoginToast'
+import { useToast } from '../../components/Toast'
 
 const STEPS = [
   {
@@ -50,7 +50,7 @@ const STEPS = [
 const TRUST = [
   { icon: <Shield size={16} color="#c2185b" />, label: 'ข้อมูลปลอดภัย', sub: 'ไม่บันทึกภาพส่วนตัว' },
   { icon: <Zap size={16} color="#c2185b" />, label: 'รวดเร็ว', sub: 'ผลภายใน 30 วินาที' },
-  { icon: <Activity size={16} color="#c2185b" />, label: 'มีความแม่นยำ', sub: 'ทดสอบทางคลินิก' },
+  { icon: <Activity size={16} color="#c2185b" />, label: 'มีความแม่นยำ', sub: 'วิเคราะห์ด้วยโมเดล AI เฉพาะทาง' },
 ]
 
 function Particle({ style }: { style: React.CSSProperties }) {
@@ -58,14 +58,18 @@ function Particle({ style }: { style: React.CSSProperties }) {
 }
 
 export default function IntroPage() {
-  const [showLoginToast, setShowLoginToast] = useState(false)
   const router = useRouter()
+  const showToast = useToast()
   const [mounted, setMounted] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  useEffect(() => { 
-    setMounted(true)
+  useEffect(() => {
+    // ตั้งค่าในเฟรมถัดไป (ไม่ setState ตรง ๆ ใน effect) — ผลที่ผู้ใช้เห็นเหมือนเดิม
+    const raf = requestAnimationFrame(() => {
+      setMounted(true)
+    })
+    return () => cancelAnimationFrame(raf)
   }, [])
 
   const handleStepClick = (i: number) => {
@@ -80,7 +84,7 @@ export default function IntroPage() {
   const goToAnalyze = () => {
     const token = localStorage.getItem('access_token')
     if (!token) {
-      setShowLoginToast(true)  // toast ขึ้น 3 วิแล้วหายเอง
+      showToast('กรุณาเข้าสู่ระบบก่อนใช้งานฟีเจอร์นี้', 'info')
       return
     }
     router.push('/home/analyze/start')
@@ -306,13 +310,6 @@ export default function IntroPage() {
           display: flex; align-items: center; justify-content: center;
           position: relative; z-index: 1;
         }
-        .about-side-ring {
-          width: 220px; height: 220px; border-radius: 50%;
-          background: linear-gradient(135deg, #fce4ec, #f8bbd0, #f48fb1);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 90px;
-          box-shadow: 0 12px 40px rgba(194,24,91,0.15);
-        }
         /* โลโก้ด้านข้าง: ขยายตามความกว้างคอลัมน์ ไม่เกิน 250px (ปรับขนาดที่ max-width) */
         .about-side-logo { width: 100%; max-width: 250px; height: auto; aspect-ratio: 1; border-radius: 50%; object-fit: cover; }
 
@@ -421,7 +418,6 @@ export default function IntroPage() {
         @media (max-width: 900px) {
           .about-card { grid-template-columns: 1fr; }
           .about-side { order: -1; }
-          .about-side-ring { width: 160px; height: 160px; font-size: 64px; }
           .about-side-logo { max-width: 200px; }
         }
 
@@ -473,9 +469,9 @@ export default function IntroPage() {
                 <button className="btn-cta" onClick={goToAnalyze}>
                   เริ่มวิเคราะห์เลย <ArrowRight size={16} />
                 </button>
-                <a href="/home/articles" className="btn-ghost-hero">
+                <Link href="/home/articles" className="btn-ghost-hero">
                   อ่านบทความ <ChevronRight size={15} />
-                </a>
+                </Link>
               </div>
             </div>
 
@@ -641,10 +637,8 @@ export default function IntroPage() {
           </div>
         </div>
 
-        {/* ══════════ FOOTER ══════════ */}
+        {/* ระยะห่างท้ายหน้า */}
         <div style={{ height: 64 }} />
-        <Footer />
-        <LoginToast show={showLoginToast} onClose={() => setShowLoginToast(false)} />
       </div>
     </>
   )

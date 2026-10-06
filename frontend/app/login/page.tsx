@@ -10,6 +10,7 @@ import { postJson } from '../lib/postJson'
 import { setCachedAvatar } from '../lib/avatarCache'
 import { clearProfileCache } from '../lib/profileCache'
 import { PASSWORD_MAX, USERNAME_MAX } from '../lib/authRules'
+import { apiBase } from '../lib/apiBase'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -22,18 +23,21 @@ export default function LoginPage() {
   const showToast = useToast()
 
   useEffect(() => {
-    setMounted(true)
-    setStars(
-      Array.from({ length: 28 }).map(() => ({
-        left: `${Math.random() * 100}%`,
-        top: `${Math.random() * 100}%`,
-        '--dur': `${2.5 + Math.random() * 4}s`,
-        '--delay': `${Math.random() * 4}s`,
-        '--bright': `${0.4 + Math.random() * 0.6}`,
-        width: `${Math.random() > 0.7 ? 4 : 2}px`,
-        height: `${Math.random() > 0.7 ? 4 : 2}px`,
-      } as React.CSSProperties))
-    )
+    // ตั้งค่าในเฟรมถัดไป (ไม่ setState ตรง ๆ ใน effect) — ผลที่ผู้ใช้เห็นเหมือนเดิม
+    requestAnimationFrame(() => {
+      setMounted(true)
+      setStars(
+        Array.from({ length: 28 }).map(() => ({
+          left: `${Math.random() * 100}%`,
+          top: `${Math.random() * 100}%`,
+          '--dur': `${2.5 + Math.random() * 4}s`,
+          '--delay': `${Math.random() * 4}s`,
+          '--bright': `${0.4 + Math.random() * 0.6}`,
+          width: `${Math.random() > 0.7 ? 4 : 2}px`,
+          height: `${Math.random() > 0.7 ? 4 : 2}px`,
+        } as React.CSSProperties))
+      )
+    })
     // มาจากหน้าสมัครสมาชิกที่สำเร็จแล้ว
     try {
       if (sessionStorage.getItem(SIGNUP_SUCCESS_KEY)) {
@@ -46,7 +50,7 @@ export default function LoginPage() {
     // (token หมดอายุ/ถูก logout แล้ว → ลบทิ้งและอยู่หน้า login ต่อ)
     const token = localStorage.getItem('access_token')
     if (!token) return
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/`, {
+    fetch(`${apiBase()}/profile/`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => {

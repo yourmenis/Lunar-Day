@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   User, Settings, Droplets, Shield, FileText,
@@ -9,15 +9,20 @@ import {
   Calendar, Edit3, X, Check, AlertTriangle
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
-import Footer from '../components/Footer'
 import { MIN_AGE, ageFrom, latestAllowedBirthDate, parseYmd } from '../../lib/birthDate'
 import { parseServerDate } from '../../lib/serverDate'
 import { useToast } from '../../components/Toast'
-import { PRIVACY_TEXT, TERMS_TEXT } from '../../lib/policyText'
+import { PRIVACY_TEXT, TERMS_INTRO, TERMS_TEXT, type PolicySection } from '../../lib/policyText'
+import PolicyBody from '../../components/PolicyBody'
 import { USERNAME_MAX, usernameError } from '../../lib/authRules'
 import { avatarUrlFromFile, getCachedAvatar, getMemoryAvatar, setCachedAvatar } from '../../lib/avatarCache'
 import { clearProfileCache, getCachedHistory, getCachedProfile, setCachedHistory, setCachedProfile } from '../../lib/profileCache'
-import { MSG_NETWORK_ERROR, responseMessage } from '../../lib/postJson'
+import { getRiskLevel } from '../../lib/riskLevels'
+import type { HistoryItem, Profile } from '../../lib/types'
+import RiskLegend from '../../components/RiskLegend'
+import { MSG_NETWORK_ERROR, MSG_SERVER_ERROR, isAuthError, readJson, responseMessage } from '../../lib/postJson'
+import { apiBase } from '../../lib/apiBase'
+import { clickable } from '../../lib/a11y'
 
 // ============================================================
 // TYPES
@@ -48,11 +53,15 @@ function buddhistDate(iso: string) {
   return `${parseInt(d)} ${months[parseInt(m)-1]} ${parseInt(y)+543}`
 }
 
-const riskConfig: Record<string, { bg: string; color: string; dot: string }> = {
-  low:    { bg: 'rgba(16,185,129,0.1)',  color: '#059669', dot: '#10b981' },
-  medium: { bg: 'rgba(245,158,11,0.1)',  color: '#d97706', dot: '#f59e0b' },
-  high:   { bg: 'rgba(239,68,68,0.1)',   color: '#dc2626', dot: '#ef4444' },
+// สีตามระดับความเสี่ยง (ชุดเดียวกับหน้าผลการวิเคราะห์ — lib/riskLevels)
+function riskStyle(level: string | null | undefined) {
+  const r = getRiskLevel(level)
+  return r
+    ? { bg: r.tint, color: r.ink, dot: r.solid }
+    : { bg: '#f1f5f9', color: '#475569', dot: '#94a3b8' }   // เช่น "ไม่พบโรค"
 }
+
+const HISTORY_PER_PAGE = 15
 
 // ============================================================
 // THAI DATE PICKER
@@ -260,7 +269,7 @@ function ProfileView({
   profile, avatarUrl, history,
   onEditProfile, onViewHistory, onViewPrivacy, onViewTerms, onLogout, onDeleteAccount,
 }: {
-  profile: any; avatarUrl: string | null; history: any[]
+  profile: Profile | null; avatarUrl: string | null; history: HistoryItem[]
   onEditProfile: () => void; onViewHistory: () => void
   onViewPrivacy: () => void; onViewTerms: () => void
   onLogout: () => void; onDeleteAccount: () => void
@@ -478,62 +487,118 @@ function EditProfileView({
 // ============================================================
 // HISTORY VIEW
 // ============================================================
-function HistoryView({ history, onBack, onSelectItem }: {
-  history: any[]; onBack: () => void; onSelectItem: (item: any) => void
+function HistoryThumb({ path }: { path?: string | null }) {
+  // ภาพที่ AI วาดกรอบแล้ว → ถ้าไม่มีใช้ภาพต้นฉบับ → ถ้าไม่มีเลยแสดงไอคอน
+  const [stage, setStage] = useState<0 | 1 | 2>(path ? 0 : 2)
+  if (!path || stage === 2) {
+    return <div className="pf-hist-thumb pf-hist-thumb-empty"><Droplets size={26} color="#f48fb1" strokeWidth={1.5} /></div>
+  }
+  const src = `${apiBase()}/${stage === 0 ? resultImagePath(path) : path}`
+  return (
+    <img
+      className="pf-hist-thumb" src={src} alt="ภาพที่วิเคราะห์" loading="lazy"
+      onError={() => setStage(s => (s === 0 ? 1 : 2))}
+    />
+  )
+}
+
+function HistoryView({ history, onBack, onSelectItem, onDeleteItem }: {
+  history: HistoryItem[]; onBack: () => void; onSelectItem: (item: HistoryItem) => void; onDeleteItem: (item: HistoryItem) => void
 }) {
+  const [page, setPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(history.length / HISTORY_PER_PAGE))
+  const current = Math.min(page, totalPages)   // ลบจนหน้าสุดท้ายว่าง → ถอยกลับหน้าก่อน
+  const items = history.slice((current - 1) * HISTORY_PER_PAGE, current * HISTORY_PER_PAGE)
+
+  const goTo = (n: number) => {
+    setPage(n)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   return (
     <div style={{ paddingBottom: 60 }}>
       <SubHeader title="ประวัติการวิเคราะห์" subtitle={`ลิ่มเลือดทั้งหมด ${history.length} รายการ`} onBack={onBack} />
 
       <div className="pf-container pf-body">
+        <div style={{ marginBottom: 'clamp(18px, 2vw, 26px)' }}>
+          <RiskLegend />
+        </div>
+
         {history.length === 0 ? (
           <div className="pf-card" style={{ textAlign: 'center', padding: '80px 20px', color: '#9e7a8a' }}>
             <Droplets size={56} color="#f8bbd0" strokeWidth={1} style={{ marginBottom: 16 }} />
             <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 16 }}>ยังไม่มีประวัติการวิเคราะห์</p>
           </div>
         ) : (
-          <div className="pf-history-grid">
-            {history.map((item, i) => {
-              const levelMap: Record<string, string> = {
-                'ฉุกเฉิน': 'high', 'เสี่ยงสูง': 'high',
-                'เสี่ยงปานกลาง': 'medium', 'ปกติ': 'low',
-              }
-              const cfg = riskConfig[levelMap[item.Risk_Level] || 'low']
-              return (
-                <div key={item.AssessmentID} className="pf-history-card" onClick={() => onSelectItem(item)} style={{
-                  animation: `fadeUp 0.4s ease ${Math.min(i, 12) * 0.05}s forwards`,
-                }}>
-                  <div style={{
-                    width: 56, height: 56, borderRadius: '50%',
-                    background: cfg.bg, border: `2px solid ${cfg.dot}30`,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
-                    <Droplets size={20} color={cfg.color} strokeWidth={1.5} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        padding: '3px 10px', borderRadius: 999,
-                        background: cfg.bg, color: cfg.color, fontSize: 11, fontWeight: 600,
-                      }}>
-                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.dot, display: 'inline-block' }} />
-                        {item.Risk_Level}
-                      </span>
+          <>
+            <div className="pf-history-list">
+              {items.map((item, i) => {
+                const cfg = riskStyle(item.Risk_Level)
+                const date = parseServerDate(item.Create_At)
+                return (
+                  <div key={item.AssessmentID} className="pf-history-card" {...clickable(() => onSelectItem(item))}
+                    aria-label={`ดูรายละเอียด ${item.Detect2 || ''} ${item.Risk_Level || ''}`.trim()}
+                    style={{ animation: `fadeUp 0.4s ease ${Math.min(i, 12) * 0.04}s forwards`, borderLeftColor: cfg.dot }}>
+                    <HistoryThumb path={item.Image_Path} />
+
+                    <div className="pf-hist-info">
+                      <div className="pf-hist-field">
+                        <span className="pf-hist-label">วันที่</span>
+                        <span className="pf-hist-value" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          <Calendar size={12} color="#9e7a8a" />
+                          {date?.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) ?? '-'}
+                        </span>
+                      </div>
+                      <div className="pf-hist-field">
+                        <span className="pf-hist-label">ความเสี่ยง</span>
+                        <span>
+                          <span className="pf-hist-badge" style={{ background: cfg.bg, color: cfg.color }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: cfg.dot }} />
+                            {item.Risk_Level || '-'}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="pf-hist-field">
+                        <span className="pf-hist-label">ประเภท</span>
+                        <span className="pf-hist-value">{item.Detect2 || '-'}</span>
+                      </div>
+                      <div className="pf-hist-field pf-hist-wide">
+                        <span className="pf-hist-label">โรคที่เกี่ยวข้อง</span>
+                        <span className="pf-hist-value pf-hist-clamp">{item.Potential_Disease || '-'}</span>
+                      </div>
                     </div>
-                    <p style={{ fontSize: 13, color: '#1a0a14', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
-                      {item.Detect2}
-                    </p>
-                    <p style={{ fontSize: 12, color: '#9e7a8a', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Calendar size={11} />
-                      {parseServerDate(item.Create_At)?.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) ?? '-'}
-                    </p>
+
+                    <div className="pf-hist-actions">
+                      <button
+                        className="pf-hist-trash" aria-label="ลบรายการนี้" title="ลบรายการนี้"
+                        onClick={e => { e.stopPropagation(); onDeleteItem(item) }}
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                      <ChevronRight size={18} color="#d6b4c4" />
+                    </div>
                   </div>
-                  <ChevronRight size={16} color="#d6b4c4" />
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="pf-pager">
+                <button className="pf-pager-btn" disabled={current === 1} onClick={() => goTo(current - 1)} aria-label="หน้าก่อนหน้า">
+                  <ChevronRight size={16} style={{ transform: 'rotate(180deg)' }} />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+                  <button key={n} className={`pf-pager-btn${n === current ? ' active' : ''}`} onClick={() => goTo(n)}>{n}</button>
+                ))}
+                <button className="pf-pager-btn" disabled={current === totalPages} onClick={() => goTo(current + 1)} aria-label="หน้าถัดไป">
+                  <ChevronRight size={16} />
+                </button>
+                <span className="pf-pager-info">
+                  {(current - 1) * HISTORY_PER_PAGE + 1}–{Math.min(current * HISTORY_PER_PAGE, history.length)} จาก {history.length} รายการ
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -543,19 +608,24 @@ function HistoryView({ history, onBack, onSelectItem }: {
 // ============================================================
 // DOC VIEW
 // ============================================================
-function DocView({ title, sections, icon, onBack }: {
-  title: string; sections: { title: string; body: string }[]
+function DocView({ title, intro, sections, icon, onBack }: {
+  title: string; intro?: string; sections: PolicySection[]
   icon: React.ReactNode; onBack: () => void
 }) {
   return (
     <div style={{ paddingBottom: 60 }}>
       <SubHeader title={title} icon={icon} onBack={onBack} />
       <div className="pf-container pf-body">
+        {intro && (
+          <div className="pf-card" style={{ padding: 'clamp(20px, 2vw, 28px)', marginBottom: 'clamp(14px, 1.6vw, 20px)' }}>
+            <p style={{ fontSize: 14, color: '#5a3a4a', lineHeight: 1.8 }}>{intro}</p>
+          </div>
+        )}
         <div className="pf-doc-grid">
           {sections.map((s, i) => (
             <div key={i} className="pf-card" style={{ padding: 'clamp(20px, 2vw, 28px)' }}>
-              <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 15, fontWeight: 600, color: '#c2185b', marginBottom: 8 }}>{s.title}</p>
-              <p style={{ fontSize: 14, color: '#5a3a4a', lineHeight: 1.8 }}>{s.body}</p>
+              <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 15, fontWeight: 600, color: '#c2185b', marginBottom: 10 }}>{s.title}</p>
+              <PolicyBody paragraphs={s.paragraphs} />
             </div>
           ))}
         </div>
@@ -570,11 +640,13 @@ function DocView({ title, sections, icon, onBack }: {
 export default function ProfilePage() {
   const router = useRouter()
   const [view, setView] = useState<View>('profile')
-  const [mounted, setMounted] = useState(false)
   // เริ่มจากข้อมูลที่จำไว้ (ถ้ามี) → กลับมาหน้านี้แล้วชื่อ/จำนวนประวัติไม่กะพริบ
-  const [profile, setProfile] = useState<any>(getCachedProfile)
-  const [history, setHistory] = useState<any[]>(getCachedHistory)
-  const [selectedHistory, setSelectedHistory] = useState<any>(null)
+  const [profile, setProfile] = useState<Profile | null>(getCachedProfile)
+  const [history, setHistory] = useState<HistoryItem[]>(getCachedHistory)
+  const [selectedHistory, setSelectedHistory] = useState<HistoryItem | null>(null)
+  const [deleteHistoryItem, setDeleteHistoryItem] = useState<HistoryItem | null>(null)
+  const [deletingHistory, setDeletingHistory] = useState(false)
+  const pendingEditSeed = useRef(false)
 
   const showToast = useToast()
 
@@ -599,14 +671,23 @@ export default function ProfilePage() {
     return () => URL.revokeObjectURL(url)
   }, [editForm.avatarFile])
 
+  const handleAuthExpired = () => {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('user')
+    setCachedAvatar(null)
+    clearProfileCache()
+    showToast('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่', 'info')
+    router.replace('/login')
+  }
+
   const fetchProfile = async () => {
     try {
       const token = localStorage.getItem('access_token')
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/`, {
+      const res = await fetch(`${apiBase()}/profile/`, {
         headers: { Authorization: `Bearer ${token}`, 'Cache-Control': 'no-cache' },
       })
       if (!res.ok) {
-        if (res.status === 401) { router.replace('/login'); return }
+        if (isAuthError(res.status)) { handleAuthExpired(); return }
         showToast(await responseMessage(res, 'ไม่สามารถโหลดข้อมูลโปรไฟล์ได้'), 'error')
         return
       }
@@ -614,6 +695,18 @@ export default function ProfilePage() {
       if (data.data) {
         setProfile(data.data)
         setCachedProfile(data.data)
+        if (pendingEditSeed.current) {
+          // เปิดหน้าแก้ไขก่อนข้อมูลมาถึง → เติมเฉพาะช่องที่ยังว่าง (ไม่ทับสิ่งที่ผู้ใช้พิมพ์ไปแล้ว)
+          pendingEditSeed.current = false
+          const p = data.data
+          setEditForm(f => ({
+            ...f,
+            name: f.name || p.Name || '',
+            lastname: f.lastname || p.LastName || '',
+            username: f.username || p.Username || '',
+            birthday: f.birthday || p.Birthday || '',
+          }))
+        }
         setCachedAvatar(avatarUrlFromFile(data.data.Profile_Image))
       }
     } catch { showToast('ไม่สามารถโหลดข้อมูลโปรไฟล์ได้', 'error') }
@@ -622,11 +715,11 @@ export default function ProfilePage() {
   const fetchHistory = async () => {
     try {
       const token = localStorage.getItem('access_token')
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/history/`, {
+      const res = await fetch(`${apiBase()}/history/`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) {
-        if (res.status === 401) { router.replace('/login'); return }
+        if (isAuthError(res.status)) { handleAuthExpired(); return }
         showToast(await responseMessage(res, 'ไม่สามารถโหลดประวัติได้'), 'error')
         return
       }
@@ -638,12 +731,13 @@ export default function ProfilePage() {
   }
 
   useEffect(() => {
-    setMounted(true)
     const token = localStorage.getItem('access_token')
     if (!token) { router.replace('/login'); return }
     setCachedAvatarState(getCachedAvatar())
     fetchProfile()
     fetchHistory()
+    // ตั้งใจโหลดครั้งเดียวตอนเปิดหน้า (fetchProfile/fetchHistory สร้างใหม่ทุก render)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
   const handleLogout = async () => {
@@ -652,7 +746,7 @@ export default function ProfilePage() {
     let msg = 'ออกจากระบบเรียบร้อยแล้ว'
     try {
       const token = localStorage.getItem('access_token')
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/logout`, {
+      const res = await fetch(`${apiBase()}/profile/logout`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -666,17 +760,44 @@ export default function ProfilePage() {
     router.push('/login')
   }
 
+  // ลบประวัติการวิเคราะห์ 1 รายการ (DELETE /history/<id>)
+  const handleDeleteHistory = async () => {
+    const item = deleteHistoryItem
+    if (!item || deletingHistory) return
+    setDeletingHistory(true)
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await fetch(`${apiBase()}/history/${item.AssessmentID}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (isAuthError(res.status)) { handleAuthExpired(); return }
+      const msg = await responseMessage(res, res.ok ? 'ลบรายการประวัติเรียบร้อยแล้ว' : 'ลบรายการไม่สำเร็จ')
+      if (!res.ok) { showToast(msg, 'error'); return }
+      const next = history.filter(h => h.AssessmentID !== item.AssessmentID)
+      setHistory(next)
+      setCachedHistory(next)
+      setDeleteHistoryItem(null)
+      showToast(msg, 'success')
+    } catch {
+      showToast(MSG_NETWORK_ERROR, 'error')
+    } finally {
+      setDeletingHistory(false)
+    }
+  }
+
   const handleDeleteAccount = async () => {
     if (!deletePassword) return showToast('กรุณากรอกรหัสผ่าน', 'error')
     try {
       const token = localStorage.getItem('access_token')
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/delete`, {
+      const res = await fetch(`${apiBase()}/profile/delete`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: deletePassword }),
       })
-      const data = await res.json()
-      if (!res.ok) return showToast(data.msg || 'รหัสผ่านไม่ถูกต้อง', 'error')
+      if (isAuthError(res.status) && res.status !== 401) { handleAuthExpired(); return }
+      const data = await readJson(res)
+      if (!res.ok) return showToast(data.msg || (res.status >= 500 ? MSG_SERVER_ERROR : 'รหัสผ่านไม่ถูกต้อง'), 'error')
       showToast(data.msg || 'ลบบัญชีผู้ใช้งานเรียบร้อยแล้ว', 'success')
       setShowDeleteConfirm(false)
       localStorage.removeItem('access_token')
@@ -710,12 +831,13 @@ export default function ProfilePage() {
     if (editForm.avatarFile) {form.append('profileImg', editForm.avatarFile)}
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile/update`, {
+      const res = await fetch(`${apiBase()}/profile/update`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: form,
       })
-      const data = await res.json()
+      if (isAuthError(res.status)) { handleAuthExpired(); return }
+      const data = await readJson(res)
       if (res.ok) {
         showToast(data.msg || 'บันทึกข้อมูลเรียบร้อย', 'success')
         setEditForm(f => ({ ...f, avatarFile: null }))
@@ -723,9 +845,9 @@ export default function ProfilePage() {
         await fetchProfile()
         setView('profile')
       } else {
-        showToast(data.msg || 'เกิดข้อผิดพลาด', 'error')
+        showToast(data.msg || MSG_SERVER_ERROR, 'error')
       }
-    } catch { showToast('ไม่สามารถบันทึกข้อมูลได้', 'error') }
+    } catch { showToast(MSG_NETWORK_ERROR, 'error') }
   }
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -735,6 +857,8 @@ export default function ProfilePage() {
   }
 
   const handleGoToEditProfile = () => {
+    // ถ้าข้อมูลโปรไฟล์ยังโหลดไม่เสร็จ ให้เติมฟอร์มทีหลังเมื่อ API ตอบ (fetchProfile)
+    pendingEditSeed.current = !profile
     setEditForm({
       name: profile?.Name || '',
       lastname: profile?.LastName || '',
@@ -750,8 +874,7 @@ export default function ProfilePage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=Sarabun:wght@300;400;500;600&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        /* flex คอลัมน์สูงเต็มจอ → footer (margin-top: auto) ติดขอบล่างแม้เนื้อหาสั้น */
-        .profile-root { min-height: 100vh; display: flex; flex-direction: column; font-family: 'Sarabun', sans-serif; background: #faf7f5; overflow-x: hidden; }
+        .profile-root { min-height: 100vh; font-family: 'Sarabun', sans-serif; background: #faf7f5; overflow-x: hidden; }
 
         /* ── Shared container (เหมือนหน้าบทความ / ติดต่อ) ── */
         .pf-container {
@@ -827,18 +950,49 @@ export default function ProfilePage() {
         }
 
         /* ── History ── */
-        .pf-history-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-          gap: clamp(12px, 1.6vw, 20px);
-        }
+        .pf-history-list { display: flex; flex-direction: column; gap: clamp(10px, 1.2vw, 14px); }
         .pf-history-card {
-          background: #fff; border-radius: 18px; padding: 18px 20px;
-          border: 1px solid #f5e6ec; box-shadow: 0 2px 12px rgba(194,24,91,0.04);
-          display: flex; align-items: center; gap: 16px; cursor: pointer;
-          opacity: 0; transition: box-shadow 0.18s, border-color 0.18s;
+          background: #fff; border-radius: 18px; padding: 14px 18px 14px 14px;
+          border: 1px solid #f5e6ec; border-left: 6px solid; box-shadow: 0 2px 12px rgba(194,24,91,0.04);
+          display: flex; align-items: center; gap: clamp(14px, 1.8vw, 22px); cursor: pointer;
+          opacity: 0; transition: box-shadow 0.18s, transform 0.18s;
         }
-        .pf-history-card:hover { box-shadow: 0 8px 24px rgba(194,24,91,0.12); border-color: #f8bbd0; }
+        .pf-history-card:hover { box-shadow: 0 8px 24px rgba(194,24,91,0.12); transform: translateY(-1px); }
+        .pf-hist-thumb {
+          width: clamp(96px, 11vw, 132px); aspect-ratio: 4 / 3; border-radius: 14px;
+          object-fit: cover; flex-shrink: 0; background: #fdf6f9; border: 1px solid #f5e6ec; display: block;
+        }
+        .pf-hist-thumb-empty { display: flex; align-items: center; justify-content: center; }
+        .pf-hist-info {
+          flex: 1; min-width: 0;
+          display: grid; grid-template-columns: minmax(110px, 0.9fr) minmax(120px, 0.9fr) minmax(120px, 1fr) minmax(160px, 1.6fr);
+          gap: 10px 18px; align-items: start;
+        }
+        .pf-hist-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+        .pf-hist-label { font-size: 11.5px; color: #9e7a8a; font-weight: 500; }
+        .pf-hist-value { font-size: 13.5px; color: #1a0a14; font-weight: 500; line-height: 1.5; }
+        .pf-hist-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .pf-hist-badge {
+          display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px;
+          font-size: 12px; font-weight: 600; white-space: nowrap;
+        }
+        .pf-hist-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .pf-hist-trash {
+          width: 38px; height: 38px; border-radius: 12px; border: 1px solid #fde2e2; background: #fff5f5;
+          color: #ef4444; display: flex; align-items: center; justify-content: center; cursor: pointer;
+          transition: background 0.15s, transform 0.15s;
+        }
+        .pf-hist-trash:hover { background: #fee2e2; transform: scale(1.05); }
+        .pf-pager { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 22px; }
+        .pf-pager-btn {
+          min-width: 38px; height: 38px; padding: 0 10px; border-radius: 12px; border: 1px solid #f5e6ec;
+          background: #fff; color: #5a3a4a; font-family: 'Mitr', sans-serif; font-size: 13.5px;
+          display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s;
+        }
+        .pf-pager-btn:hover:not(:disabled) { border-color: #f48fb1; color: #c2185b; }
+        .pf-pager-btn.active { background: linear-gradient(135deg, #f06292, #c2185b); color: #fff; border-color: transparent; }
+        .pf-pager-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pf-pager-info { width: 100%; text-align: center; font-size: 12px; color: #9e7a8a; margin-top: 4px; }
 
         /* ── Docs ── */
         .pf-doc-grid {
@@ -876,7 +1030,8 @@ export default function ProfilePage() {
           .pf-subhero { padding: 28px 0 24px; }
           .pf-menu-pair, .pf-form-grid, .pf-reco-grid, .pf-detail-rows { grid-template-columns: 1fr; }
           .pf-detail-row:nth-child(odd) { border-right: none; }
-          .pf-history-grid { grid-template-columns: 1fr; }
+          .pf-hist-info { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .pf-hist-wide { grid-column: 1 / -1; }
         }
 
         .btn-primary {
@@ -933,6 +1088,7 @@ export default function ProfilePage() {
         {view === 'history' && (
           <HistoryView history={history} onBack={() => setView('profile')}
             onSelectItem={(item) => { setSelectedHistory(item); setView('historyDetail') }}
+            onDeleteItem={(item) => setDeleteHistoryItem(item)}
           />
         )}
 
@@ -946,14 +1102,47 @@ export default function ProfilePage() {
         )}
 
         {view === 'terms' && (
-          <DocView title="ข้อตกลงเงื่อนไขการใช้งาน" sections={TERMS_TEXT}
+          <DocView title="ข้อตกลงเงื่อนไขการใช้งาน" intro={TERMS_INTRO} sections={TERMS_TEXT}
             icon={<FileText size={14} />} onBack={() => setView('profile')} />
+        )}
+
+        {/* DELETE HISTORY MODAL */}
+        {deleteHistoryItem && (
+          <div className="modal-overlay" onClick={() => !deletingHistory && setDeleteHistoryItem(null)}>
+            <div className="modal-sheet" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+              <div className="modal-handle" />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Trash2 size={26} color="#ef4444" strokeWidth={1.5} />
+                </div>
+                <h3 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 18, fontWeight: 600, color: '#1a0a14', textAlign: 'center' }}>ลบประวัติการวิเคราะห์นี้ใช่ไหม?</h3>
+                <p style={{ fontSize: 13, color: '#9e7a8a', textAlign: 'center', lineHeight: 1.6 }}>
+                  {deleteHistoryItem.Detect2 || 'รายการนี้'}
+                  {parseServerDate(deleteHistoryItem.Create_At) && ` · ${parseServerDate(deleteHistoryItem.Create_At)!.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}`}
+                  <br />เมื่อลบแล้วจะไม่สามารถกู้คืนได้
+                </p>
+                <div style={{ display: 'flex', gap: 12, width: '100%', marginTop: 8 }}>
+                  <button disabled={deletingHistory} onClick={() => setDeleteHistoryItem(null)} style={{
+                    flex: 1, padding: '14px', borderRadius: 14,
+                    border: '1.5px solid rgba(194,24,91,0.2)', background: 'transparent', color: '#c2185b',
+                    fontFamily: "'Mitr', sans-serif", fontSize: 14, cursor: 'pointer',
+                  }}>ยกเลิก</button>
+                  <button disabled={deletingHistory} onClick={handleDeleteHistory} style={{
+                    flex: 1, padding: '14px', borderRadius: 14, border: 'none',
+                    background: 'linear-gradient(135deg, #f87171, #ef4444)', color: '#fff',
+                    fontFamily: "'Mitr', sans-serif", fontSize: 14, cursor: deletingHistory ? 'wait' : 'pointer',
+                    opacity: deletingHistory ? 0.7 : 1, boxShadow: '0 4px 16px rgba(239,68,68,0.35)',
+                  }}>{deletingHistory ? 'กำลังลบ...' : 'ลบรายการ'}</button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* LOGOUT MODAL */}
         {showLogoutModal && (
           <div className="modal-overlay" onClick={() => setShowLogoutModal(false)}>
-            <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-sheet" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
               <div className="modal-handle" />
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'linear-gradient(135deg, #fce4ec, #f8bbd0)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -977,7 +1166,7 @@ export default function ProfilePage() {
         {/* DELETE MODAL */}
         {showDeleteModal && (
           <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
-            <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-sheet" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
               <div className="modal-handle" />
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1012,7 +1201,7 @@ export default function ProfilePage() {
         {/* DELETE CONFIRM */}
         {showDeleteConfirm && (
           <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
-            <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-sheet" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
               <div className="modal-handle" />
               <h3 style={{ fontFamily: "'Mitr', sans-serif", fontSize: 17, fontWeight: 600, color: '#1a0a14', marginBottom: 6 }}>กรุณากรอกรหัสยืนยันตัวตน</h3>
               <p style={{ fontSize: 13, color: '#9e7a8a', marginBottom: 20 }}>กรอกรหัสผ่านเพื่อยืนยันการลบบัญชี</p>
@@ -1023,7 +1212,7 @@ export default function ProfilePage() {
                   value={deletePassword}
                   onChange={e => setDeletePassword(e.target.value)}
                   style={{
-                    width: '100%', padding: '14px 48px 14px 16px',
+                    width: '100%', padding: '11px 48px 11px 16px', lineHeight: '24px',
                     borderRadius: 14, border: '2px solid #fca5a5',
                     fontSize: 14, outline: 'none',
                     fontFamily: "'Sarabun', sans-serif", color: '#1a0a14', background: '#fff',
@@ -1053,7 +1242,6 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <Footer />
       </div>
     </>
   )
@@ -1126,7 +1314,8 @@ function FormField({ label, value, onChange, readOnly = false, prefix, icon, onK
           onChange={e => onChange?.(e.target.value)}
           onKeyDown={e => onKeyDown?.(e)}
           style={{
-            width: '100%', padding: prefix ? '13px 16px 13px 28px' : '13px 16px',
+            // line-height สูงพอให้ "_" ไม่ถูกตัด (ลด padding เท่ากัน ความสูงช่องเท่าเดิม)
+            width: '100%', padding: prefix ? '10px 16px 10px 28px' : '10px 16px', lineHeight: '24px',
             borderRadius: 12, border: `2px solid ${readOnly ? '#f3f4f6' : '#fce7f3'}`,
             fontSize: 14, outline: 'none', fontFamily: "'Sarabun', sans-serif",
             background: readOnly ? '#f9fafb' : '#fff',
@@ -1142,35 +1331,35 @@ function FormField({ label, value, onChange, readOnly = false, prefix, icon, onK
   )
 }
 
-function HistoryDetailView({ item, onBack }: { item: any; onBack: () => void }) {
-  const [detail, setDetail] = useState<any>(item)
+function HistoryDetailView({ item, onBack }: { item: HistoryItem; onBack: () => void }) {
+  const [detail, setDetail] = useState<HistoryItem>(item)
   const [loading, setLoading] = useState(true)
   const showToast = useToast()
+  const router = useRouter()
 
   useEffect(() => {
     const fetchDetail = async () => {
       try {
         const token = localStorage.getItem('access_token')
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/history/${item.AssessmentID}`, {
+        // GET /analysis/result/<id> (ตอบเฉพาะผลวิเคราะห์ ไม่มีวันที่ → รวมกับข้อมูลจากรายการเดิมที่มี Create_At)
+        const res = await fetch(`${apiBase()}/analysis/result/${item.AssessmentID}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
+        if (isAuthError(res.status)) { router.replace('/login'); return }
         if (!res.ok) {
           showToast(await responseMessage(res, 'ไม่สามารถโหลดรายละเอียดได้'), 'error')
           return
         }
-        const data = await res.json()
-        if (data.status === 'success') setDetail(data.data)
+        const data = await readJson(res)
+        if (data.status === 'success') setDetail(prev => ({ ...prev, ...data.data }))
       } catch {
         showToast(MSG_NETWORK_ERROR, 'error')
       } finally { setLoading(false) }
     }
     fetchDetail()
-  }, [item.AssessmentID, showToast])
+  }, [item.AssessmentID, showToast, router])
 
-  const levelMap: Record<string, string> = {
-    'ฉุกเฉิน': 'high', 'เสี่ยงสูง': 'high', 'เสี่ยงปานกลาง': 'medium', 'ปกติ': 'low',
-  }
-  const cfg = riskConfig[levelMap[detail.Risk_Level] || 'low']
+  const cfg = riskStyle(detail.Risk_Level)
 
   const rows = [
     { label: 'ผลการวิเคราะห์ภาพ (AI)', value: detail.Detect1, emoji: '🩸' },
@@ -1198,13 +1387,13 @@ function HistoryDetailView({ item, onBack }: { item: any; onBack: () => void }) 
               <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 13, fontWeight: 600, color: '#9e7a8a', padding: '14px 20px 12px' }}>ภาพที่วิเคราะห์</p>
               {detail.Image_Path ? (
                 <img
-                  src={`${process.env.NEXT_PUBLIC_API_URL}/${resultImagePath(detail.Image_Path)}`}
+                  src={`${apiBase()}/${resultImagePath(detail.Image_Path)}`}
                   alt="Analyzed"
                   onError={e => {
                     const img = e.currentTarget
                     if (img.dataset.fallback !== '1') {
                       img.dataset.fallback = '1'
-                      img.src = `${process.env.NEXT_PUBLIC_API_URL}/${detail.Image_Path}`
+                      img.src = `${apiBase()}/${detail.Image_Path}`
                     } else {
                       img.style.display = 'none'
                     }
@@ -1255,8 +1444,7 @@ function HistoryDetailView({ item, onBack }: { item: any; onBack: () => void }) 
               <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 15, fontWeight: 600, color: '#1a0a14', marginBottom: 12 }}>คำแนะนำ</p>
               <div className="pf-reco-grid">
                 {detail.Recommendation.split(/[·•]/).filter(Boolean).map((s: string, i: number) => (
-                  <div key={i} style={{ display: 'flex', gap: 10, padding: '14px 16px', background: '#fff', borderRadius: 14, border: '1px solid #f5e6ec' }}>
-                    <div style={{ width: 22, height: 22, borderRadius: 7, flexShrink: 0, background: 'linear-gradient(135deg, #f06292, #c2185b)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Mitr', sans-serif", fontSize: 11, color: '#fff', fontWeight: 600 }}>{i + 1}</div>
+                  <div key={i} style={{ padding: '14px 16px', background: '#fff', borderRadius: 14, border: '1px solid #f5e6ec' }}>
                     <p style={{ fontSize: 13.5, color: '#4a2a3a', lineHeight: 1.6 }}>{s.trim()}</p>
                   </div>
                 ))}

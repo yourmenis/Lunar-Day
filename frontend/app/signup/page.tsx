@@ -8,8 +8,9 @@ import Image from 'next/image'
 import { SIGNUP_SUCCESS_KEY, useToast } from '../components/Toast'
 import { postJson } from '../lib/postJson'
 import { ageFrom, parseYmd } from '../lib/birthDate'
-import { PASSWORD_MAX, USERNAME_MAX, passwordLengthError, usernameError } from '../lib/authRules'
-import { PRIVACY_TEXT, TERMS_TEXT } from '../lib/policyText'
+import { PASSWORD_MAX, PASSWORD_PLACEHOLDER, USERNAME_MAX, passwordRuleError, usernameError } from '../lib/authRules'
+import { PRIVACY_TEXT, TERMS_INTRO, TERMS_TEXT } from '../lib/policyText'
+import PolicyBody from '../components/PolicyBody'
 
 const STEPS = [
   { id: 1, title: 'ข้อมูลส่วนตัว', subtitle: 'บอกเราเกี่ยวกับคุณ' },
@@ -185,18 +186,21 @@ export default function SignUpPage() {
   })
 
   useEffect(() => {
-    setMounted(true)
-    setStars(
-      Array.from({ length: 28 }).map(() => ({
-        left: `${Math.random() * 100}%`,
-        top: `${Math.random() * 100}%`,
-        '--dur': `${2.5 + Math.random() * 4}s`,
-        '--delay': `${Math.random() * 4}s`,
-        '--bright': `${0.4 + Math.random() * 0.6}`,
-        width: `${Math.random() > 0.7 ? 4 : 2}px`,
-        height: `${Math.random() > 0.7 ? 4 : 2}px`,
-      } as React.CSSProperties))
-    )
+    // ตั้งค่าในเฟรมถัดไป (ไม่ setState ตรง ๆ ใน effect) — ผลที่ผู้ใช้เห็นเหมือนเดิม
+    requestAnimationFrame(() => {
+      setMounted(true)
+      setStars(
+        Array.from({ length: 28 }).map(() => ({
+          left: `${Math.random() * 100}%`,
+          top: `${Math.random() * 100}%`,
+          '--dur': `${2.5 + Math.random() * 4}s`,
+          '--delay': `${Math.random() * 4}s`,
+          '--bright': `${0.4 + Math.random() * 0.6}`,
+          width: `${Math.random() > 0.7 ? 4 : 2}px`,
+          height: `${Math.random() > 0.7 ? 4 : 2}px`,
+        } as React.CSSProperties))
+      )
+    })
   }, [])
 
   const handleChange = (key: string, value: string) => {
@@ -222,7 +226,7 @@ export default function SignUpPage() {
       // backend ตัดช่องว่างหัว-ท้ายรหัสผ่านก่อนตรวจ จึงตรวจแบบเดียวกัน
       const pw = form.password.trim()
       if (!pw) return 'กรุณากรอกรหัสผ่าน'
-      const pwErr = passwordLengthError(form.password)
+      const pwErr = passwordRuleError(form.password)
       if (pwErr) return pwErr
       if (pw !== form.confirmPassword.trim()) return 'โปรดระบุรหัสผ่านทั้งสองช่องให้ตรงกัน'
       if (!agreed) return 'กรุณากดยอมรับเงื่อนไขและนโยบายความเป็นส่วนตัวก่อนดำเนินการต่อ'
@@ -392,7 +396,7 @@ export default function SignUpPage() {
                 <input
                   type="email"
                   className="field-input"
-                  placeholder="example@email.com"
+                  placeholder="อีเมลของผู้ใช้งาน"
                   value={form.email}
                   onChange={e => handleChange('email', e.target.value)}
                 />
@@ -403,7 +407,7 @@ export default function SignUpPage() {
                 <input
                   type="text"
                   className="field-input"
-                  placeholder="username"
+                  placeholder="ชื่อผู้ใช้งาน"
                   value={form.username}
                   maxLength={USERNAME_MAX}
                   onChange={e => handleChange('username', e.target.value)}
@@ -428,7 +432,7 @@ export default function SignUpPage() {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   className="field-input"
-                  placeholder="อย่างน้อย 8 ตัวอักษร"
+                  placeholder={PASSWORD_PLACEHOLDER}
                   value={form.password}
                   maxLength={PASSWORD_MAX}
                   onChange={e => handleChange('password', e.target.value)}
@@ -529,10 +533,13 @@ export default function SignUpPage() {
               </p>
             </div>
             <div style={{ padding: '16px 24px', overflowY: 'auto' }}>
+              {policyDoc === 'terms' && (
+                <p style={{ fontSize: 13.5, color: '#5a3a4a', lineHeight: 1.8, marginBottom: 16 }}>{TERMS_INTRO}</p>
+              )}
               {(policyDoc === 'terms' ? TERMS_TEXT : PRIVACY_TEXT).map((sec, i) => (
-                <div key={i} style={{ marginBottom: 16 }}>
-                  <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 600, color: '#c2185b', marginBottom: 4 }}>{sec.title}</p>
-                  <p style={{ fontSize: 13.5, color: '#5a3a4a', lineHeight: 1.8 }}>{sec.body}</p>
+                <div key={i} style={{ marginBottom: 18 }}>
+                  <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 14, fontWeight: 600, color: '#c2185b', marginBottom: 6 }}>{sec.title}</p>
+                  <PolicyBody paragraphs={sec.paragraphs} fontSize={13.5} />
                 </div>
               ))}
             </div>

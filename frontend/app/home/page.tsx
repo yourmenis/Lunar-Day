@@ -4,29 +4,23 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { TrendingUp, BookOpen, ArrowRight, ChevronRight, Sparkles, Activity } from 'lucide-react'
 import Navbar from './components/Navbar'
-import Footer from './components/Footer'
 import HeroCharacter from './components/HeroCharacter'
 import api from '../lib/api'
 import { useToast } from '../components/Toast'
 import { axiosErrorMessage } from '../lib/postJson'
-import LoginToast from './components/LoginToast'
+import { apiBase, fixBackendUrl } from '../lib/apiBase'
+import type { Article } from '../lib/types'
 
 // ── ดึง URL ภาพปกจากข้อมูลบทความ (ปรับชื่อ field ให้ตรงกับ API ของคุณ) ──
-const getCoverUrl = (article: any): string | null => {
-  const raw =
-    article?.CoverImage ||
-    article?.ImageURL ||
-    article?.ImageUrl ||
-    article?.Image ||
-    article?.Thumbnail ||
-    null
+const getCoverUrl = (article: Article): string | null => {
+  const raw = article.ImageURL
   if (!raw) return null
-  if (/^(https?:)?\/\//.test(raw) || raw.startsWith('data:')) return raw
-  const base = (api as any)?.defaults?.baseURL || ''
-  return `${base.replace(/\/$/, '')}/${String(raw).replace(/^\//, '')}`
+  if (/^(https?:)?\/\//.test(raw)) return fixBackendUrl(raw)
+  if (raw.startsWith('data:')) return raw
+  return `${apiBase()}/${String(raw).replace(/^\//, '')}`
 }
 
-function ArticleCover({ article, fallback }: { article: any; fallback: string }) {
+function ArticleCover({ article, fallback }: { article: Article; fallback: string }) {
   const [failed, setFailed] = useState(false)
   const url = getCoverUrl(article)
 
@@ -45,31 +39,28 @@ function ArticleCover({ article, fallback }: { article: any; fallback: string })
 }
 
 export default function HomePage() {
-  const [showLoginToast, setShowLoginToast] = useState(false)
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [waveBars, setWaveBars] = useState<number[]>([])
-  const [articles, setArticles] = useState<any[]>([])
+  const [articles, setArticles] = useState<Article[]>([])
   const showToast = useToast()
 
-  const fetchArticles = async () => {
-    try {
-      const res = await api.get('/articles')
-      setArticles(res.data)
-    } catch (err) {
-      showToast(axiosErrorMessage(err, 'โหลดบทความไม่สำเร็จ'), 'error')
-    }
-  }
 
   useEffect(() => {
-    setMounted(true)
-    setWaveBars(
-      Array.from({ length: 20 }, (_, i) =>
-        20 + Math.sin(i * 0.8) * 14 + Math.random() * 10
+    // ตั้งค่าในเฟรมถัดไป (ไม่ setState ตรง ๆ ใน effect) — ผลที่ผู้ใช้เห็นเหมือนเดิม
+    const raf = requestAnimationFrame(() => {
+      setMounted(true)
+      setWaveBars(
+        Array.from({ length: 20 }, (_, i) =>
+          20 + Math.sin(i * 0.8) * 14 + Math.random() * 10
+        )
       )
-    )
-    fetchArticles()
-  }, [])
+    })
+    api.get('/articles')
+      .then(res => setArticles(res.data))
+      .catch(err => showToast(axiosErrorMessage(err, 'โหลดบทความไม่สำเร็จ'), 'error'))
+    return () => cancelAnimationFrame(raf)
+  }, [showToast])
 
   const topArticles = [...articles].slice(0, 4)
   const fallbackEmojis = ['🔬', '💊', '🌸', '📊']
@@ -79,7 +70,7 @@ export default function HomePage() {
     const token = localStorage.getItem('access_token')
 
     if (!token) {
-      setShowLoginToast(true)
+      showToast('กรุณาเข้าสู่ระบบก่อนใช้งานฟีเจอร์นี้', 'info')
       return
     }
 
@@ -352,42 +343,6 @@ export default function HomePage() {
           pointer-events: none;
         }
 
-        /* ── ป้ายอันดับ 1-4 (สีต่างกัน) ── */
-        .article-rank {
-          position: absolute;
-          top: 12px; left: 12px;
-          z-index: 2;
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 4px 10px;
-          border-radius: 999px;
-          font-size: 11px;
-          font-family: 'Mitr', sans-serif;
-          font-weight: 500;
-          backdrop-filter: blur(6px);
-        }
-        .article-rank.rank-1 {
-          background: linear-gradient(135deg, #fff3e0, #ffe0b2);
-          color: #e65100;
-          border: 1px solid rgba(230,81,0,0.25);
-        }
-        .article-rank.rank-2 {
-          background: linear-gradient(135deg, #f1f3f5, #dee2e6);
-          color: #495057;
-          border: 1px solid rgba(73,80,87,0.25);
-        }
-        .article-rank.rank-3 {
-          background: linear-gradient(135deg, #fdeee0, #f3c9a0);
-          color: #a1590f;
-          border: 1px solid rgba(161,89,15,0.25);
-        }
-        .article-rank.rank-4 {
-          background: rgba(255,255,255,0.88);
-          color: #c2185b;
-          border: 1px solid rgba(194,24,91,0.2);
-        }
-
         .article-card-body {
           padding: 18px 20px 20px;
           display: flex;
@@ -605,8 +560,8 @@ export default function HomePage() {
             <div className="cta-content">
               <p className="cta-label">✦ เริ่มต้นวันนี้</p>
               <h2 className="cta-title">
-                วิเคราะห์ผลเลือด<br />
-                เพื่อสุขภาพที่ดีกว่า
+                เช็กสุขภาพสตรีเชิงลึก<br />
+                ผ่านประจำเดือน
               </h2>
               <p className="cta-desc">รับผลวิเคราะห์ละเอียดพร้อมคำแนะนำเฉพาะบุคคลภายในไม่กี่นาที</p>
               <button className="btn-primary" style={{ marginTop: 24 }} onClick={goToAnalyze}>
@@ -636,10 +591,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* ── Footer ── */}
-        <Footer />
       </div>
-      <LoginToast show={showLoginToast} onClose={() => setShowLoginToast(false)} />
     </>
   )
 }
