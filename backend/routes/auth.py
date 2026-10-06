@@ -102,9 +102,11 @@ def register():
         return jsonify({"msg": "สมัครสมาชิกสำเร็จ"}), 201
 
     except mysql.connector.Error:
+        logger.error(f"Database Error: {err}")
         return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
     except Exception:
+        logger.error(f"System Error: {e}")
         return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
         
     finally:
@@ -195,13 +197,13 @@ def login():
         else:
             # กรณีไม่มีชื่อผู้ใช้นี้ในระบบ
             return jsonify({"msg": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
-
+        
     except mysql.connector.Error as err:
-        print(f"[DB Error] in login: {err}")
+        logger.error(f"Database Error: {err}")
         return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
     except Exception as e:
-        print(f"[Error] in login: {e}")
+        logger.error(f"System Error: {e}")
         return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
         
     finally:
@@ -292,19 +294,21 @@ Luna Day Team
 
         return jsonify({"msg": "ส่งรหัส OTP ไปยังอีเมลของคุณเรียบร้อยแล้ว"}), 200
 
-    except mysql.connector.Error:
+    except mysql.connector.Error as err:
+        logger.error(f"Database Error: {err}")
         return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
-    except smtplib.SMTPException:
+    except smtplib.SMTPException as em:
+        logger.error(f"Email Error: {em}")
         return jsonify({"msg": "เกิดปัญหาในการส่งอีเมล กรุณาลองใหม่อีกครั้งภายหลัง"}), 500
-    except Exception:
+    except Exception as e:
+        logger.error(f"System Error: {e}")
         return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
         if cursor is not None:
             cursor.close()
         if db is not None:
             db.close()
-
-
+            
 # ==========================================
 # 🛡️ verify otp
 # ==========================================
@@ -340,10 +344,12 @@ def verify_otp():
 
         return jsonify({"msg": "รหัส OTP ถูกต้อง"}), 200
 
-    except mysql.connector.Error:
+    except mysql.connector.Error as err:
+        logger.error(f"Database Error: {err}")
         return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
-    except Exception:
+    except Exception as e:
+        logger.error(f"System Error: {e}")
         return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
 
     finally:
@@ -414,13 +420,14 @@ def reset_password():
             (hashed_pw, email),
         )
         db.commit()
-
         return jsonify({"msg": "เปลี่ยนรหัสผ่านสำเร็จ"}), 200
 
-    except mysql.connector.Error:
+    except mysql.connector.Error as err:
+        logger.error(f"Database Error: {err}")
         return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
-    except Exception:
+    except Exception as e:
+        logger.error(f"System Error: {e}")
         return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
 
     finally:
