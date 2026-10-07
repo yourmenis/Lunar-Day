@@ -13,8 +13,10 @@ from email.mime.text import MIMEText
 import re
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-auth_bp = Blueprint("auth_bp", __name__)
+import logging
 
+auth_bp = Blueprint("auth_bp", __name__)
+logger = logging.getLogger(__name__)
 # ==========================================
 # ระบบสมาชิก 
 # ==========================================
@@ -35,32 +37,32 @@ def register():
         consent = data.get("isConsent")
 
         if not consent:
-            return jsonify({"msg": "กรุณากดยอมรับเงื่อนไขและนโยบายความเป็นส่วนตัวก่อนดำเนินการต่อ"}), 400
+            return jsonify({"status":"error","error_code":"A11","msg": "กรุณากดยอมรับเงื่อนไขและนโยบายความเป็นส่วนตัวก่อนดำเนินการต่อ"}), 400
 
         # ---ตรวจสอบข้อมูลว่าง---
         if not all([username, password, confirm_pw, name, lastname, birthday, email]):
-            return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
+            return jsonify({"status":"error","error_code":"A2","msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
 
         # ---ตรวจสอบความยาวรหัสผ่าน---
         if len(password) < 8:
             return jsonify({"msg": "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร"}), 400
         if len(username)> 32:
-            return jsonify({"msg": "ชื่อผู้ใช้งานต้องมีความยาวไม่เกิน 32 ตัวอักษร"}), 400
+            return jsonify({"status":"error","error_code":"A8","msg": "ชื่อผู้ใช้งานต้องมีความยาวไม่เกิน 32 ตัวอักษร"}), 400
         if " " in username:
-            return jsonify({"msg": "ห้ามมีช่องว่างระหว่างชื่อผู้ใช้งาน"}), 400
+            return jsonify({"status":"error","error_code":"A10","msg": "ห้ามมีช่องว่างระหว่างชื่อผู้ใช้งาน"}), 400
         if len(password) >128:
-            return jsonify({"msg": "รหัสผ่านต้องมีความยาวไม่เกิน 128 ตัวอักษร"}), 400
+            return jsonify({"status":"error","error_code":"A9","msg": "รหัสผ่านต้องมีความยาวไม่เกิน 128 ตัวอักษร"}), 400
         password_pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).+$"
         if not re.match(password_pattern, password):
-            return jsonify({"msg": "รหัสผ่านต้องประกอบด้วยตัวอักษรพิมพ์ใหญ่ อักษรพิมพ์เล็ก และอักษรพิเศษอย่างน้อย 1 ตัว"}), 400
+            return jsonify({"status":"error","error_code":"A12","msg": "รหัสผ่านต้องประกอบด้วยตัวอักษรพิมพ์ใหญ่ อักษรพิมพ์เล็ก และอักษรพิเศษอย่างน้อย 1 ตัว"}), 400
         # ---ตรวจสอบรหัสผ่านตรงกัน---
         if password != confirm_pw:
-            return jsonify({"msg": "โปรดระบุรหัสผ่านทั้งสองช่องให้ตรงกัน"}), 400
+            return jsonify({"status":"error","error_code":"A4","msg": "โปรดระบุรหัสผ่านทั้งสองช่องให้ตรงกัน"}), 400
 
         # ---ตรวจสอบรูปแบบอีเมล---
         email_pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
         if not re.match(email_pattern, email):
-            return jsonify({"msg": "รูปแบบอีเมลไม่ถูกต้อง"}), 400
+            return jsonify({"status":"error","error_code":"A6","msg": "โปรดระบุอีเมลที่ถูกต้อง"}), 400
             
         # ---ตรวจสอบเงื่อนไขอายุ---
         try:
@@ -70,9 +72,9 @@ def register():
             today = date.today()
             age = today.year - birthday_obj.year - ((today.month, today.day) < (birthday_obj.month, birthday_obj.day))
             if age < 13:
-                return jsonify({"msg": "ผู้สมัครต้องมีอายุตั้งแต่ 13 ปีขึ้นไปจึงจะใช้งานได้"}), 400
+                return jsonify({"status":"error","error_code":"A5","msg": "ผู้สมัครต้องมีอายุตั้งแต่ 13 ปีขึ้นไปจึงจะใช้งานได้"}), 400
         except ValueError:
-            return jsonify({"msg": "รูปแบบวันที่ไม่ถูกต้อง"}), 400
+            return jsonify({"status":"error","msg": "รูปแบบวันที่ไม่ถูกต้อง"}), 400
 
         db = get_db_connection()
         cursor = db.cursor(dictionary=True)
@@ -81,19 +83,17 @@ def register():
         check_sql = "SELECT Username FROM User WHERE Username = %s"
         cursor.execute(check_sql, (username,))
         if cursor.fetchone():
-            return jsonify({"msg": "ชื่อผู้ใช้นี้ถูกใช้งานแล้ว"}), 400
+            return jsonify({"status":"error","error_code":"A1","msg": "ชื่อผู้ใช้นี้ถูกใช้งานแล้ว"}), 400
 
         # ตรวจสอบ email ซ้ำ
         check_sql = "SELECT Email FROM User WHERE Email = %s"
         cursor.execute(check_sql, (email,))
         if cursor.fetchone():
-            return jsonify({"msg": "อีเมลนี้ถูกใช้แล้ว กรุณาระบุอีเมลใหม่"}), 400
+            return jsonify({"status":"error","error_code":"A7","msg": "อีเมลนี้ถูกใช้แล้ว กรุณาระบุอีเมลใหม่"}), 400
         hashed_pw = bcrypt.generate_password_hash(password).decode("utf-8")
         consent_value = 1 if consent else 0
 
-        
-
-        # บันทึกข้อมูล
+            # บันทึกข้อมูล
         sql = "INSERT INTO User (Username, Password, Name, LastName, Birthday, Email, Is_Consent) VALUES (%s, %s, %s, %s, %s, %s, %s)"
         values = (username, hashed_pw, name, lastname, birthday_obj, email, consent_value)
 
@@ -101,11 +101,11 @@ def register():
         db.commit()  
         return jsonify({"msg": "สมัครสมาชิกสำเร็จ"}), 201
 
-    except mysql.connector.Error:
+    except mysql.connector.Error as err:
         logger.error(f"Database Error: {err}")
         return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
-    except Exception:
+    except Exception as e:
         logger.error(f"System Error: {e}")
         return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
         
@@ -192,7 +192,10 @@ def login():
                     cursor.execute(update_sql, (failed_count, user["UserID"]))
                     db.commit()
                     
-                    return jsonify({"msg": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
+                    return jsonify({
+                        "status":"error",
+                        "error_code":"",
+                        "msg": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
                     
         else:
             # กรณีไม่มีชื่อผู้ใช้นี้ในระบบ
@@ -386,6 +389,11 @@ def reset_password():
         
         if len(new_password) > 128 :
             return jsonify({"msg": "รหัสผ่านต้องมีความยาวไม่เกิน 128 ตัวอักษร"}), 400
+        
+        password_pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).+$"
+        if not re.match(password_pattern, new_password):
+            return jsonify({"msg": "รหัสผ่านต้องประกอบด้วยตัวอักษรพิมพ์ใหญ่ อักษรพิมพ์เล็ก และอักษรพิเศษอย่างน้อย 1 ตัว"}), 400
+        
         db = get_db_connection()
         cursor = db.cursor(dictionary=True, buffered=True)
 
@@ -401,11 +409,11 @@ def reset_password():
         user = cursor.fetchone()
 
         if not user:
-            return jsonify({"msg": "รหัส OTP ไม่ถูกต้อง โปรดตรวจสอบอีกครั้ง"}), 400
+            return jsonify({"status": "error","msg": "รหัส OTP ไม่ถูกต้อง โปรดตรวจสอบอีกครั้ง"}), 400
 
         # เช็ควันหมดอายุซ้ำ
         if user["OTPExpireTime"] is None or datetime.now() > user["OTPExpireTime"]:
-            return jsonify({"msg": "รหัส OTP หมดอายุแล้ว โปรดขอรหัสใหม่"}), 400
+            return jsonify({"status": "error", "msg": "รหัส OTP หมดอายุแล้ว โปรดขอรหัสใหม่"}), 400
 
         # แฮชรหัสผ่านใหม่
         hashed_pw = bcrypt.generate_password_hash(new_password).decode("utf-8")
@@ -424,11 +432,11 @@ def reset_password():
 
     except mysql.connector.Error as err:
         logger.error(f"Database Error: {err}")
-        return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
+        return jsonify({"status": "error","msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
     except Exception as e:
         logger.error(f"System Error: {e}")
-        return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        return jsonify({"status": "error","msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
 
     finally:
         if cursor is not None:
