@@ -16,6 +16,7 @@ import { useToast } from '../../components/Toast'
 import { PRIVACY_TEXT, TERMS_TEXT } from '../../lib/policyText'
 import { USERNAME_MAX, usernameError } from '../../lib/authRules'
 import { avatarUrlFromFile, getCachedAvatar, getMemoryAvatar, setCachedAvatar } from '../../lib/avatarCache'
+import { clearProfileCache, getCachedHistory, getCachedProfile, setCachedHistory, setCachedProfile } from '../../lib/profileCache'
 import { MSG_NETWORK_ERROR, responseMessage } from '../../lib/postJson'
 
 // ============================================================
@@ -570,8 +571,9 @@ export default function ProfilePage() {
   const router = useRouter()
   const [view, setView] = useState<View>('profile')
   const [mounted, setMounted] = useState(false)
-  const [profile, setProfile] = useState<any>(null)
-  const [history, setHistory] = useState<any[]>([])
+  // เริ่มจากข้อมูลที่จำไว้ (ถ้ามี) → กลับมาหน้านี้แล้วชื่อ/จำนวนประวัติไม่กะพริบ
+  const [profile, setProfile] = useState<any>(getCachedProfile)
+  const [history, setHistory] = useState<any[]>(getCachedHistory)
   const [selectedHistory, setSelectedHistory] = useState<any>(null)
 
   const showToast = useToast()
@@ -611,6 +613,7 @@ export default function ProfilePage() {
       const data = await res.json()
       if (data.data) {
         setProfile(data.data)
+        setCachedProfile(data.data)
         setCachedAvatar(avatarUrlFromFile(data.data.Profile_Image))
       }
     } catch { showToast('ไม่สามารถโหลดข้อมูลโปรไฟล์ได้', 'error') }
@@ -628,7 +631,9 @@ export default function ProfilePage() {
         return
       }
       const data = await res.json()
-      if (data.status === 'success') setHistory(data.data)
+      const list = data.status === 'success' ? data.data : []
+      setHistory(list)
+      setCachedHistory(list)
     } catch { showToast('ไม่สามารถโหลดประวัติได้', 'error') }
   }
 
@@ -657,6 +662,7 @@ export default function ProfilePage() {
     localStorage.removeItem('access_token')
     localStorage.removeItem('user')
     setCachedAvatar(null)
+    clearProfileCache()
     router.push('/login')
   }
 
@@ -676,6 +682,7 @@ export default function ProfilePage() {
       localStorage.removeItem('access_token')
       localStorage.removeItem('user')
       setCachedAvatar(null)
+      clearProfileCache()
       router.push('/login')
     } catch { showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error') }
   }

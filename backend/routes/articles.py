@@ -2,12 +2,13 @@ from flask import Blueprint, jsonify, request
 from config.database import get_db_connection
 import mysql.connector
 import os
+import logging # เพิ่ม import logging
 
 articles_bp = Blueprint("articles_bp", __name__)
-
-# ใช้ ENV ถ้ามี ไม่งั้น fallback localhost
 SERVER_URL = os.getenv("SERVER_URL", "http://localhost:5000")
 
+# สร้างตัวแปร logger
+logger = logging.getLogger(__name__)
 
 # ----------------------------------------------
 # Helper: จัดการ URL รูปภาพ
@@ -21,7 +22,6 @@ def format_image_url(article):
         article["ImageURL"] = f"{SERVER_URL}{article['ImageURL']}"
     return article
 
-
 # ----------------------------------------------
 # Helper: ปิด DB
 # ----------------------------------------------
@@ -30,7 +30,6 @@ def close_db(cursor, db):
         cursor.close()
     if db is not None and db.is_connected():
         db.close()
-
 
 # ----------------------------------------------
 # 1. ดึงรายการบทความทั้งหมด
@@ -54,12 +53,13 @@ def get_articles():
         return jsonify(articles), 200
 
     except mysql.connector.Error as err:
-        return jsonify({"msg": f"Database Error: {err}"}), 500
+        logger.error(f"Database Error: {err}")
+        return jsonify({"status":"error","msg": "ระบบไม่สามารถค้นหาข้อมูลได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"}), 500
     except Exception as e:
-        return jsonify({"msg": str(e)}), 500
+        logger.error(f"System Error: {e}")
+        return jsonify({"status":"error","msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
         close_db(cursor, db)
-
 
 # ----------------------------------------------
 # 2. ดึงรายละเอียดบทความ
@@ -85,12 +85,13 @@ def get_article_detail(article_id):
         return jsonify(article), 200
 
     except mysql.connector.Error as err:
-        return jsonify({"msg": f"Database Error: {err}"}), 500
+        logger.error(f"Database Error: {err}")
+        return jsonify({"status":"error","msg": "ระบบไม่สามารถค้นหาข้อมูลได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"}), 500
     except Exception as e:
-        return jsonify({"msg": str(e)}), 500
+        logger.error(f"System Error: {e}")
+        return jsonify({"status":"error","msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
         close_db(cursor, db)
-
 
 # ----------------------------------------------
 # 3. ค้นหาบทความ
@@ -98,9 +99,8 @@ def get_article_detail(article_id):
 @articles_bp.route("/articles/search", methods=["GET"])
 def search_articles():
     query = request.args.get("q", "").strip()
-
     if not query:
-        return jsonify({"msg": "กรุณาใส่คำค้นหา"}), 400
+        return jsonify({"status":"error","error_code":"A2","msg": "กรุณาใส่คำค้นหา"}), 400
 
     db = None
     cursor = None
@@ -116,17 +116,18 @@ def search_articles():
         """
         cursor.execute(sql, (f"%{query}%", f"%{query}%"))
         results = cursor.fetchall()
-
+        
         if not results:
-            return jsonify({"msg": "ไม่พบข้อมูลที่ค้นหา"}), 404
-
+            return jsonify({"status":"error","error_code":"A1","msg": "ไม่พบข้อมูลที่ค้นหา"}), 404
+    
         results = [format_image_url(a) for a in results]
-
         return jsonify(results), 200
 
     except mysql.connector.Error as err:
-        return jsonify({"msg": f"Database Error: {err}"}), 500
+        logger.error(f"Database Error: {err}")
+        return jsonify({"status":"error","msg": "ระบบไม่สามารถค้นหาข้อมูลได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"}), 500
     except Exception as e:
-        return jsonify({"msg": str(e)}), 500
+        logger.error(f"System Error: {e}")
+        return jsonify({"status":"error","msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
         close_db(cursor, db)

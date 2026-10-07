@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import api from '../../lib/api'
 import { useToast } from '../../components/Toast'
 import { avatarUrlFromFile, getCachedAvatar, getMemoryAvatar, setCachedAvatar } from '../../lib/avatarCache'
+import { clearProfileCache } from '../../lib/profileCache'
 import Image from 'next/image'
 
 const NAV_LINKS = [
@@ -13,6 +14,10 @@ const NAV_LINKS = [
   { href: '/home/articles', label: 'บทความ',              icon: BookOpen },
   { href: '/home/contact',  label: 'ติดต่อเรา',           icon: Phone },
 ]
+
+// จำสถานะล็อกอินล่าสุดไว้ข้ามหน้า (เปลี่ยนหน้าแล้วปุ่มไม่กะพริบ)
+// ค่าเริ่มเป็น false เหมือนฝั่ง server จึงไม่เกิด hydration mismatch ตอนโหลดหน้าแรก
+let knownLoggedIn = false
 
 export default function Navbar() {
   const router   = useRouter()
@@ -22,6 +27,8 @@ export default function Navbar() {
   const [profileImage,    setProfileImage]    = useState<string | null>(getMemoryAvatar)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [drawerOpen,      setDrawerOpen]      = useState(false)
+  const [isLoggedIn,      setIsLoggedIn]      = useState(() => knownLoggedIn)
+  const markLoggedIn = (v: boolean) => { knownLoggedIn = v; setIsLoggedIn(v) }
   const showToast = useToast()
 
   // ล็อก scroll เมื่อ drawer เปิด
@@ -38,7 +45,8 @@ export default function Navbar() {
   useEffect(() => {
     const fetchAvatar = async () => {
       const token = localStorage.getItem('access_token')
-      if (!token) { setCachedAvatar(null); setProfileImage(null); return }
+      if (!token) { setCachedAvatar(null); setProfileImage(null); markLoggedIn(false); return }
+      markLoggedIn(true)
       // แสดงรูปที่จำไว้ก่อน (กรณีรีเฟรชหน้า) แล้วค่อยอัปเดตจาก API
       const cached = getCachedAvatar()
       if (cached) setProfileImage(cached)
@@ -51,6 +59,7 @@ export default function Navbar() {
         if ((err as { response?: { status?: number } })?.response?.status === 401) {
           setCachedAvatar(null)
           setProfileImage(null)
+          markLoggedIn(false)
         }
       }
     }
@@ -65,6 +74,8 @@ export default function Navbar() {
     localStorage.removeItem('access_token')
     localStorage.removeItem('user')
     setCachedAvatar(null)
+    clearProfileCache()
+    markLoggedIn(false)
     showToast('ออกจากระบบเรียบร้อยแล้ว')
     setTimeout(() => router.push('/login'), 1000)
   }
@@ -106,7 +117,8 @@ export default function Navbar() {
         }
 
         /* Desktop links */
-        .nav-links { display: flex; align-items: center; gap: 4px; }
+        /* ระยะห่างระหว่างเมนู: กว้างขึ้นตามจอ (จอเล็กสุด 12px, จอใหญ่สุด 32px) */
+        .nav-links { display: flex; align-items: center; gap: clamp(12px, 2.5vw, 32px); }
         .nav-link {
           display: flex; align-items: center; gap: 7px;
           padding: 8px 16px; border-radius: 10px; border: none;
@@ -368,10 +380,12 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Logout (desktop only) */}
-          <button className="nav-logout-btn nav-logout-desktop" onClick={() => setShowLogoutModal(true)}>
-            <LogOut size={18} />
-          </button>
+          {/* Logout (desktop only) — แสดงเฉพาะตอนล็อกอินแล้ว */}
+          {isLoggedIn && (
+            <button className="nav-logout-btn nav-logout-desktop" onClick={() => setShowLogoutModal(true)}>
+              <LogOut size={18} />
+            </button>
+          )}
 
           {/* Hamburger (mobile only) */}
           <button className="nav-hamburger" onClick={() => setDrawerOpen(true)} aria-label="เปิดเมนู">
@@ -435,15 +449,17 @@ export default function Navbar() {
           ))}
         </div>
 
-        {/* Logout */}
-        <div className="drawer-footer">
-          <button className="drawer-logout-btn" onClick={() => { setDrawerOpen(false); setShowLogoutModal(true) }}>
-            <div className="drawer-logout-icon">
-              <LogOut size={17} color="#dc2626" />
-            </div>
-            ออกจากระบบ
-          </button>
-        </div>
+        {/* Logout — แสดงเฉพาะตอนล็อกอินแล้ว */}
+        {isLoggedIn && (
+          <div className="drawer-footer">
+            <button className="drawer-logout-btn" onClick={() => { setDrawerOpen(false); setShowLogoutModal(true) }}>
+              <div className="drawer-logout-icon">
+                <LogOut size={17} color="#dc2626" />
+              </div>
+              ออกจากระบบ
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Logout Modal ── */}
