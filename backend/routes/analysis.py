@@ -1,4 +1,3 @@
-from email import errors
 import numpy as np
 import torch
 import cv2
@@ -11,6 +10,7 @@ import segmentation_models_pytorch as smp
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import mysql.connector
 from config.database import get_db_connection
+
 
 # ==============================
 # INIT
@@ -59,28 +59,6 @@ DB_ADVICE = {
     "เสี่ยงสูง": "ควรปรึกษาสูตินรีแพทย์เพื่อการวินิจฉัยเพิ่มเติมเนื่องจากลักษณะเลือดออกหรืออาการปวดที่พบ อาจสัมพันธ์กับความผิดปกติของมดลูกหรือภาวะเลือดออกมากที่ควรได้รับการตรวจหาสาเหตุ",
     "เสี่ยงปานกลาง": "แนะนำให้ติดตามอาการและจดบันทึกรอบเดือนต่อเนื่องควรสังเกตความเปลี่ยนแปลงใน 1-2 รอบเดือนถัดไป หากอาการยังคงอยู่ ไม่สม่ำเสมอ หรือรบกวนการใช้ชีวิตประจำวัน แนะนำให้ปรึกษาแพทย์เมื่อสะดวก",
     "ปกติ": "วิเคราะห์เบื้องต้นอยู่ในเกณฑ์ทั่วไปยังไม่พบข้อบ่งชี้ความเสี่ยงที่น่ากังวลในขณะนี้แนะนำให้ดูแลสุขภาพ จดบันทึกประจำเดือนสม่ำเสมอ และเข้ารับการตรวจคัดกรองสุขภาพประจำปีตามปกติ",
-}
-
-
-ALLOWED_VALUES = {
-    "q1": {"low", "normal", "high"},
-    "q2": {"short", "normal", "long"},
-    "q3": {"short", "normal", "long"},
-    "q4": {"spotting", "postcoital", "none"},
-    "q5": {"none", "mild", "severe"},
-    "q6": {"none", "mild", "severe"},
-    "q7": {
-        "palpitation",
-        "nausea",
-        "fever",
-        "breast",
-        "urine",
-        "bowel",
-        "discharge",
-    },
-    "q8": {"no_sex", "protected", "unprotected", "both", "failure"},
-    "q9": {"pregnant", "not_pregnant", "unsure"},
-    "q10": {"small", "large"},
 }
 
 
@@ -551,7 +529,7 @@ def analyze_image():
             f.write(file_content)
         img_bgr = cv2.imdecode(np.frombuffer(file_content, np.uint8), cv2.IMREAD_COLOR)
         if img_bgr is None:
-            return jsonify({"status": "error", "msg": "ไม่สามารถอ่านภาพได้"}), 400
+            return jsonify({"status": "error", "error_code": "A5","msg": "ไฟล์รูปภาพชำรุดหรือไม่สมบูรณ์ กรุณาตรวจสอบไฟล์แล้วอัปโหลดใหม่อีกครั้ง"}), 400
 
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
         img_resized = cv2.resize(img_rgb, (IMG_SIZE, IMG_SIZE))
@@ -571,7 +549,7 @@ def analyze_image():
                     {
                         "status": "error",
                         "error_code": "A5",
-                        "msg": "ไม่พบลักษณะเลือดประจำเดือนในภาพ กรุณาอัปโหลดภาพที่เกี่ยวข้องกับลักษณะเลือดประจำเดือน",
+                        "msg": "ไม่พบลักษณะเลือดประจำเดือนในภาพ กรุณาอัปโหลดภาพที่เกี่ยวข้องลักษณะเลือดประจำเดือน",
                     }
                 ),
                 400,
@@ -648,12 +626,17 @@ def analyze_image():
         )
 
     except Exception as e:
-        print(f"[Error] in analyze_image: {e}")
+
         if filepath and os.path.exists(filepath):
             try:
                 os.remove(filepath)
             except:
                 pass 
+        if res_filepath and os.path.exists(res_filepath):
+            try:
+                os.remove(res_filepath)
+            except:
+                pass
         logger.error(f"System Error: {e}")
         return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดขณะประมวลผลรูปภาพ โปรดลองอีกครั้ง"}), 500
 
@@ -701,7 +684,7 @@ def analyze_risk():
                     {
                         "status": "error",
                         "error_code": "A4",
-                        "msg": "กรุณากรอกข้อมูลอาการให้ครบถ้วน",
+                        "msg": "โปรดระบุข้อมูลอาการให้ครบถ้วน",
                         "errors": errors,
                     },
                 ),
@@ -838,12 +821,11 @@ def get_assessment_result(assessment_id):
                 jsonify(
                     {
                         "status": "error",
-                        "msg": "ไม่พบข้อมูลการประเมินนี้ หรือคุณไม่มีสิทธิ์เข้าถึง",
+                        "msg": "ไม่พบข้อมูลการประเมินนี้",
                     }
                 ),
                 404,
             )
-
         return jsonify({"status": "success", "data": row}), 200
 
     except mysql.connector.Error as err:
