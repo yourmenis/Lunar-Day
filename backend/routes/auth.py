@@ -129,7 +129,7 @@ def login():
         password = str(data.get("password", "")).strip()
 
         if not username or not password:
-            return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
+            return jsonify({"status":"error","error_code":"A2","msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
 
         db = get_db_connection()
         cursor = db.cursor(dictionary=True)
@@ -140,18 +140,18 @@ def login():
         user = cursor.fetchone()
         
         if user:
-            # 🛡️ ด่านที่ 1: เช็คว่าบัญชีโดนระงับอยู่หรือไม่
+            #  เช็คว่าบัญชีโดนระงับ
             if user.get("LockedUntil") and user["LockedUntil"] > datetime.now():
                 # ถ้าเวลาปัจจุบันยังไม่เลยเวลาที่โดนล็อค
                 return jsonify({
                     "status": "error",
-                    "error_code": "A11",
+                    "error_code": "A3",
                     "msg": "บัญชีของคุณถูกระงับชั่วคราวเนื่องจากเข้าสู่ระบบผิดพลาดเกิน 3 ครั้ง กรุณาลองใหม่ในอีก 30 นาที"
-                }), 403 # HTTP 403 Forbidden
+                }), 403 
 
-            # 🛡️ ด่านที่ 2: ตรวจสอบรหัสผ่าน
+            # ตรวจสอบรหัสผ่าน
             if bcrypt.check_password_hash(user["Password"], password):
-                # ✅ กรณีรหัสถูกต้อง: รีเซ็ตค่าการกรอกผิดเป็น 0 และปลดล็อคบัญชี
+                # กรณีรหัสถูกต้อง: รีเซ็ตค่าการกรอกผิดเป็น 0 และปลดล็อคบัญชี
                 reset_sql = "UPDATE User SET FailedAttempts = 0, LockedUntil = NULL WHERE UserID = %s"
                 cursor.execute(reset_sql, (user["UserID"],))
                 db.commit()
@@ -183,7 +183,7 @@ def login():
                     
                     return jsonify({
                         "status": "error",
-                        "error_code": "A11",
+                        "error_code": "A3",
                         "msg": "บัญชีของคุณถูกระงับชั่วคราวเนื่องจากเข้าสู่ระบบผิดพลาดเกิน 3 ครั้ง กรุณาลองใหม่ในอีก 30 นาที"
                     }), 403
                 else:
@@ -194,7 +194,7 @@ def login():
                     
                     return jsonify({
                         "status":"error",
-                        "error_code":"",
+                        "error_code":"A1",
                         "msg": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
                     
         else:
