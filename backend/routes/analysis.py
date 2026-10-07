@@ -548,7 +548,7 @@ def analyze_image():
                 jsonify(
                     {
                         "status": "error",
-                        "error_code": "A5",
+                        "error_code": "A6",
                         "msg": "ไม่พบลักษณะเลือดประจำเดือนในภาพ กรุณาอัปโหลดภาพที่เกี่ยวข้องลักษณะเลือดประจำเดือน",
                     }
                 ),
@@ -695,7 +695,7 @@ def analyze_risk():
                 jsonify(
                     {
                         "status": "error",
-                        "error_code": "A6",
+                        "error_code": "A7",
                         "msg": "ความสัมพันธ์อาการไม่สอดคล้องกันของลักษณะเลือดออกและประวัติทางเพศ",
                     }
                 ),
@@ -712,7 +712,7 @@ def analyze_risk():
                 jsonify(
                     {
                         "status": "error",
-                        "error_code": "A7",
+                        "error_code": "A8",
                         "msg": "ไม่พบโรคที่สอดคล้องกับอาการที่ระบุ กรุณาตรวจสอบข้อมูลอาการอีกครั้ง",
                     }
                 ),
