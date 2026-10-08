@@ -10,6 +10,19 @@ logger = logging.getLogger(__name__)
 
 # กำหนด Path ของโฟลเดอร์รูปภาพ
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
+SERVER_URL = os.getenv("SERVER_URL", "http://localhost:5000")
+
+# ---------------------------------------------------------
+# Helper: แปลงชื่อไฟล์ให้เป็น URL เต็มๆ 
+# ---------------------------------------------------------
+def format_history_images(record):
+    if record and record.get("Image_Path"):
+        path = record["Image_Path"]
+        if not path.startswith("http"):
+            filename = path.split("/")[-1]
+            record["Image_Path"] = f"{SERVER_URL}/uploads/{filename}"
+            record["Res_Image_Path"] = f"{SERVER_URL}/uploads/res_{filename}"
+    return record
 
 # ---------------------------------------------------------
 # 1. GET: ดึงรายการประวัติทั้งหมด 
@@ -40,6 +53,9 @@ def get_history_list():
         if not history:
             return jsonify({"status": "empty","error_code":"H1", "msg": "ไม่พบประวัติการใช้งาน"}), 200
 
+        # [เพิ่ม] แปลง URL รูปภาพก่อนส่งให้หน้าบ้าน
+        history = [format_history_images(h) for h in history]
+
         return jsonify({"status": "success", "data": history}), 200
 
     except mysql.connector.Error as err:
@@ -47,7 +63,6 @@ def get_history_list():
         return jsonify({"status": "error", "error_code": "H2","msg": "เกิดข้อผิดพลาดในการดึงข้อมูลจากฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
     except Exception as e:
         logger.error(f"System Error fetching history list (UserID: {current_user_id}): {e}")
-        # [แก้ไข] เติม error_code: A4
         return jsonify({"status": "error", "error_code": "H4", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
         if cursor:
@@ -78,6 +93,9 @@ def get_history_detail(assessment_id):
         if not detail:
             return jsonify({"status": "error", "error_code": "H1", "msg": "ไม่พบข้อมูลประวัติการใช้งาน"}), 404
 
+        # [เพิ่ม] แปลง URL รูปภาพก่อนส่งให้หน้าบ้าน
+        detail = format_history_images(detail)
+
         return jsonify({"status": "success", "data": detail}), 200
         
     except mysql.connector.Error as err:
@@ -85,7 +103,7 @@ def get_history_detail(assessment_id):
         return jsonify({"status": "error","error_code":"H2", "msg": "เกิดข้อผิดพลาดในการดึงข้อมูลจากฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
     except Exception as e:
         logger.error(f"System Error fetching history detail (ID: {assessment_id}): {e}")
-        \
+        # ลบ \ ที่เกินมาออกให้แล้วครับ
         return jsonify({"status": "error", "error_code": "H4", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
         if cursor:
