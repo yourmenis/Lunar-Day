@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { BookOpen, Search, ChevronRight } from 'lucide-react'
 import Navbar from '../components/Navbar'
-import Footer from '../components/Footer'
 import api from '../../lib/api'
 import { useToast } from '../../components/Toast'
 import { axiosErrorMessage } from '../../lib/postJson'
+import { fixBackendUrl } from '../../lib/apiBase'
 
 // ความกว้างเนื้อหา + ระยะขอบข้าง (ปรับตามขนาดจอ) ใช้ร่วมกันทั้ง Header และรายการบทความ
 const CONTAINER: React.CSSProperties = {
@@ -26,11 +26,18 @@ const GRID: React.CSSProperties = {
   gap: 'clamp(14px, 1.6vw, 22px)',
 }
 
+// รูปแบบข้อมูลจาก GET /articles และ /articles/search
+type ArticleItem = { ArticleID: number; Title: string; ImageURL?: string | null }
+
 export default function ArticlesPage() {
   const router = useRouter()
-  const [articles, setArticles] = useState<any[]>([])
+  const [articles, setArticles] = useState<ArticleItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  // ผลค้นหาจาก backend (null = ไม่ได้ค้นหา → แสดงบทความทั้งหมด)
+  const [results, setResults] = useState<ArticleItem[] | null>(null)
+  const [emptyMsg, setEmptyMsg] = useState('ไม่พบบทความที่ค้นหา')
+  const searchSeq = useRef(0)
 
   const showToast = useToast()
 
@@ -41,9 +48,31 @@ export default function ArticlesPage() {
       .finally(() => setLoading(false))
   }, [showToast])
 
-  const filtered = articles.filter(a =>
-    a.Title?.toLowerCase().includes(search.toLowerCase())
-  )
+  // ค้นหาผ่าน GET /articles/search?q= (ค้นทั้งชื่อและเนื้อหาบทความ)
+  // รอพิมพ์เสร็จ 350ms ค่อยเรียก และไม่ใช้ผลของคำค้นเก่าที่ตอบกลับมาช้า
+  useEffect(() => {
+    const q = search.trim()
+    const seq = ++searchSeq.current
+    if (!q) return   // ไม่ได้ค้นหา → แสดงบทความทั้งหมด (ดู filtered ด้านล่าง)
+    const t = setTimeout(() => {
+      api.get('/articles/search', { params: { q } })
+        .then(res => { if (seq === searchSeq.current) setResults(res.data) })
+        .catch(err => {
+          if (seq !== searchSeq.current) return
+          if (err?.response?.status === 404) {
+            // ไม่พบผลลัพธ์: แสดงข้อความจาก backend ในหน้า (ไม่เด้ง toast ทุกครั้งที่พิมพ์)
+            setEmptyMsg(axiosErrorMessage(err, 'ไม่พบบทความที่ค้นหา'))
+            setResults([])
+          } else {
+            showToast(axiosErrorMessage(err, 'ค้นหาบทความไม่สำเร็จ'), 'error')
+          }
+        })
+    }, 350)
+    return () => clearTimeout(t)
+  }, [search, showToast])
+
+  const searching = search.trim() !== ''
+  const filtered = searching ? (results ?? articles) : articles
 
   const emojis = ['🔬', '💊', '🌸', '📊', '🩸', '💉', '🧬', '🫀']
 
@@ -74,7 +103,9 @@ export default function ArticlesPage() {
             <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 14, margin: 0 }}>
               ความรู้เกี่ยวกับสุขภาพสตรีและการดูแลตัวเอง
               {!loading && articles.length > 0 && (
-                <span style={{ marginLeft: 8, color: '#f48fb1' }}>· {articles.length} บทความ</span>
+                <span style={{ marginLeft: 8, color: '#f48fb1' }}>
+                  · {searching && results ? `พบ ${results.length} บทความ` : `${articles.length} บทความ`}
+                </span>
               )}
             </p>
           </div>
@@ -85,7 +116,7 @@ export default function ArticlesPage() {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="ค้นหาบทความ..."
+              placeholder="ค้นหาจากชื่อหรือเนื้อหาบทความ..."
               style={{
                 width: '100%',
                 boxSizing: 'border-box',
@@ -125,7 +156,7 @@ export default function ArticlesPage() {
         {!loading && filtered.length === 0 && (
           <div style={{ textAlign: 'center', padding: '80px 0', color: '#9e7a8a' }}>
             <BookOpen size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
-            <p style={{ fontSize: 15 }}>ไม่พบบทความที่ค้นหา</p>
+            <p style={{ fontSize: 15 }}>{emptyMsg}</p>
           </div>
         )}
 
@@ -160,7 +191,7 @@ export default function ArticlesPage() {
                 <div style={{
                   height: 150,
                   background: article.ImageURL
-                    ? `url(${article.ImageURL}) center/cover no-repeat`
+                    ? `url(${fixBackendUrl(article.ImageURL)}) center/cover no-repeat`
                     : 'linear-gradient(135deg,#fce4ec,#f8bbd0)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 48,
@@ -198,7 +229,6 @@ export default function ArticlesPage() {
         )}
       </div>
 
-      <Footer />
     </div>
   )
 }

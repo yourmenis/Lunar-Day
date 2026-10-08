@@ -1,10 +1,10 @@
 import axios from 'axios'
+import { apiBase } from './apiBase'
 
-const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-})
+const api = axios.create()
 
 api.interceptors.request.use((config) => {
+  config.baseURL = apiBase()
   const token = localStorage.getItem('access_token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config

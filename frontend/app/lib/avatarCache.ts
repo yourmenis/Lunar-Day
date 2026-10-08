@@ -1,3 +1,5 @@
+import { apiBase, fixBackendUrl } from './apiBase'
+
 // จำ URL รูปโปรไฟล์ไว้ เพื่อให้ Navbar / หน้าโปรไฟล์แสดงรูปได้ทันที ไม่ต้องรอ API (กันรูปกะพริบ)
 // - ตัวแปรในหน่วยความจำ: อยู่รอดตอนเปลี่ยนหน้าแบบ client-side และอ่านได้ตั้งแต่ render แรก
 //   (ตอนโหลดหน้าครั้งแรกค่าเป็น null เหมือนฝั่ง server จึงไม่เกิด hydration mismatch)
@@ -9,8 +11,8 @@ let memory: string | null = null
 export function avatarUrlFromFile(fileName: string | null | undefined): string | null {
   if (!fileName) return null
   return fileName.startsWith('http')
-    ? fileName
-    : `${process.env.NEXT_PUBLIC_API_URL}/static/uploads/profiles/${fileName}`
+    ? fixBackendUrl(fileName)
+    : `${apiBase()}/static/uploads/profiles/${fileName}`
 }
 
 // ค่าที่ใช้เป็น state เริ่มต้นได้อย่างปลอดภัย (ไม่แตะ sessionStorage)

@@ -35,22 +35,6 @@ body {
   color: var(--text-dark);
 }
 
-.font-mitr {
-  font-family: 'Mitr', sans-serif;
-}
-
-.glass-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border);
-  border-radius: 20px;
-}
-
-.pink-gradient-bg {
-  background: radial-gradient(ellipse at top left, #F4789E 0%, #E05082 40%, #C23D6B 100%);
-}
-
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--pink-pale); }
 ::-webkit-scrollbar-thumb { background: var(--pink-light); border-radius: 3px; }
@@ -63,19 +47,6 @@ a, button {
 [role="button"] {
   cursor: pointer;
 }
-
-/* .hero-title {
-  font-family: 'Mitr', sans-serif;
-  font-weight: 700;
-  color: white;
-  text-shadow:
-    -2px -2px 0 #C23D6B,
-     2px -2px 0 #C23D6B,
-    -2px  2px 0 #C23D6B,
-     2px  2px 0 #C23D6B,
-     0    3px 6px rgba(0,0,0,0.3);
-  letter-spacing: 0.02em;
-} */
 
 input:-webkit-autofill {
   -webkit-text-fill-color: white !important;

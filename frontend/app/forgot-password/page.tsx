@@ -7,6 +7,7 @@ import './forgot-password.css'
 import Image from 'next/image'
 import { useToast } from '../components/Toast'
 import { postJson } from '../lib/postJson'
+import { PASSWORD_HINT, PASSWORD_PLACEHOLDER, passwordRuleError } from '../lib/authRules'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const OTP_LENGTH = 6
@@ -22,11 +23,12 @@ const STEPS = [
 // ── Password strength helper ───────────────────────────────────────────────
 function getStrength(pw: string): { score: number; label: string } {
   if (!pw) return { score: 0, label: '' }
+  // นับตามเงื่อนไขรหัสผ่าน (lib/authRules): ครบ 4 ข้อ = แข็งแกร่ง
   let s = 0
-  if (pw.length >= 8)   s++
-  if (/[A-Z]/.test(pw)) s++
-  if (/[0-9]/.test(pw)) s++
-  if (/[^A-Za-z0-9]/.test(pw)) s++
+  if (pw.trim().length >= 8)        s++
+  if (/[a-z]/.test(pw))             s++
+  if (/[A-Z]/.test(pw))             s++
+  if (/[^A-Za-z0-9\s]/.test(pw))    s++
   const labels = ['', 'อ่อน', 'พอใช้', 'ดี', 'แข็งแกร่ง']
   return { score: s, label: labels[s] }
 }
@@ -189,8 +191,12 @@ export default function ForgotPasswordPage() {
   const showToast = useToast()
 
   useEffect(() => {
-    setMounted(true)
-    setStars(makeStars(28))
+    // ตั้งค่าในเฟรมถัดไป (ไม่ setState ตรง ๆ ใน effect) — ผลที่ผู้ใช้เห็นเหมือนเดิม
+    const raf = requestAnimationFrame(() => {
+      setMounted(true)
+      setStars(makeStars(28))
+    })
+    return () => cancelAnimationFrame(raf)
   }, [])
 
   // ── Transitions ──────────────────────────────────────────────────────────
@@ -253,7 +259,8 @@ export default function ForgotPasswordPage() {
     // หน้า login ตัดช่องว่างหัว-ท้ายรหัสผ่านเสมอ จึงต้องตัดแบบเดียวกันตอนตั้งรหัสใหม่
     const newPassword = password.trim()
     const newConfirm = confirmPassword.trim()
-    if (newPassword.length < 8) { failPassword('รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'); return }
+    const ruleErr = passwordRuleError(password)
+    if (ruleErr) { failPassword(ruleErr); return }
     if (newPassword !== newConfirm) { failPassword('รหัสผ่านไม่ตรงกัน'); return }
     setPwError('')
     setLoading(true)
@@ -430,7 +437,7 @@ export default function ForgotPasswordPage() {
                 <input
                   type={showPw ? 'text' : 'password'}
                   className={`field-input${pwError ? ' error' : ''}`}
-                  placeholder="อย่างน้อย 8 ตัวอักษร"
+                  placeholder={PASSWORD_PLACEHOLDER}
                   value={password}
                   onChange={e => { setPassword(e.target.value); setPwError('') }}
                   style={{ paddingRight: 44 }}
@@ -439,7 +446,7 @@ export default function ForgotPasswordPage() {
                   {showPw ? <Eye size={16} /> : <EyeOff size={16} />}
                 </button>
                 <StrengthBar password={password} />
-                <p className="field-hint">รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร</p>
+                <p className="field-hint">{PASSWORD_HINT}</p>
               </div>
 
               <div className="field-wrap">
