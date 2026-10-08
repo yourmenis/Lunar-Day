@@ -105,7 +105,7 @@ def delete_history(assessment_id):
 
     if not db:
         logger.error(f"Database connection failed at DELETE /history/{assessment_id} (UserID: {current_user_id})")
-        return jsonify({"status": "error","error_code":"A3","msg": "เกิดข้อผิดพลาดในการลบข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
+        return jsonify({"status": "error","error_code":"H3","msg": "เกิดข้อผิดพลาดในการลบข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
     try:
         cursor = db.cursor(dictionary=True) 
