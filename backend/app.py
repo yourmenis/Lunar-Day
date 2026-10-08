@@ -60,6 +60,7 @@ def check_if_token_revoked(jwt_header, jwt_payload):
 bcrypt = Bcrypt(app)
 
 # --- 4. ลงทะเบียน Blueprint (Route ทั้งหมด) ---
+
 app.register_blueprint(auth_bp, url_prefix="/auth")
 app.register_blueprint(articles_bp, url_prefix="/")
 app.register_blueprint(analysis_bp, url_prefix="/analysis")
