@@ -6,8 +6,11 @@ from werkzeug.utils import secure_filename
 from config.database import get_db_connection
 from extensions import bcrypt
 import mysql.connector
+import logging
+from datetime import datetime, timedelta, date # เพิ่ม date เข้ามา
 
 profile_bp = Blueprint("profile", __name__)
+logger = logging.getLogger(__name__)
 
 # กำหนดโฟลเดอร์สำหรับเก็บไฟล์รูปโปรไฟล์
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,15 +25,19 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
-
 # ---------------------------------------------------------
-# 1. GET: ดูข้อมูลโปรไฟล์ (Main Flow ข้อ 2)
+# 1. GET: ดูข้อมูลโปรไฟล์ 
 # ---------------------------------------------------------
 @profile_bp.route("/", methods=["GET"])
 @jwt_required()
 def get_profile():
     user_id = get_jwt_identity()
     db = get_db_connection()
+    cursor = None 
+
+    if not db:
+        return jsonify({"status": "error", "error_code": "P9", "msg": "เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
+
     try:
         cursor = db.cursor(dictionary=True)
 
@@ -45,17 +52,23 @@ def get_profile():
         if user:
             if user["Birthday"]:
                 user["Birthday"] = user["Birthday"].strftime("%Y-%m-%d")
-
             return jsonify({"status": "success", "data": user}), 200
 
-        return jsonify({"status": "error", "msg": "ไม่พบข้อมูลผู้ใช้"}), 404
+        return jsonify({"status": "error", "error_code": "P11", "msg": "ไม่พบข้อมูลผู้ใช้"}), 404
+
+    except mysql.connector.Error as err:
+        logger.error(f"Database Error fetching profile: {err}")
+        return jsonify({"status": "error", "error_code": "P9", "msg": "เกิดข้อผิดพลาดในการดึงข้อมูลจากฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
     except Exception as e:
-        return jsonify({"status": "error", "msg": str(e)}), 500
+        logger.error(f"System Error fetching profile: {e}")
+        return jsonify({"status": "error", "error_code": "P10", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
 
     finally:
-        db.close()
-
+        if cursor:
+            cursor.close()
+        if db:
+            db.close()
 
 # ---------------------------------------------------------
 # 2. POST/PUT: แก้ไขข้อมูลและรูปภาพ 
@@ -65,46 +78,65 @@ def get_profile():
 def update_profile():
     user_id = get_jwt_identity()
     db = get_db_connection()
-    cursor = db.cursor(dictionary=True)
+    cursor = None
+
+    if not db:
+        return jsonify({"status": "error", "error_code": "P9", "msg": "เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
     
     def clean_input(val):
         return val.strip('"').strip("'") if val is not None else None
-
-    # รับค่าจากหน้าบ้าน (Camel Case)
+        
     username = clean_input(request.form.get("username"))
     firstName = clean_input(request.form.get("firstName"))
     lastName = clean_input(request.form.get("lastName"))
     birthDate = clean_input(request.form.get("birthDate"))
     file = request.files.get("profileImg")
     
-    # เช็คค่าว่าง
-    if username == "" or firstName == "" or lastName == "" or birthDate == "":
+    # เช็คค่าว่าง 
+    if not username or not firstName or not lastName or not birthDate:
         return jsonify({
             "status": "error", 
+            "error_code": "P5",
             "msg": "กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วนก่อนทำการบันทึก"
         }), 400
         
     try:
-        # [A1] เช็ค Username ซ้ำ
-        if username is not None:
-            cursor.execute(
-                "SELECT UserID FROM User WHERE Username = %s AND UserID != %s",
-                (username, user_id),
-            )
-            if cursor.fetchone():
-                return jsonify({
-                    "status": "error",
-                    "error_code": "A1",
-                    "msg": "ชื่อผู้ใช้งานนี้มีผู้ใช้แล้ว"
-                }), 400
+        cursor = db.cursor(dictionary=True)
 
-        # [A3, A4] เช็คไฟล์รูปภาพและขนาดไฟล์
+        cursor.execute(
+            "SELECT UserID FROM User WHERE Username = %s AND UserID != %s",
+            (username, user_id),
+        )
+        if cursor.fetchone():
+            return jsonify({
+                "status": "error",
+                "error_code": "P1",
+                "msg": "ชื่อผู้ใช้งานนี้มีผู้ใช้แล้ว"
+            }), 400
+            
+        if len(username) > 32:
+            return jsonify({"status":"error", "error_code":"P7", "msg": "ชื่อผู้ใช้งานต้องมีความยาวไม่เกิน 32 ตัวอักษร"}), 400
+            
+        if " " in username:
+            return jsonify({"status":"error", "error_code":"P6", "msg": "ห้ามมีช่องว่างระหว่างชื่อผู้ใช้งาน"}), 400
+            
+        try:
+            birthday_obj = datetime.strptime(birthDate, "%Y-%m-%d").date()
+            if birthday_obj.year > 2400:
+                birthday_obj = birthday_obj.replace(year=birthday_obj.year - 543)
+            today = date.today()
+            age = today.year - birthday_obj.year - ((today.month, today.day) < (birthday_obj.month, birthday_obj.day))
+            if age < 13:
+                return jsonify({"status":"error", "error_code":"P8", "msg": "ผู้ใช้งานต้องมีอายุตั้งแต่ 13 ปีขึ้นไป"}), 400
+        except ValueError:
+            return jsonify({"status":"error", "msg": "รูปแบบวันที่ไม่ถูกต้อง"}), 400
+        
         profile_img_name = None
         if file and file.filename != "":
             if not allowed_file(file.filename):
                 return jsonify({
                     "status": "error",
-                    "error_code": "A3",
+                    "error_code": "P3",
                     "msg": "รูปแบบไฟล์ไม่รองรับ กรุณาอัปโหลดไฟล์นามสกุล .jpg, .jpeg หรือ .png"
                 }), 400
 
@@ -113,7 +145,7 @@ def update_profile():
             if file_length > MAX_FILE_SIZE:
                 return jsonify({
                     "status": "error",
-                    "error_code": "A4",
+                    "error_code": "P4",
                     "msg": "ขนาดไฟล์เกินขีดจำกัด กรุณาอัปโหลดไฟล์ขนาดไม่เกิน 10 MB"
                 }), 400
 
@@ -125,6 +157,14 @@ def update_profile():
             save_path = os.path.join(PROFILE_UPLOAD_FOLDER, profile_img_name)
             file.save(save_path)
 
+        # ดึงชื่อรูปโปรไฟล์ "เก่า" มาเก็บไว้ก่อน เผื่อต้องลบทิ้งถ้ามีการอัปโหลดรูปใหม่
+        old_profile_image = None
+        if profile_img_name: 
+            cursor.execute("SELECT Profile_Image FROM User WHERE UserID = %s", (user_id,))
+            user_record = cursor.fetchone()
+            if user_record and user_record.get("Profile_Image"):
+                old_profile_image = user_record["Profile_Image"]
+
         # Map ข้อมูลเพื่อเตรียม Update ลงฐานข้อมูล
         updates = []
         params = []
@@ -132,33 +172,52 @@ def update_profile():
             updates.append("Username=%s")
             params.append(username)
         if firstName is not None:
-            updates.append("Name=%s")  # จับคู่กับคอลัมน์ Name
+            updates.append("Name=%s")  
             params.append(firstName)
         if lastName is not None:
-            updates.append("LastName=%s") # จับคู่กับคอลัมน์ LastName
+            updates.append("LastName=%s") 
             params.append(lastName)
         if birthDate is not None:
-            updates.append("Birthday=%s") # จับคู่กับคอลัมน์ Birthday
-            params.append(birthDate)
+            # ใช้ birthday_obj ที่จัดฟอร์แมตแล้ว
+            updates.append("Birthday=%s") 
+            params.append(birthday_obj)
         if profile_img_name:
             updates.append("Profile_Image=%s")
             params.append(profile_img_name)
 
-        if not updates:
-            return jsonify({"status": "error", "msg": "ไม่มีข้อมูลที่จะอัปเดต"}), 400
 
         params.append(user_id)
         sql = f"UPDATE User SET {', '.join(updates)} WHERE UserID=%s"
         cursor.execute(sql, params)
         db.commit()
 
+        # ลบรูปโปรไฟล์เก่าทิ้ง
+        if old_profile_image:
+            old_image_path = os.path.join(PROFILE_UPLOAD_FOLDER, old_profile_image)
+            if os.path.exists(old_image_path):
+                try:
+                    os.remove(old_image_path)
+                except Exception as e:
+                    logger.warning(f"ลบรูปโปรไฟล์เก่าไม่สำเร็จ: {e}")
+
         return jsonify({"status": "success", "msg": "บันทึกข้อมูลสำเร็จ"}), 200
 
-    except Exception as e:
+    except mysql.connector.Error as err:
         db.rollback()
-        return jsonify({"status": "error", "msg": str(e)}), 500
+        logger.error(f"Database Error updating profile: {err}")
+        return jsonify({"status": "error", "error_code": "P9", "msg": "เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
+        
+    except Exception as e:
+        if db:
+            db.rollback()
+        logger.error(f"System Error updating profile: {e}")
+        return jsonify({"status": "error", "error_code": "P10", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        
     finally:
-        db.close()
+        if cursor:
+            cursor.close()
+        if db:
+            db.close()
 
 
 # ---------------------------------------------------------
@@ -172,23 +231,29 @@ def delete_account():
     jti = claims["jti"]
     exp_timestamp = claims["exp"]
     
-    # ดึงรหัสผ่านจาก Payload
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     password = data.get("password")
     
     if not password:
-        return jsonify({"status": "error", "msg": "กรุณากรอกรหัสผ่าน"}), 400
+        return jsonify({"status": "error", "error_code": "D3", "msg": "กรุณากรอกรหัสผ่านเพื่อยืนยันการลบบัญชี"}), 400
 
     db = get_db_connection()
-    cursor = db.cursor(dictionary=True)
+    cursor = None
+
+    if not db:
+        return jsonify({"status": "error", "error_code": "D4", "msg": "ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาลองใหม่อีกครั้ง"}), 500
 
     try:
+        cursor = db.cursor(dictionary=True)
+
         # 1. เช็ครหัสผ่านก่อนว่าตรงกับในฐานข้อมูลไหม
-        cursor.execute("SELECT Password FROM User WHERE UserID = %s", (user_id,))
+        cursor.execute("SELECT Password, Profile_Image FROM User WHERE UserID = %s", (user_id,))
         user = cursor.fetchone()
         
         if not user or not bcrypt.check_password_hash(user["Password"], password):
-            return jsonify({"status": "error", "msg": "รหัสผ่านไม่ถูกต้อง"}), 401
+            return jsonify({"status": "error", "error_code": "D1", "msg": "รหัสผ่านไม่ถูกต้อง"}), 401
+
+        profile_img = user.get("Profile_Image")
 
         # 2. ถ้ารหัสถูก ค่อยทำการลบข้อมูล
         cursor.execute(
@@ -201,31 +266,52 @@ def delete_account():
         cursor.execute("DELETE FROM TokenBlacklist WHERE ExpiresAt_TK < NOW()")
         
         db.commit()
+
+        # ลบรูปโปรไฟล์ทิ้งออกจากเครื่อง
+        if profile_img:
+            img_path = os.path.join(PROFILE_UPLOAD_FOLDER, profile_img)
+            if os.path.exists(img_path):
+                try:
+                    os.remove(img_path)
+                except Exception as e:
+                    logger.warning(f"ลบรูปโปรไฟล์ไม่สำเร็จตอนลบบัญชี: {e}")
+
         return jsonify({"status": "success", "msg": "ลบบัญชีผู้ใช้งานเรียบร้อยแล้ว"}), 200
 
     except mysql.connector.Error as err:
         db.rollback()
-        return jsonify({"status": "error", "msg": f"ไม่สามารถลบบัญชีได้: {err}"}), 500
+        logger.error(f"Database Error deleting account: {err}")
+        return jsonify({"status": "error", "error_code": "D4", "msg": "เกิดข้อผิดพลาดในการลบบัญชี กรุณาลองใหม่อีกครั้ง"}), 500
     except Exception as e:
         db.rollback()
-        return jsonify({"status": "error", "msg": str(e)}), 500
+        logger.error(f"System Error deleting account: {e}")
+        return jsonify({"status": "error", "error_code": "D5", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
-        cursor.close()
-        db.close()
+        if cursor:
+            cursor.close()
+        if db:
+            db.close()
+
+
 # ---------------------------------------------------------
-# 4. logout: ออกจากระบบ
+# 4. POST: ออกจากระบบ 
 # ---------------------------------------------------------
 @profile_bp.route("/logout", methods=["POST"])
 @jwt_required()
 def logout():
     claims = get_jwt()
     jti = claims["jti"]
-    exp_timestamp = claims["exp"]  # เวลาหมดอายุของ token
+    exp_timestamp = claims["exp"]
     user_id = get_jwt_identity()
 
     db = get_db_connection()
-    cursor = db.cursor()
+    cursor = None
+
+    if not db:
+        return jsonify({"status": "error", "error_code": "L2", "msg": "เกิดข้อผิดพลาดในการออกจากระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     try:
+        cursor = db.cursor()
+        
         cursor.execute(
             "INSERT INTO TokenBlacklist (JTI, UserID, ExpiresAt_TK) VALUES (%s, %s, FROM_UNIXTIME(%s))",
             (jti, user_id, exp_timestamp),
@@ -234,14 +320,17 @@ def logout():
         cursor.execute("DELETE FROM TokenBlacklist WHERE ExpiresAt_TK < NOW()")
         db.commit()
         return jsonify({"status": "success", "msg": "ออกจากระบบเรียบร้อยแล้ว"}), 200
+        
     except mysql.connector.Error as err:
         db.rollback()
-        return (
-            jsonify({"status": "error", "msg": f"ไม่สามารถออกจากระบบได้: {err}"}),
-            500,
-        )
+        logger.error(f"Database Error during logout: {err}")
+        return jsonify({"status": "error", "error_code": "L2", "msg": "เกิดข้อผิดพลาดในการออกจากระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+    except Exception as e:
+        db.rollback()
+        logger.error(f"System Error during logout: {e}")
+        return jsonify({"status": "error", "error_code": "L3", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
-        cursor.close()
-        db.close()
-
-
+        if cursor:
+            cursor.close()
+        if db:
+            db.close()
