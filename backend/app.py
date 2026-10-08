@@ -19,15 +19,15 @@ load_dotenv()
 
 app = Flask(__name__)
 
-
-# Route สำหรับดึงรูปภาพที่อัปโหลดไว้
+# ---------------------------------------------------------
+# Route สำหรับดึงรูปภาพที่อัปโหลดไว้ 
+# ---------------------------------------------------------
 @app.route("/uploads/<filename>", methods=["GET"])
 def get_uploaded_image(filename):
     try:
         return send_from_directory(UPLOAD_FOLDER, filename)
     except Exception as e:
         return {"error": "File not found"}, 404
-
 
 # --- 1. ตั้งค่า CORS ---
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -39,13 +39,13 @@ app.config["JWT_SECRET_KEY"] = os.environ.get(
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)
 jwt = JWTManager(app)
 
-
-# ดักจับ Token ที่ถูกแบน (Logout)
 @jwt.token_in_blocklist_loader
 def check_if_token_revoked(jwt_header, jwt_payload):
     jti = jwt_payload["jti"]
 
     db = get_db_connection()
+    if not db:
+        return True #
     cursor = db.cursor(dictionary=True)
     try:
         cursor.execute("SELECT TokenID FROM TokenBlacklist WHERE JTI = %s", (jti,))
@@ -55,21 +55,17 @@ def check_if_token_revoked(jwt_header, jwt_payload):
         cursor.close()
         db.close()
 
-
 # --- 3. ตั้งค่า Bcrypt ---
 # ใช้สำหรับแฮชรหัสผ่านในระบบ
 bcrypt = Bcrypt(app)
 
 # --- 4. ลงทะเบียน Blueprint (Route ทั้งหมด) ---
-# กำหนด Prefix ให้ชัดเจน เพื่อให้เรียกใช้ผ่าน Postman/Frontend ได้ง่าย
 app.register_blueprint(auth_bp, url_prefix="/auth")
 app.register_blueprint(articles_bp, url_prefix="/")
 app.register_blueprint(analysis_bp, url_prefix="/analysis")
 app.register_blueprint(profile_bp, url_prefix="/profile")
 app.register_blueprint(history_bp, url_prefix="/history")
 
-
-# หน้าแรกสำหรับเช็คว่า Server รันติดไหม
 @app.route("/")
 def index():
     return {
