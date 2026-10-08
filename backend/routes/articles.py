@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request
 from config.database import get_db_connection
 import mysql.connector
 import os
-import logging # เพิ่ม import logging
+import logging
 
 articles_bp = Blueprint("articles_bp", __name__)
 SERVER_URL = os.getenv("SERVER_URL", "http://localhost:5000")
@@ -36,11 +36,14 @@ def close_db(cursor, db):
 # ----------------------------------------------
 @articles_bp.route("/articles", methods=["GET"])
 def get_articles():
-    db = None
+    db = get_db_connection()
     cursor = None
 
+    if not db:
+        logger.error("Database connection failed at GET /articles")
+        return jsonify({"status": "error", "error_code": "A4", "msg": "ระบบไม่สามารถค้นหาข้อมูลได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"}), 500
+
     try:
-        db = get_db_connection()
         cursor = db.cursor(dictionary=True)
 
         sql = "SELECT ArticleID, Title, ImageURL FROM Article"
@@ -53,11 +56,13 @@ def get_articles():
         return jsonify(articles), 200
 
     except mysql.connector.Error as err:
-        logger.error(f"Database Error: {err}")
-        return jsonify({"status":"error","msg": "ระบบไม่สามารถค้นหาข้อมูลได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"}), 500
+        logger.error(f"Database Error fetching all articles: {err}")
+        # Database Error คืนค่า A3 ตามเอกสาร
+        return jsonify({"status":"error", "error_code": "A3", "msg": "ระบบไม่สามารถค้นหาข้อมูลได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"}), 500
     except Exception as e:
-        logger.error(f"System Error: {e}")
-        return jsonify({"status":"error","msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        logger.error(f"System Error fetching all articles: {e}")
+        # System Error คืนค่า A4 ตามเอกสาร
+        return jsonify({"status":"error", "error_code": "A4", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
         close_db(cursor, db)
 
@@ -66,11 +71,14 @@ def get_articles():
 # ----------------------------------------------
 @articles_bp.route("/articles/<int:article_id>", methods=["GET"])
 def get_article_detail(article_id):
-    db = None
+    db = get_db_connection()
     cursor = None
 
+    if not db:
+        logger.error(f"Database connection failed at GET /articles/{article_id}")
+        return jsonify({"status": "error", "error_code": "A4", "msg": "ระบบไม่สามารถค้นหาข้อมูลได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"}), 500
+
     try:
-        db = get_db_connection()
         cursor = db.cursor(dictionary=True)
 
         sql = "SELECT * FROM Article WHERE ArticleID = %s"
@@ -78,18 +86,19 @@ def get_article_detail(article_id):
         article = cursor.fetchone()
 
         if not article:
-            return jsonify({"msg": "ไม่พบบทความที่ต้องการ"}), 404
+            # หาบทความไม่เจอ เป็น A3 ตามโค้ดดั้งเดิม
+            return jsonify({"status":"error", "error_code":"A3", "msg": "ระบบไม่สามารถค้นหาข้อมูลได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"}), 404
 
         article = format_image_url(article)
 
         return jsonify(article), 200
 
     except mysql.connector.Error as err:
-        logger.error(f"Database Error: {err}")
-        return jsonify({"status":"error","msg": "ระบบไม่สามารถค้นหาข้อมูลได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"}), 500
+        logger.error(f"Database Error fetching article detail (ID: {article_id}): {err}")
+        return jsonify({"status":"error", "error_code":"A3", "msg": "ระบบไม่สามารถค้นหาข้อมูลได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"}), 500
     except Exception as e:
-        logger.error(f"System Error: {e}")
-        return jsonify({"status":"error","msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        logger.error(f"System Error fetching article detail (ID: {article_id}): {e}")
+        return jsonify({"status":"error", "error_code":"A4", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
         close_db(cursor, db)
 
@@ -100,13 +109,16 @@ def get_article_detail(article_id):
 def search_articles():
     query = request.args.get("q", "").strip()
     if not query:
-        return jsonify({"status":"error","error_code":"A2","msg": "กรุณาใส่คำค้นหา"}), 400
+        return jsonify({"status":"error", "error_code":"A2", "msg": "กรุณาใส่คำค้นหา"}), 400
 
-    db = None
+    db = get_db_connection()
     cursor = None
 
+    if not db:
+        logger.error(f"Database connection failed at GET /articles/search?q={query}")
+        return jsonify({"status": "error", "error_code": "A4", "msg": "ระบบไม่สามารถเชื่อมต่อฐานข้อมูลได้ในขณะนี้"}), 500
+
     try:
-        db = get_db_connection()
         cursor = db.cursor(dictionary=True)
 
         sql = """
@@ -118,16 +130,17 @@ def search_articles():
         results = cursor.fetchall()
         
         if not results:
-            return jsonify({"status":"error","error_code":"A1","msg": "ไม่พบข้อมูลที่ค้นหา"}), 404
+            # ค้นหาไม่เจอ เป็น A1
+            return jsonify({"status":"error", "error_code":"A1", "msg": "ไม่พบข้อมูลที่ค้นหา"}), 404
     
         results = [format_image_url(a) for a in results]
         return jsonify(results), 200
 
     except mysql.connector.Error as err:
-        logger.error(f"Database Error: {err}")
-        return jsonify({"status":"error","msg": "ระบบไม่สามารถค้นหาข้อมูลได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"}), 500
+        logger.error(f"Database Error searching articles (Query: '{query}'): {err}")
+        return jsonify({"status":"error", "error_code":"A3", "msg": "ระบบไม่สามารถค้นหาข้อมูลได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"}), 500
     except Exception as e:
-        logger.error(f"System Error: {e}")
-        return jsonify({"status":"error","msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        logger.error(f"System Error searching articles (Query: '{query}'): {e}")
+        return jsonify({"status":"error", "error_code":"A4", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
         close_db(cursor, db)
