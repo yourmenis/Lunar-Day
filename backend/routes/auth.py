@@ -15,184 +15,233 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 auth_bp = Blueprint("auth_bp", __name__)
 
-
 # ==========================================
-# 🆕 ส่วนที่ 1: ระบบสมาชิก (Register )
+# ระบบสมาชิก 
 # ==========================================
 @auth_bp.route("/register", methods=["POST"])
 def register():
-    data = request.json
-    username = data.get("username", "").strip()
-    password = data.get("password", "").strip()
-    confirm_pw = data.get("confirmPassword", "").strip()
-    name = data.get("firstName", "").strip()
-    lastname = data.get("lastName", "").strip()
-    birthday = data.get("birthDate", "").strip()
-    email = data.get("email", "").strip()
-    consent = data.get("isConsent")
+    db = None    
+    cursor = None
     
+    try:           
+        data = request.get_json(silent=True) or {}
+        username = str(data.get("username", "")).strip()
+        password = str(data.get("password", "")).strip()
+        confirm_pw = str(data.get("confirmPassword", "")).strip()
+        name = str(data.get("firstName", "")).strip()
+        lastname = str(data.get("lastName", "")).strip()
+        birthday = str(data.get("birthDate", "")).strip()
+        email = str(data.get("email", "")).strip()
+        consent = data.get("isConsent")
 
-    if not consent:
-        return jsonify({"msg": "กรุณากดยอมรับเงื่อนไขและนโยบายความเป็นส่วนตัวก่อนดำเนินการต่อ"}), 400
+        if not consent:
+            return jsonify({"msg": "กรุณากดยอมรับเงื่อนไขและนโยบายความเป็นส่วนตัวก่อนดำเนินการต่อ"}), 400
 
-    # --- ด่านที่ 1: เช็คข้อมูลว่าง (A2) ---
-    if not all([username, password, confirm_pw, name, lastname, birthday, email]):
-        return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
+        # ---ตรวจสอบข้อมูลว่าง---
+        if not all([username, password, confirm_pw, name, lastname, birthday, email]):
+            return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
 
-    # --- ด่านที่ 2: เช็ครหัสผ่านสั้นไป (A5) ---
-    if len(password) < 8:
-        return jsonify({"msg": "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร"}), 400
+        # ---ตรวจสอบความยาวรหัสผ่าน---
+        if len(password) < 8:
+            return jsonify({"msg": "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร"}), 400
+        if len(username)> 32:
+            return jsonify({"msg": "ชื่อผู้ใช้งานต้องมีความยาวไม่เกิน 32 ตัวอักษร"}), 400
+        if " " in username:
+            return jsonify({"msg": "ห้ามมีช่องว่างระหว่างชื่อผู้ใช้งาน"}), 400
+        if len(password) >128:
+            return jsonify({"msg": "รหัสผ่านต้องมีความยาวไม่เกิน 128 ตัวอักษร"}), 400
+        password_pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).+$"
+        if not re.match(password_pattern, password):
+            return jsonify({"msg": "รหัสผ่านต้องประกอบด้วยตัวอักษรพิมพ์ใหญ่ อักษรพิมพ์เล็ก และอักษรพิเศษอย่างน้อย 1 ตัว"}), 400
+        # ---ตรวจสอบรหัสผ่านตรงกัน---
+        if password != confirm_pw:
+            return jsonify({"msg": "โปรดระบุรหัสผ่านทั้งสองช่องให้ตรงกัน"}), 400
 
-    # --- ด่านที่ 3: เช็ครหัสผ่านไม่ตรงกัน (A3) ---
-    if password != confirm_pw:
-        return jsonify({"msg": "โปรดระบุรหัสผ่านทั้งสองช่องให้ตรงกัน"}), 400
+        # ---ตรวจสอบรูปแบบอีเมล---
+        email_pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
+        if not re.match(email_pattern, email):
+            return jsonify({"msg": "รูปแบบอีเมลไม่ถูกต้อง"}), 400
+            
+        # ---ตรวจสอบเงื่อนไขอายุ---
+        try:
+            birthday_obj = datetime.strptime(birthday, "%Y-%m-%d").date()
+            if birthday_obj.year > 2400:
+                birthday_obj = birthday_obj.replace(year=birthday_obj.year - 543)
+            today = date.today()
+            age = today.year - birthday_obj.year - ((today.month, today.day) < (birthday_obj.month, birthday_obj.day))
+            if age < 13:
+                return jsonify({"msg": "ผู้สมัครต้องมีอายุตั้งแต่ 13 ปีขึ้นไปจึงจะใช้งานได้"}), 400
+        except ValueError:
+            return jsonify({"msg": "รูปแบบวันที่ไม่ถูกต้อง"}), 400
 
-    # --- ด่านที่ 4: format email ---
-    email_pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
-    if not re.match(email_pattern, email):
-        return jsonify({"msg": "รูปแบบอีเมลไม่ถูกต้อง"}), 400
-        
-    # --- ด่านที่ 4: เช็คอายุต้อง >= 13 ปี (A4) ---
-    try:
-        birthday = datetime.strptime(birthday, "%Y-%m-%d").date()
-        if birthday.year > 2400:
-            birthday = birthday.replace(year=birthday.year - 543)
+        db = get_db_connection()
+        cursor = db.cursor(dictionary=True)
 
-        today = date.today()
-
-        age = (
-            today.year
-            - birthday.year
-            - ((today.month, today.day) < (birthday.month, birthday.day))
-        )
-
-        if age < 13:
-            return jsonify({"msg": "ผู้สมัครต้องมีอายุตั้งแต่ 13 ปีขึ้นไปจึงจะใช้งานได้"}), 400
-
-    except ValueError:
-        return jsonify({"msg": "รูปแบบวันที่ไม่ถูกต้อง"}), 400
-
-    # --- ด่านที่ 5: ทำงานกับ Database (A1 & บันทึก) ---
-    db = get_db_connection()
-    cursor = db.cursor(dictionary=True)
-
-    try:
-        # เช็ค Username ซ้ำ
+        # ตรวจสอบ Username ซ้ำ
         check_sql = "SELECT Username FROM User WHERE Username = %s"
         cursor.execute(check_sql, (username,))
         if cursor.fetchone():
             return jsonify({"msg": "ชื่อผู้ใช้นี้ถูกใช้งานแล้ว"}), 400
 
-        # check email ซ้ำ
+        # ตรวจสอบ email ซ้ำ
         check_sql = "SELECT Email FROM User WHERE Email = %s"
         cursor.execute(check_sql, (email,))
         if cursor.fetchone():
             return jsonify({"msg": "อีเมลนี้ถูกใช้แล้ว กรุณาระบุอีเมลใหม่"}), 400
-
-        # ถ้าผ่านทุกด่านแล้ว ค่อยแฮชรหัสผ่าน
         hashed_pw = bcrypt.generate_password_hash(password).decode("utf-8")
-
         consent_value = 1 if consent else 0
 
+        
+
         # บันทึกข้อมูล
-        sql = "INSERT INTO User (Username, Password, Name, LastName, Birthday,Email,Is_Consent) VALUES (%s, %s, %s, %s, %s, %s,%s)"
-        values = (username, hashed_pw, name, lastname, birthday, email, consent_value)
+        sql = "INSERT INTO User (Username, Password, Name, LastName, Birthday, Email, Is_Consent) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+        values = (username, hashed_pw, name, lastname, birthday_obj, email, consent_value)
 
         cursor.execute(sql, values)
-        db.commit()  # ยืนยันการบันทึกลง Hard Drive
+        db.commit()  
         return jsonify({"msg": "สมัครสมาชิกสำเร็จ"}), 201
 
-    except mysql.connector.Error as err:
-        return jsonify({"msg": f"เกิดข้อผิดพลาดทางเทคนิค: {err}"}), 500
+    except mysql.connector.Error:
+        logger.error(f"Database Error: {err}")
+        return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
+
+    except Exception:
+        logger.error(f"System Error: {e}")
+        return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        
     finally:
-        cursor.close()
-        db.close()
+        if cursor is not None:
+            cursor.close()
+        if db is not None:
+            db.close()
 
 # ==========================================
-# ✅ ส่วนที่ 2: login
+# 🔑 เข้าสู่ระบบ (Login) 
 # ==========================================
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.json
-    username = data.get("username", "").strip()
-    password = data.get("password", "").strip()
-
-    if not username or not password:
-        return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
-
-    db = get_db_connection()
-    cursor = db.cursor(dictionary=True)
-
+    db = None    
+    cursor = None
+    
     try:
-        # 1. ค้นหา User จากฐานข้อมูล
+        data = request.get_json(silent=True) or {}
+        username = str(data.get("username", "")).strip()
+        password = str(data.get("password", "")).strip()
+
+        if not username or not password:
+            return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
+
+        db = get_db_connection()
+        cursor = db.cursor(dictionary=True)
+        
+        # ดึงข้อมูลผู้ใช้จากฐานข้อมูล
         sql = "SELECT * FROM User WHERE Username = %s"
         cursor.execute(sql, (username,))
         user = cursor.fetchone()
+        
+        if user:
+            # 🛡️ ด่านที่ 1: เช็คว่าบัญชีโดนระงับอยู่หรือไม่
+            if user.get("LockedUntil") and user["LockedUntil"] > datetime.now():
+                # ถ้าเวลาปัจจุบันยังไม่เลยเวลาที่โดนล็อค
+                return jsonify({
+                    "status": "error",
+                    "error_code": "A11",
+                    "msg": "บัญชีของคุณถูกระงับชั่วคราวเนื่องจากเข้าสู่ระบบผิดพลาดเกิน 3 ครั้ง กรุณาลองใหม่ในอีก 30 นาที"
+                }), 403 # HTTP 403 Forbidden
 
-        # 2. ตรวจสอบว่ามี User นี้ไหม และรหัสผ่านถูกต้องหรือไม่
-        # [A1] กรณีรหัสผ่านหรือชื่อผู้ใช้ผิด
-        if user and bcrypt.check_password_hash(user["Password"], password):
-            # 3. ถ้าถูกต้อง สร้าง Access Token (JWT)
-            access_token = create_access_token(identity=str(user["UserID"]))
+            # 🛡️ ด่านที่ 2: ตรวจสอบรหัสผ่าน
+            if bcrypt.check_password_hash(user["Password"], password):
+                # ✅ กรณีรหัสถูกต้อง: รีเซ็ตค่าการกรอกผิดเป็น 0 และปลดล็อคบัญชี
+                reset_sql = "UPDATE User SET FailedAttempts = 0, LockedUntil = NULL WHERE UserID = %s"
+                cursor.execute(reset_sql, (user["UserID"],))
+                db.commit()
 
-            return (
-                jsonify(
-                    {
-            
-                        "access_token": access_token,
-                        "user": {
-                            "id": user["UserID"],
-                            "firtName": user["Name"],
-                            "lastName": user["LastName"],
-                        },
-                    }
-                ),
-                200,
-            )
+                access_token = create_access_token(identity=str(user["UserID"]))
+                return (
+                    jsonify(
+                        {
+                            "access_token": access_token,
+                            "user": {
+                                "id": user["UserID"],
+                                "firstName": user["Name"],
+                                "lastName": user["LastName"],
+                            },
+                        }
+                    ),
+                    200,
+                )
+            else:
+                #  กรณีรหัสผิด
+                failed_count = user.get("FailedAttempts", 0) + 1
+                
+                if failed_count >= 3:
+                    # ถ้าผิดครบ 3 ครั้ง -> ล็อคบัญชี 30 นาที
+                    lockout_time = datetime.now() + timedelta(minutes=30)
+                    update_sql = "UPDATE User SET FailedAttempts = %s, LockedUntil = %s WHERE UserID = %s"
+                    cursor.execute(update_sql, (failed_count, lockout_time, user["UserID"]))
+                    db.commit()
+                    
+                    return jsonify({
+                        "status": "error",
+                        "error_code": "A11",
+                        "msg": "บัญชีของคุณถูกระงับชั่วคราวเนื่องจากเข้าสู่ระบบผิดพลาดเกิน 3 ครั้ง กรุณาลองใหม่ในอีก 30 นาที"
+                    }), 403
+                else:
+                    # ถ้ายังไม่ครบ 3 ครั้ง 
+                    update_sql = "UPDATE User SET FailedAttempts = %s WHERE UserID = %s"
+                    cursor.execute(update_sql, (failed_count, user["UserID"]))
+                    db.commit()
+                    
+                    return jsonify({"msg": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
+                    
         else:
+            # กรณีไม่มีชื่อผู้ใช้นี้ในระบบ
             return jsonify({"msg": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
-
+        
     except mysql.connector.Error as err:
-        return jsonify({"msg": f"เกิดข้อผิดพลาดทางเทคนิค: {err}"}), 500
-    finally:
-        cursor.close()
-        db.close()
+        logger.error(f"Database Error: {err}")
+        return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
+    except Exception as e:
+        logger.error(f"System Error: {e}")
+        return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if db is not None:
+            db.close()
 
 # --- Configuration (ระบบส่งเมล) ---
-
 GMAIL_USER1 = os.environ.get("GMAIL_USER1")
 GMAIL_USER2 = os.environ.get("GMAIL_USER2")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
 PW_OTP1 =os.environ.get("PW_OTP1")
 PW_OTP2 =os.environ.get("PW_OTP2")
 
-
 # ==========================================
-# 🔑 1. ส่ง OTP ไปที่อีเมล (Forgot Password)
+# 🔑 Forgot Password
 # ==========================================
 @auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
-    data = request.json
 
-    email = data.get("email", "").strip()
+    db = None
+    cursor = None
+    try: 
+        data = request.get_json(silent=True) or {}
+        email = str(data.get("email", "")).strip()
 
-    if not email:
-        return jsonify({"msg": "กรุณากรอกอีเมล"}), 400
+        if not email:
+            return jsonify({"msg": "กรุณากรอกอีเมล"}), 400
+        db = get_db_connection()
+        cursor = db.cursor(dictionary=True, buffered=True)
 
-    db = get_db_connection()
-    cursor = db.cursor(dictionary=True, buffered=True)
-
-
-
-    try:
         # ตรวจสอบอีเมลในระบบ
         cursor.execute("SELECT UserID FROM User WHERE Email = %s", (email,))
         user = cursor.fetchone()
 
         if not user:
             return jsonify({"msg": "ไม่พบอีเมลนี้ในระบบ"}), 404
-
         if email == GMAIL_USER1:
             otp = PW_OTP1
             expire_time = datetime.now() + timedelta(minutes=5)
@@ -202,8 +251,6 @@ def forgot_password():
         else:
             otp = str(random.randint(100000, 999999))
             expire_time = datetime.now() + timedelta(minutes=5)
-
-        
 
         # บันทึก OTP + เวลาหมดอายุ
         cursor.execute(
@@ -247,31 +294,38 @@ Luna Day Team
 
         return jsonify({"msg": "ส่งรหัส OTP ไปยังอีเมลของคุณเรียบร้อยแล้ว"}), 200
 
+    except mysql.connector.Error as err:
+        logger.error(f"Database Error: {err}")
+        return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
+    except smtplib.SMTPException as em:
+        logger.error(f"Email Error: {em}")
+        return jsonify({"msg": "เกิดปัญหาในการส่งอีเมล กรุณาลองใหม่อีกครั้งภายหลัง"}), 500
     except Exception as e:
-        return jsonify({"msg": f"เกิดข้อผิดพลาดในการส่งอีเมล: {str(e)}"}), 500
-
+        logger.error(f"System Error: {e}")
+        return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
-        cursor.close()
-        db.close()
-
-
+        if cursor is not None:
+            cursor.close()
+        if db is not None:
+            db.close()
+            
 # ==========================================
-# 🛡️ ส่วนที่ 4: verify otp
+# 🛡️ verify otp
 # ==========================================
 @auth_bp.route("/verify-otp", methods=["POST"])
 def verify_otp():
-    data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").strip()
-    otp = (data.get("otp") or "").strip()
+    db = None
+    cursor = None
+    try: 
+        data = request.get_json(silent=True) or {}
+        email = str(data.get("email") or "").strip()
+        otp = str(data.get("otp") or "").strip()
 
-    if not otp:
-        return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
+        if not otp:
+            return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
 
-    db = get_db_connection()
-    cursor = db.cursor(dictionary=True, buffered=True)
-
-    try:
-        # เช็คว่า OTP ตรงไหม
+        db = get_db_connection()
+        cursor = db.cursor(dictionary=True, buffered=True)
         cursor.execute(
             """
             SELECT UserID, OTPExpireTime 
@@ -281,7 +335,6 @@ def verify_otp():
             (email, otp),
         )
         user = cursor.fetchone()
-
         if not user:
             return jsonify({"msg": "รหัส OTP ไม่ถูกต้อง โปรดตรวจสอบอีกครั้ง"}), 400
 
@@ -291,41 +344,51 @@ def verify_otp():
 
         return jsonify({"msg": "รหัส OTP ถูกต้อง"}), 200
 
+    except mysql.connector.Error as err:
+        logger.error(f"Database Error: {err}")
+        return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
+
     except Exception as e:
-        return jsonify({"msg": f"เกิดข้อผิดพลาดทางเทคนิค: {str(e)}"}), 500
+        logger.error(f"System Error: {e}")
+        return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
 
     finally:
-        cursor.close()
-        db.close()
-
-
+        if cursor is not None:
+            cursor.close()
+        if db is not None:
+            db.close()
+            
 # ==========================================
-# 🛡️ ส่วนที่ 5: ตั้งรหัสผ่านใหม่ (Reset Password + Confirm)
+# 🛡️ Reset Password 
 # ==========================================
 @auth_bp.route("/reset-password", methods=["POST"])
 def reset_password():
-    data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").strip()
-    otp = (data.get("otp") or "").strip()
-    new_password = data.get("newPassword") or ""
-    confirm_password = data.get("confirmPassword") or ""
+    db = None
+    cursor = None
+    try: 
+        data = request.get_json(silent=True) or {}
+        email = str(data.get("email") or "").strip()
+        otp = str(data.get("otp") or "").strip()
+        new_password = str(data.get("newPassword", "")).strip()
+        confirm_password = str(data.get("confirmPassword", "")).strip()
 
-    # เช็คค่าว่าง
-    if not all([email, otp, new_password, confirm_password]):
-        return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
+        # เช็คค่าว่าง
+        if not all([email, otp, new_password, confirm_password]):
+            return jsonify({"msg": "กรุณากรอกข้อมูลให้ครบถ้วน"}), 400
 
-    # เช็ครหัสผ่านตรงกัน
-    if new_password != confirm_password:
-        return jsonify({"msg": "รหัสผ่านไม่ตรงกัน"}), 400
+        # เช็ครหัสผ่านตรงกัน
+        if new_password != confirm_password:
+            return jsonify({"msg": "รหัสผ่านไม่ตรงกัน"}), 400
 
-    # เช็คความยาว
-    if len(new_password) < 8:
-        return jsonify({"msg": "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร"}), 400
+        # เช็คความยาว
+        if len(new_password) < 8 :
+            return jsonify({"msg": "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร"}), 400
+        
+        if len(new_password) > 128 :
+            return jsonify({"msg": "รหัสผ่านต้องมีความยาวไม่เกิน 128 ตัวอักษร"}), 400
+        db = get_db_connection()
+        cursor = db.cursor(dictionary=True, buffered=True)
 
-    db = get_db_connection()
-    cursor = db.cursor(dictionary=True, buffered=True)
-
-    try:
         #  ดึง OTP + เวลา expire 
         cursor.execute(
             """
@@ -357,12 +420,18 @@ def reset_password():
             (hashed_pw, email),
         )
         db.commit()
-
         return jsonify({"msg": "เปลี่ยนรหัสผ่านสำเร็จ"}), 200
 
+    except mysql.connector.Error as err:
+        logger.error(f"Database Error: {err}")
+        return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
+
     except Exception as e:
-        return jsonify({"msg": f"เกิดข้อผิดพลาดทางเทคนิค: {str(e)}"}), 500
+        logger.error(f"System Error: {e}")
+        return jsonify({"msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
 
     finally:
-        cursor.close()
-        db.close()
+        if cursor is not None:
+            cursor.close()
+        if db is not None:
+            db.close()
