@@ -638,7 +638,7 @@ def analyze_image():
             except:
                 pass
         logger.error(f"System Error: {e}")
-        return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดขณะประมวลผลรูปภาพ โปรดลองอีกครั้ง"}), 500
+        return jsonify({"status": "error", "error_code":"A11","msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
 
 
 @analysis_bp.route("/risk", methods=["POST"])
@@ -779,11 +779,11 @@ def analyze_risk():
         if db is not None:
             db.rollback()
         logger.error(f"Database Error: {err}")
-        return jsonify({"status": "error", "msg": "บันทึกผลวิเคราะห์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"}), 500
+        return jsonify({"status": "error","error_code":"A10", "msg": "บันทึกผลวิเคราะห์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"}), 500
         
     except Exception as e:
         logger.error(f"System Error: {e}")
-        return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        return jsonify({"status": "error","error_code":"A11", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
         
     finally:
         if cursor is not None:
@@ -793,49 +793,3 @@ def analyze_risk():
 
     
 
-
-@analysis_bp.route("/result/<int:assessment_id>", methods=["GET"])
-@jwt_required()
-def get_assessment_result(assessment_id):
-    current_user_id = get_jwt_identity()
-    db = None
-    cursor = None
-
-    try:
-        db = get_db_connection()
-        cursor = db.cursor(dictionary=True)
-
-        cursor.execute(
-            """
-            SELECT AssessmentID, Detect1, Detect2, Confidence, 
-                   Potential_Disease, Risk_Level, Recommendation, Image_Path
-            FROM Risk_Assessment
-            WHERE AssessmentID = %s AND UserID = %s
-            """,
-            (assessment_id, current_user_id),
-        )
-        row = cursor.fetchone()
-
-        if not row:
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "msg": "ไม่พบข้อมูลการประเมินนี้",
-                    }
-                ),
-                404,
-            )
-        return jsonify({"status": "success", "data": row}), 200
-
-    except mysql.connector.Error as err:
-        logger.error(f"Database Error: {err}")
-        return jsonify({"status": "error", "msg": "ระบบไม่สามารถดึงข้อมูลประวัติได้"}), 500
-    except Exception as e:
-        logger.error(f"System Error: {e}")
-        return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
-    finally:
-        if cursor is not None:
-            cursor.close()
-        if db is not None:
-            db.close()
