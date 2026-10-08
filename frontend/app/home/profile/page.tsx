@@ -874,7 +874,7 @@ export default function ProfilePage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=Sarabun:wght@300;400;500;600&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        .profile-root { min-height: 100vh; font-family: 'Sarabun', sans-serif; background: #faf7f5; overflow-x: hidden; }
+        .profile-root { min-height: 100vh; font-family: 'Sarabun', sans-serif; background: #faf7f5; overflow-x: clip; }
 
         /* ── Shared container (เหมือนหน้าบทความ / ติดต่อ) ── */
         .pf-container {

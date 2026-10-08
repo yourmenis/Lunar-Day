@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Fragment } from 'react'
 import {
-  Upload, Camera, ChevronRight, AlertCircle, CheckCircle2,
+  Upload, ChevronRight, AlertCircle, CheckCircle2,
   Info, Sparkles, Activity, X, ImageIcon, Loader2,
   Shield, Zap, FlaskConical, Baby, Clock, Ruler
 } from 'lucide-react'
@@ -489,7 +489,8 @@ export default function AnalyzePage() {
           min-height: 100vh;
           font-family: 'Sarabun', sans-serif;
           background: #faf7f5;
-          overflow-x: hidden;
+          /* clip (ไม่ใช่ hidden) เพื่อไม่ให้แถบเมนู position: sticky หลุด */
+          overflow-x: clip;
         }
 
         /* ── Header ── */
@@ -655,7 +656,6 @@ export default function AnalyzePage() {
 
         /* ── Desktop: wider two-column layouts ── */
         @media (min-width: 769px) {
-          .symptom-form { grid-template-columns: 1fr 1fr; column-gap: 28px; }
           .result-detail { grid-template-columns: 1fr 1fr; }
           .rd-row:nth-last-child(2) { border-bottom: none; }
           .upload-zone { min-height: 280px; }
@@ -784,7 +784,7 @@ export default function AnalyzePage() {
                     <div className="upload-zone-icon"><Upload size={26} color="#c2185b" /></div>
                     <div className="upload-zone-title">ลากไฟล์มาวางหรือคลิกเพื่อเลือก</div>
                     <div className="upload-zone-sub">รูปที่แสดงถึงเกี่ยวข้องประจำเดือน</div>
-                    <div className="upload-chip"><Camera size={13} /> เลือกภาพ</div>
+                    <div className="upload-chip"><ImageIcon size={13} /> เลือกภาพ</div>
                     <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
                       onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
                   </div>
@@ -882,18 +882,16 @@ export default function AnalyzePage() {
                     <RadioGroup name="sex" options={SEX_HISTORY_OPTIONS} value={form.sex_history}
                       onChange={v => setForm(f => ({ ...f, sex_history: v, is_pregnant: v === 'no_sex' ? '' : f.is_pregnant }))} />
                   </div>
-                  {/* แสดงตลอด (ไม่ซ่อน/โผล่) เพื่อไม่ให้คำถามอื่นเลื่อนตำแหน่ง — ปิดไว้เมื่อไม่มีเพศสัมพันธ์ */}
-                  <div>
-                    <div className="sf-label"><Baby size={14} /> มีความเป็นไปได้ว่าตั้งครรภ์?</div>
-                    <RadioGroup name="preg"
-                      options={PREGNANCY_OPTIONS}
-                      value={form.is_pregnant}
-                      disabled={form.sex_history === 'no_sex'}
-                      onChange={v => setForm(f => ({ ...f, is_pregnant: v }))} />
-                    {form.sex_history === 'no_sex' && (
-                      <div style={{ fontSize: 12, color: '#9e7a8a', marginTop: 8 }}>ไม่ต้องตอบข้อนี้ เนื่องจากไม่มีเพศสัมพันธ์</div>
-                    )}
-                  </div>
+                  {/* แสดงเฉพาะเมื่อตอบข้อประวัติการมีเพศสัมพันธ์แล้ว และไม่ใช่ "ไม่มีเพศสัมพันธ์" */}
+                  {form.sex_history && form.sex_history !== 'no_sex' && (
+                    <div>
+                      <div className="sf-label"><Baby size={14} /> มีความเป็นไปได้ว่าตั้งครรภ์?</div>
+                      <RadioGroup name="preg"
+                        options={PREGNANCY_OPTIONS}
+                        value={form.is_pregnant}
+                        onChange={v => setForm(f => ({ ...f, is_pregnant: v }))} />
+                    </div>
+                  )}
                   {/* อาการร่วม: เต็มความกว้าง ตัวเลือกเรียงเป็นตาราง */}
                   <div className="sf-full">
                     <div className="sf-label"><Sparkles size={14} /> อาการร่วม (เลือกได้หลายข้อ / ไม่มีให้ข้าม)</div>
