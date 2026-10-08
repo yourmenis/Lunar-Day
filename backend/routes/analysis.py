@@ -638,7 +638,7 @@ def analyze_image():
             except:
                 pass
         logger.error(f"System Error: {e}")
-        return jsonify({"status": "error", "error_code":"A11","msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        return jsonify({"status": "error", "error_code":"A10","msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
 
 
 @analysis_bp.route("/risk", methods=["POST"])
@@ -708,17 +708,17 @@ def analyze_risk():
         results, risk_level, recommendation = screen_symptoms(ai_res, answers)
 
         if not results:
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "error_code": "A8",
-                        "msg": "ไม่พบโรคที่สอดคล้องกับอาการที่ระบุ กรุณาตรวจสอบข้อมูลอาการอีกครั้ง",
-                    }
-                ),
-                400,
+            risk_level = "ไม่พบความเสี่ยงที่ชัดเจน"
+            potential_disease = "ไม่พบโรคที่สอดคล้องกับอาการของท่านในฐานข้อมูลปัจจุบัน"
+            recommendation = (
+                "ระบบไม่พบภาวะหรือโรคที่สอดคล้องกับข้อมูลอาการที่ท่านระบุในฐานข้อมูลปัจจุบัน "
+                "เพื่อความถูกต้องและความปลอดภัยของท่าน แนะนำให้เข้ารับคำปรึกษาจากแพทย์ผู้เชี่ยวชาญด้านสูตินรีเวช "
+                "เพื่อรับการตรวจวินิจฉัยเพิ่มเติม"
             )
-        potential_disease = ", ".join(r["disease"] for r in results)[:255]
+            disease_scores = []
+        else:
+            potential_disease = ", ".join(r["disease"] for r in results)[:255]
+            disease_scores = results
 
         q7_joined = ",".join(answers["q7"])
         db = get_db_connection()
@@ -756,10 +756,15 @@ def analyze_risk():
         )
         db.commit()
         assessment_id = cursor.lastrowid
+
+        # ถ้าคะแนนไม่ถึงเกณฑ์ แนบ error_code: "A7" ไปบอกหน้าบ้าน เพื่อให้พุ่งไปหน้า result ทันที
+        response_error_code = "A7" if not results else None
+
         return (
             jsonify(
                 {
                     "status": "success",
+                    "error_code": response_error_code,
                     "assessment_id": assessment_id,
                     "msg": "บันทึกข้อมูลเรียบร้อยแล้ว",
                     "data": {
@@ -769,7 +774,7 @@ def analyze_risk():
                         "potential_disease": potential_disease,
                         "risk_level": risk_level,
                         "recommendation": recommendation,
-                        "disease_scores": results,
+                        "disease_scores": disease_scores,
                     },
                 }
             ),
@@ -779,11 +784,11 @@ def analyze_risk():
         if db is not None:
             db.rollback()
         logger.error(f"Database Error: {err}")
-        return jsonify({"status": "error","error_code":"A10", "msg": "บันทึกผลวิเคราะห์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"}), 500
+        return jsonify({"status": "error","error_code":"A9", "msg": "บันทึกผลวิเคราะห์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"}), 500
         
     except Exception as e:
         logger.error(f"System Error: {e}")
-        return jsonify({"status": "error","error_code":"A11", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        return jsonify({"status": "error","error_code":"A10", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
         
     finally:
         if cursor is not None:
