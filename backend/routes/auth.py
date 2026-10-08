@@ -354,6 +354,10 @@ def verify_otp():
         logger.error(f"Database Error: {err}")
         return jsonify({"status": "error","msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
+    except mysql.connector.Error as err:
+        logger.error(f"Database Error: {err}")
+        return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
+
     except Exception as e:
         logger.error(f"System Error: {e}")
         return jsonify({"status": "error","msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
@@ -436,6 +440,10 @@ def reset_password():
     except mysql.connector.Error as err:
         logger.error(f"Database Error: {err}")
         return jsonify({"status": "error","msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
+
+    except mysql.connector.Error as err:
+        logger.error(f"Database Error: {err}")
+        return jsonify({"msg": "เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล กรุณาลองใหม่อีกครั้ง"}), 500
 
     except Exception as e:
         logger.error(f"System Error: {e}")

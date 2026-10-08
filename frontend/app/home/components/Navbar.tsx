@@ -98,9 +98,12 @@ export default function Navbar() {
           position: sticky; top: 0; z-index: 50;
           display: flex; align-items: center; justify-content: space-between;
           padding: 0 40px; height: 64px;
-          background: rgba(255,255,255,0.92);
-          backdrop-filter: blur(20px);
-          border-bottom: 1px solid rgba(220,80,120,0.1);
+          /* glassmorphism: พื้นโปร่งแสง + เบลอฉากหลัง + ขอบสะท้อนแสงด้านบน + เงานุ่ม */
+          background: linear-gradient(180deg, rgba(255,255,255,0.62) 0%, rgba(255,240,246,0.42) 100%);
+          -webkit-backdrop-filter: blur(18px) saturate(180%);
+          backdrop-filter: blur(18px) saturate(180%);
+          border-bottom: 1px solid rgba(255,255,255,0.55);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 8px 32px rgba(194,24,91,0.08);
           font-family: 'Sarabun', sans-serif;
         }
         .nav-logo {
@@ -130,8 +133,11 @@ export default function Navbar() {
           transition: background 0.18s, color 0.18s; text-decoration: none;
           white-space: nowrap;
         }
-        .nav-link:hover  { background: rgba(240,98,146,0.08); color: #c2185b; }
-        .nav-link.active { background: rgba(240,98,146,0.12); color: #c2185b; font-weight: 500; }
+        .nav-link:hover  { background: rgba(255,255,255,0.45); color: #c2185b; }
+        .nav-link.active {
+          background: rgba(255,255,255,0.55); color: #c2185b; font-weight: 500;
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.75), 0 2px 10px rgba(194,24,91,0.10);
+        }
 
         /* Right icons */
         .nav-right { display: flex; align-items: center; gap: 8px; }

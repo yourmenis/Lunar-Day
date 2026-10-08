@@ -72,6 +72,11 @@ export default function ArticlesPage() {
   }, [search, showToast])
 
   const searching = search.trim() !== ''
+
+  // กด Enter / คลิกแว่นขยาย: ถ้ายังไม่ได้พิมพ์คำค้น → แจ้งเตือน (มีคำค้นอยู่แล้วระบบค้นหาให้อัตโนมัติ)
+  const submitSearch = () => {
+    if (!searching) showToast('กรุณาใส่คำค้นหา', 'info')
+  }
   const filtered = searching ? (results ?? articles) : articles
 
   const emojis = ['🔬', '💊', '🌸', '📊', '🩸', '💉', '🧬', '🫀']
@@ -112,10 +117,19 @@ export default function ArticlesPage() {
 
           {/* Search */}
           <div style={{ position: 'relative', flex: '1 1 320px', maxWidth: 520 }}>
-            <Search size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }} />
+            {/* ไอคอนแว่นขยายกดค้นหาได้ (ตำแหน่งเดิม: padding 6 + left 8 = ไอคอนอยู่ที่ 14px) */}
+            <button type="button" onClick={submitSearch} aria-label="ค้นหา" style={{
+              position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+              background: 'none', border: 'none', padding: 6, cursor: 'pointer',
+              display: 'flex', color: 'rgba(255,255,255,0.4)',
+            }}>
+              <Search size={15} />
+            </button>
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') submitSearch() }}
+              aria-label="ค้นหาบทความ"
               placeholder="ค้นหาจากชื่อหรือเนื้อหาบทความ..."
               style={{
                 width: '100%',

@@ -84,6 +84,28 @@ ALLOWED_VALUES = {
 }
 
 
+ALLOWED_VALUES = {
+    "q1": {"low", "normal", "high"},
+    "q2": {"short", "normal", "long"},
+    "q3": {"short", "normal", "long"},
+    "q4": {"spotting", "postcoital", "none"},
+    "q5": {"none", "mild", "severe"},
+    "q6": {"none", "mild", "severe"},
+    "q7": {
+        "palpitation",
+        "nausea",
+        "fever",
+        "breast",
+        "urine",
+        "bowel",
+        "discharge",
+    },
+    "q8": {"no_sex", "protected", "unprotected", "both", "failure"},
+    "q9": {"pregnant", "not_pregnant", "unsure"},
+    "q10": {"small", "large"},
+}
+
+
 # ==============================
 # HELPERS
 # ==============================
@@ -626,12 +648,17 @@ def analyze_image():
         )
 
     except Exception as e:
+<<<<<<< HEAD
 
+=======
+        print(f"[Error] in analyze_image: {e}")
+>>>>>>> f83748a2180960f7a2a65ce47614ac22f9e93ae8
         if filepath and os.path.exists(filepath):
             try:
                 os.remove(filepath)
             except:
                 pass 
+<<<<<<< HEAD
         if res_filepath and os.path.exists(res_filepath):
             try:
                 os.remove(res_filepath)
@@ -639,6 +666,10 @@ def analyze_image():
                 pass
         logger.error(f"System Error: {e}")
         return jsonify({"status": "error", "error_code":"A10","msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+=======
+        logger.error(f"System Error: {e}")
+        return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดขณะประมวลผลรูปภาพ โปรดลองอีกครั้ง"}), 500
+>>>>>>> f83748a2180960f7a2a65ce47614ac22f9e93ae8
 
 
 @analysis_bp.route("/risk", methods=["POST"])
@@ -684,7 +715,11 @@ def analyze_risk():
                     {
                         "status": "error",
                         "error_code": "A4",
+<<<<<<< HEAD
                         "msg": "โปรดระบุข้อมูลอาการให้ครบถ้วน",
+=======
+                        "msg": "กรุณากรอกข้อมูลอาการให้ครบถ้วน",
+>>>>>>> f83748a2180960f7a2a65ce47614ac22f9e93ae8
                         "errors": errors,
                     },
                 ),
@@ -695,7 +730,11 @@ def analyze_risk():
                 jsonify(
                     {
                         "status": "error",
+<<<<<<< HEAD
                         "error_code": "A7",
+=======
+                        "error_code": "A6",
+>>>>>>> f83748a2180960f7a2a65ce47614ac22f9e93ae8
                         "msg": "ความสัมพันธ์อาการไม่สอดคล้องกันของลักษณะเลือดออกและประวัติทางเพศ",
                     }
                 ),
@@ -708,6 +747,7 @@ def analyze_risk():
         results, risk_level, recommendation = screen_symptoms(ai_res, answers)
 
         if not results:
+<<<<<<< HEAD
             risk_level = "ไม่พบความเสี่ยงที่ชัดเจน"
             potential_disease = "ไม่พบโรคที่สอดคล้องกับอาการของท่านในฐานข้อมูลปัจจุบัน"
             recommendation = (
@@ -719,6 +759,19 @@ def analyze_risk():
         else:
             potential_disease = ", ".join(r["disease"] for r in results)[:255]
             disease_scores = results
+=======
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A7",
+                        "msg": "ไม่พบโรคที่สอดคล้องกับอาการที่ระบุ กรุณาตรวจสอบข้อมูลอาการอีกครั้ง",
+                    }
+                ),
+                400,
+            )
+        potential_disease = ", ".join(r["disease"] for r in results)[:255]
+>>>>>>> f83748a2180960f7a2a65ce47614ac22f9e93ae8
 
         q7_joined = ",".join(answers["q7"])
         db = get_db_connection()
@@ -756,15 +809,21 @@ def analyze_risk():
         )
         db.commit()
         assessment_id = cursor.lastrowid
+<<<<<<< HEAD
 
         # ถ้าคะแนนไม่ถึงเกณฑ์ แนบ error_code: "A7" ไปบอกหน้าบ้าน เพื่อให้พุ่งไปหน้า result ทันที
         response_error_code = "A7" if not results else None
 
+=======
+>>>>>>> f83748a2180960f7a2a65ce47614ac22f9e93ae8
         return (
             jsonify(
                 {
                     "status": "success",
+<<<<<<< HEAD
                     "error_code": response_error_code,
+=======
+>>>>>>> f83748a2180960f7a2a65ce47614ac22f9e93ae8
                     "assessment_id": assessment_id,
                     "msg": "บันทึกข้อมูลเรียบร้อยแล้ว",
                     "data": {
@@ -774,7 +833,11 @@ def analyze_risk():
                         "potential_disease": potential_disease,
                         "risk_level": risk_level,
                         "recommendation": recommendation,
+<<<<<<< HEAD
                         "disease_scores": disease_scores,
+=======
+                        "disease_scores": results,
+>>>>>>> f83748a2180960f7a2a65ce47614ac22f9e93ae8
                     },
                 }
             ),
@@ -784,11 +847,19 @@ def analyze_risk():
         if db is not None:
             db.rollback()
         logger.error(f"Database Error: {err}")
+<<<<<<< HEAD
         return jsonify({"status": "error","error_code":"A9", "msg": "บันทึกผลวิเคราะห์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"}), 500
         
     except Exception as e:
         logger.error(f"System Error: {e}")
         return jsonify({"status": "error","error_code":"A10", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+=======
+        return jsonify({"status": "error", "msg": "บันทึกผลวิเคราะห์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"}), 500
+        
+    except Exception as e:
+        logger.error(f"System Error: {e}")
+        return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+>>>>>>> f83748a2180960f7a2a65ce47614ac22f9e93ae8
         
     finally:
         if cursor is not None:
@@ -798,3 +869,53 @@ def analyze_risk():
 
     
 
+<<<<<<< HEAD
+=======
+
+@analysis_bp.route("/result/<int:assessment_id>", methods=["GET"])
+@jwt_required()
+def get_assessment_result(assessment_id):
+    current_user_id = get_jwt_identity()
+    db = None
+    cursor = None
+
+    try:
+        db = get_db_connection()
+        cursor = db.cursor(dictionary=True)
+
+        cursor.execute(
+            """
+            SELECT AssessmentID, Detect1, Detect2, Confidence, 
+                   Potential_Disease, Risk_Level, Recommendation, Image_Path
+            FROM Risk_Assessment
+            WHERE AssessmentID = %s AND UserID = %s
+            """,
+            (assessment_id, current_user_id),
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "msg": "ไม่พบข้อมูลการประเมินนี้ หรือคุณไม่มีสิทธิ์เข้าถึง",
+                    }
+                ),
+                404,
+            )
+
+        return jsonify({"status": "success", "data": row}), 200
+
+    except mysql.connector.Error as err:
+        logger.error(f"Database Error: {err}")
+        return jsonify({"status": "error", "msg": "ระบบไม่สามารถดึงข้อมูลประวัติได้"}), 500
+    except Exception as e:
+        logger.error(f"System Error: {e}")
+        return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if db is not None:
+            db.close()
+>>>>>>> f83748a2180960f7a2a65ce47614ac22f9e93ae8
