@@ -102,7 +102,8 @@ export default function IntroPage() {
           min-height: 100vh;
           font-family: 'Sarabun', sans-serif;
           background: #faf7f5;
-          overflow-x: hidden;
+          /* clip (ไม่ใช่ hidden) เพื่อไม่ให้แถบเมนู position: sticky หลุด */
+          overflow-x: clip;
         }
 
         .intro-hero {

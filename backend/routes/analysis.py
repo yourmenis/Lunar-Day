@@ -84,6 +84,28 @@ ALLOWED_VALUES = {
 }
 
 
+ALLOWED_VALUES = {
+    "q1": {"low", "normal", "high"},
+    "q2": {"short", "normal", "long"},
+    "q3": {"short", "normal", "long"},
+    "q4": {"spotting", "postcoital", "none"},
+    "q5": {"none", "mild", "severe"},
+    "q6": {"none", "mild", "severe"},
+    "q7": {
+        "palpitation",
+        "nausea",
+        "fever",
+        "breast",
+        "urine",
+        "bowel",
+        "discharge",
+    },
+    "q8": {"no_sex", "protected", "unprotected", "both", "failure"},
+    "q9": {"pregnant", "not_pregnant", "unsure"},
+    "q10": {"small", "large"},
+}
+
+
 # ==============================
 # HELPERS
 # ==============================
@@ -133,7 +155,9 @@ def run_inference(img):
     mask_np = mask[0].cpu().numpy()
 
     conf_np = conf[0].cpu().numpy()
+    
     detected = (mask_np > 0) & (conf_np > CONF_THRESHOLD)
+    
     if np.any(detected):
         avg_conf = np.mean(conf_np[detected])
     else:
@@ -470,61 +494,61 @@ def _clean(v):
 @analysis_bp.route("/image", methods=["POST"])
 @jwt_required()
 def analyze_image():
-    current_user_id = get_jwt_identity()
+    filepath = None
+    res_filepath = None
     start_time = time.time()
-    file = request.files.get("image")
-
-
-   # ===== ด่านที่ 1  เช็คว่าไม่ได้อัปโหลดรูปภาพมา =====
-    if not file or file.filename == "":
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A1",
-                    "msg": "กรุณาอัปโหลดรูปภาพก่อนทำการวิเคราะห์",
-                }
-            ),
-            400,
-        )
-
-    # ===== ด่านที่ 2 : เช็คว่านามสกุลไฟล์ถูกต้องไหม =====
-    if not allowed_file(file.filename):
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A2",
-                    "msg": "รูปแบบไฟล์ไม่รองรับ กรุณาอัปโหลดไฟล์นามสกุล .jpg, .jpeg หรือ .png",
-                }
-            ),
-            400,
-        )
-
-    # อ่านเนื้อหาไฟล์
-    file_content = file.read()
-
-    # ===== ด่านที่ 3 เช็คขนาดไฟล์เกิน =====
-    if len(file_content) > MAX_FILE_SIZE:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A3",
-                    "msg": "ขนาดไฟล์เกินขีดจำกัด กรุณาอัปโหลดไฟล์ขนาดไม่เกิน 10 MB",
-                }
-            ),
-            400,
-        )
-    # ===== SAVE IMAGE =====
-    timestamp = int(time.time())
-    filename = f"user_{current_user_id}_{timestamp}.jpg"
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-
-    with open(filepath, "wb") as f:
-        f.write(file_content)
-
     try:
+        current_user_id = get_jwt_identity()
+        file = request.files.get("image")
+
+
+    # =====ตรวจสอบการอัปโหลดรูปภาพ=====
+        if not file or file.filename == "":
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A1",
+                        "msg": "กรุณาอัปโหลดรูปภาพก่อนทำการวิเคราะห์",
+                    }
+                ),
+                400,
+            )
+    # =====ตรวจสอบนามสกุลไฟล์=====
+        if not allowed_file(file.filename):
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A2",
+                        "msg": "รูปแบบไฟล์ไม่รองรับ กรุณาอัปโหลดไฟล์นามสกุล .jpg, .jpeg หรือ .png",
+                    }
+                ),
+                400,
+            )
+
+        # อ่านเนื้อหาไฟล์
+        file_content = file.read()
+
+        # =====ตรวจสอบขนาดไฟล์=====
+        if len(file_content) > MAX_FILE_SIZE:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A3",
+                        "msg": "ขนาดไฟล์เกินขีดจำกัด กรุณาอัปโหลดไฟล์ขนาดไม่เกิน 10 MB",
+                    }
+                ),
+                400,
+            )
+        # ===== SAVE IMAGE =====
+        timestamp = int(time.time())
+        filename = f"user_{current_user_id}_{timestamp}.jpg"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+        with open(filepath, "wb") as f:
+            f.write(file_content)
         img_bgr = cv2.imdecode(np.frombuffer(file_content, np.uint8), cv2.IMREAD_COLOR)
         if img_bgr is None:
             return jsonify({"status": "error", "msg": "ไม่สามารถอ่านภาพได้"}), 400
@@ -597,7 +621,7 @@ def analyze_image():
                         cv2.putText(
                             img_visual,
                             info["name"],
-                            (x, y - 10),
+                            (x, label_y),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.7,
                             info["color"],
@@ -610,105 +634,110 @@ def analyze_image():
 
         # เซฟภาพที่วาดเส้นแล้วลงในโฟลเดอร์ uploads
         cv2.imwrite(res_filepath, cv2.cvtColor(img_visual, cv2.COLOR_RGB2BGR))
-
+        base_url = request.host_url
         return jsonify(
             {
                 "status": "success",
                 "ai_result": ai_res,
-                "image_path": f"uploads/{filename}",
-                "visual_path": f"uploads/{res_filename}",
+                "image_path": f"{base_url}uploads/{filename}",
+                "visual_path": f"{base_url}uploads/{res_filename}",
                 "detect_label": AI_RESULT_TH.get(ai_res, ai_res),
                 "confidence": round(avg_conf * 100, 2),
-                "processing_time": round(time.time() - start_time, 2),
+                #"processing_time": round(time.time() - start_time, 2),
             }
         )
 
     except Exception as e:
-        logger.exception(e)
-        return jsonify({"status": "error", "msg": str(e)}), 500
+        print(f"[Error] in analyze_image: {e}")
+        if filepath and os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+            except:
+                pass 
+        logger.error(f"System Error: {e}")
+        return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดขณะประมวลผลรูปภาพ โปรดลองอีกครั้ง"}), 500
 
 
 @analysis_bp.route("/risk", methods=["POST"])
 @jwt_required()
 def analyze_risk():
-    current_user_id = get_jwt_identity()
-
-    start_time = time.time()
-    data = request.form
-
-    ai_res = _clean(data.get("aiResult"))
-    image_path = data.get("imagePath")
-    confidence_raw = data.get("confidence")
-    try:
-        confidence = float(confidence_raw) if confidence_raw not in (None, "") else None
-    except (TypeError, ValueError):
-        confidence = None
-
-    q7_list = [_clean(x) for x in data.getlist("q7")]  # รับค่า q7 เป็น list
-    q7_valid = [x for x in q7_list if x]
-
-    answers = {
-        "q1": _clean(data.get("q1")),
-        "q2": _clean(data.get("q2")),
-        "q3": _clean(data.get("q3")),
-        "q4": _clean(data.get("q4")),
-        "q5": _clean(data.get("q5")),
-        "q6": _clean(data.get("q6")),
-        "q7": q7_valid,
-        "q8": _clean(data.get("q8")),
-        "q9": _clean(data.get("q9")),
-        "q10": _clean(data.get("q10")),
-    }
-
-    errors = validate_answers(answers, ai_res, answers["q8"])
-    if errors:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A4",
-                    "msg": "กรุณากรอกข้อมูลอาการให้ครบถ้วน",
-                    "errors": errors,
-                },
-            ),
-            400,
-        )
-    if answers["q4"] == "postcoital" and answers["q8"] == "no_sex":
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A6",
-                    "msg": "ความสัมพันธ์อาการไม่สอดคล้องกันของลักษณะเลือดออกและประวัติทางเพศ",
-                }
-            ),
-            400,
-        )
-
-    detect1 = AI_RESULT_TH.get(ai_res, ai_res)
-    detect2 = build_detect2(ai_res, answers["q10"])
-
-    results, risk_level, recommendation = screen_symptoms(ai_res, answers)
-
-    if not results:
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "error_code": "A7",
-                    "msg": "ไม่พบโรคที่สอดคล้องกับอาการที่ระบุ กรุณาตรวจสอบข้อมูลอาการอีกครั้ง",
-                }
-            ),
-            400,
-        )
-    potential_disease = ", ".join(r["disease"] for r in results)[:255]
-
-    q7_joined = ",".join(answers["q7"])
-
     db = None
     cursor = None
     assessment_id = None
+    start_time = time.time()
+    
     try:
+        current_user_id = get_jwt_identity()
+        data = request.form
+
+        ai_res = _clean(data.get("aiResult"))
+        image_path = data.get("imagePath")
+        confidence_raw = data.get("confidence")
+        try:
+            confidence = float(confidence_raw) if confidence_raw not in (None, "") else None
+        except (TypeError, ValueError):
+            confidence = None
+
+        q7_list = [_clean(x) for x in data.getlist("q7")]  # รับค่า q7 เป็น list
+        q7_valid = [x for x in q7_list if x]
+
+        answers = {
+            "q1": _clean(data.get("q1")),
+            "q2": _clean(data.get("q2")),
+            "q3": _clean(data.get("q3")),
+            "q4": _clean(data.get("q4")),
+            "q5": _clean(data.get("q5")),
+            "q6": _clean(data.get("q6")),
+            "q7": q7_valid,
+            "q8": _clean(data.get("q8")),
+            "q9": _clean(data.get("q9")),
+            "q10": _clean(data.get("q10")),
+        }
+
+        errors = validate_answers(answers, ai_res, answers["q8"])
+        if errors:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A4",
+                        "msg": "กรุณากรอกข้อมูลอาการให้ครบถ้วน",
+                        "errors": errors,
+                    },
+                ),
+                400,
+            )
+        if answers["q4"] == "postcoital" and answers["q8"] == "no_sex":
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A6",
+                        "msg": "ความสัมพันธ์อาการไม่สอดคล้องกันของลักษณะเลือดออกและประวัติทางเพศ",
+                    }
+                ),
+                400,
+         )
+
+        detect1 = AI_RESULT_TH.get(ai_res, ai_res)
+        detect2 = build_detect2(ai_res, answers["q10"])
+
+        results, risk_level, recommendation = screen_symptoms(ai_res, answers)
+
+        if not results:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "error_code": "A7",
+                        "msg": "ไม่พบโรคที่สอดคล้องกับอาการที่ระบุ กรุณาตรวจสอบข้อมูลอาการอีกครั้ง",
+                    }
+                ),
+                400,
+            )
+        potential_disease = ", ".join(r["disease"] for r in results)[:255]
+
+        q7_joined = ",".join(answers["q7"])
         db = get_db_connection()
         cursor = db.cursor()
         cursor.execute(
@@ -744,36 +773,42 @@ def analyze_risk():
         )
         db.commit()
         assessment_id = cursor.lastrowid
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "assessment_id": assessment_id,
+                    "msg": "บันทึกข้อมูลเรียบร้อยแล้ว",
+                    "data": {
+                        "detect1": detect1,
+                        "detect2": detect2,
+                        "confidence": confidence,
+                        "potential_disease": potential_disease,
+                        "risk_level": risk_level,
+                        "recommendation": recommendation,
+                        "disease_scores": results,
+                    },
+                }
+            ),
+            201,
+        )
     except mysql.connector.Error as err:
         if db is not None:
             db.rollback()
-        logger.error(f"บันทึกผลวิเคราะห์ล้มเหลว: {err}")
-        return jsonify({"status": "error", "msg": "บันทึกผลวิเคราะห์ไม่สำเร็จ"}), 500
+        logger.error(f"Database Error: {err}")
+        return jsonify({"status": "error", "msg": "บันทึกผลวิเคราะห์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"}), 500
+        
+    except Exception as e:
+        logger.error(f"System Error: {e}")
+        return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        
     finally:
         if cursor is not None:
             cursor.close()
         if db is not None:
             db.close()
 
-    return (
-        jsonify(
-            {
-                "status": "success",
-                "assessment_id": assessment_id,
-                "msg": "บันทึกข้อมูลเรียบร้อยแล้ว",
-                "data": {
-                    "detect1": detect1,
-                    "detect2": detect2,
-                    "confidence": confidence,
-                    "potential_disease": potential_disease,
-                    "risk_level": risk_level,
-                    "recommendation": recommendation,
-                    "disease_scores": results,
-                },
-            }
-        ),
-        201,
-    )
+    
 
 
 @analysis_bp.route("/result/<int:assessment_id>", methods=["GET"])
@@ -812,11 +847,11 @@ def get_assessment_result(assessment_id):
         return jsonify({"status": "success", "data": row}), 200
 
     except mysql.connector.Error as err:
-        logger.error(f"ดึงข้อมูลประวัติล้มเหลว: {err}")
-        return (
-            jsonify({"status": "error", "msg": "ระบบไม่สามารถดึงข้อมูลประวัติได้"}),
-            500,
-        )
+        logger.error(f"Database Error: {err}")
+        return jsonify({"status": "error", "msg": "ระบบไม่สามารถดึงข้อมูลประวัติได้"}), 500
+    except Exception as e:
+        logger.error(f"System Error: {e}")
+        return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
         if cursor is not None:
             cursor.close()
