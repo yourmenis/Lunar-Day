@@ -14,6 +14,7 @@ import { parseServerDate } from '../../lib/serverDate'
 import { useToast } from '../../components/Toast'
 import { PRIVACY_TEXT, TERMS_INTRO, TERMS_TEXT, type PolicySection } from '../../lib/policyText'
 import PolicyBody from '../../components/PolicyBody'
+import MiniSelect from '../../components/MiniSelect'
 import { USERNAME_MAX, usernameError } from '../../lib/authRules'
 import { avatarUrlFromFile, getCachedAvatar, getMemoryAvatar, setCachedAvatar } from '../../lib/avatarCache'
 import { clearProfileCache, getCachedHistory, getCachedProfile, setCachedHistory, setCachedProfile } from '../../lib/profileCache'
@@ -21,8 +22,9 @@ import { getRiskLevel } from '../../lib/riskLevels'
 import type { HistoryItem, Profile } from '../../lib/types'
 import RiskLegend from '../../components/RiskLegend'
 import { MSG_NETWORK_ERROR, MSG_SERVER_ERROR, isAuthError, readJson, responseMessage } from '../../lib/postJson'
-import { apiBase } from '../../lib/apiBase'
+import { apiBase, backendUrl } from '../../lib/apiBase'
 import { clickable } from '../../lib/a11y'
+import { NAV_RESELECT_EVENT } from '../../lib/navEvents'
 
 // ============================================================
 // TYPES
@@ -42,6 +44,7 @@ type EditForm = {
 // HELPERS
 // ============================================================
 // backend บันทึกภาพที่วาดกรอบผล AI ไว้เป็น res_<ชื่อไฟล์เดิม> ในโฟลเดอร์เดียวกัน
+// Image_Path ใน DB อาจเป็น path ("uploads/x.jpg") หรือ URL เต็ม ("http://host:5000/uploads/x.jpg") → แปลงด้วย backendUrl()
 function resultImagePath(path: string) {
   return path.replace(/([^/]+)$/, 'res_$1')
 }
@@ -141,34 +144,14 @@ function ThaiDatePicker({ value, onChange }: { value: string; onChange: (v: stri
         }}>
           {/* Month / Year selects */}
           <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-            <select
-              value={viewMonth}
-              onChange={e => setViewMonth(Number(e.target.value))}
-              style={{
-                flex: 1, padding: '3px 4px', borderRadius: 8,
-                border: '1px solid #fce7f3', fontSize: 10,
-                fontFamily: "'Sarabun', sans-serif", color: '#1a0a14',
-                background: '#fff', outline: 'none', cursor: 'pointer',
-              }}
-            >
-              {THAI_MONTHS_FULL.map((m, i) => (
-                <option key={i} value={i}>{m}</option>
-              ))}
-            </select>
-            <select
-              value={viewYear}
-              onChange={e => setViewYear(Number(e.target.value))}
-              style={{
-                flex: 1, padding: '3px 4px', borderRadius: 8,
-                border: '1px solid #fce7f3', fontSize: 10,
-                fontFamily: "'Sarabun', sans-serif", color: '#1a0a14',
-                background: '#fff', outline: 'none', cursor: 'pointer',
-              }}
-            >
-              {years.map(y => (
-                <option key={y} value={y}>{y + 543}</option>
-              ))}
-            </select>
+            <MiniSelect
+              ariaLabel="เลือกเดือน" value={viewMonth} onChange={setViewMonth}
+              options={THAI_MONTHS_FULL.map((m, i) => ({ value: i, label: m }))}
+            />
+            <MiniSelect
+              ariaLabel="เลือกปี (พ.ศ.)" value={viewYear} onChange={setViewYear}
+              options={years.map(y => ({ value: y, label: String(y + 543) }))}
+            />
           </div>
 
           {/* Header nav */}
@@ -493,7 +476,7 @@ function HistoryThumb({ path }: { path?: string | null }) {
   if (!path || stage === 2) {
     return <div className="pf-hist-thumb pf-hist-thumb-empty"><Droplets size={26} color="#f48fb1" strokeWidth={1.5} /></div>
   }
-  const src = `${apiBase()}/${stage === 0 ? resultImagePath(path) : path}`
+  const src = backendUrl(stage === 0 ? resultImagePath(path) : path)
   return (
     <img
       className="pf-hist-thumb" src={src} alt="ภาพที่วิเคราะห์" loading="lazy"
@@ -640,6 +623,14 @@ function DocView({ title, intro, sections, icon, onBack }: {
 export default function ProfilePage() {
   const router = useRouter()
   const [view, setView] = useState<View>('profile')
+  // กดเมนูโปรไฟล์ขณะอยู่หน้านี้ (เช่น ดูประวัติอยู่) → กลับไปหน้าโปรไฟล์หลัก
+  useEffect(() => {
+    const onReselect = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === '/home/profile') setView('profile')
+    }
+    window.addEventListener(NAV_RESELECT_EVENT, onReselect)
+    return () => window.removeEventListener(NAV_RESELECT_EVENT, onReselect)
+  }, [])
   // เริ่มจากข้อมูลที่จำไว้ (ถ้ามี) → กลับมาหน้านี้แล้วชื่อ/จำนวนประวัติไม่กะพริบ
   const [profile, setProfile] = useState<Profile | null>(getCachedProfile)
   const [history, setHistory] = useState<HistoryItem[]>(getCachedHistory)
@@ -1387,13 +1378,13 @@ function HistoryDetailView({ item, onBack }: { item: HistoryItem; onBack: () => 
               <p style={{ fontFamily: "'Mitr', sans-serif", fontSize: 13, fontWeight: 600, color: '#9e7a8a', padding: '14px 20px 12px' }}>ภาพที่วิเคราะห์</p>
               {detail.Image_Path ? (
                 <img
-                  src={`${apiBase()}/${resultImagePath(detail.Image_Path)}`}
+                  src={backendUrl(resultImagePath(detail.Image_Path))}
                   alt="Analyzed"
                   onError={e => {
                     const img = e.currentTarget
                     if (img.dataset.fallback !== '1') {
                       img.dataset.fallback = '1'
-                      img.src = `${apiBase()}/${detail.Image_Path}`
+                      img.src = backendUrl(detail.Image_Path ?? '')
                     } else {
                       img.style.display = 'none'
                     }

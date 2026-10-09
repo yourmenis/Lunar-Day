@@ -11,6 +11,7 @@ import { ageFrom, parseYmd } from '../lib/birthDate'
 import { PASSWORD_MAX, PASSWORD_PLACEHOLDER, USERNAME_MAX, passwordRuleError, usernameError } from '../lib/authRules'
 import { PRIVACY_TEXT, TERMS_INTRO, TERMS_TEXT } from '../lib/policyText'
 import PolicyBody from '../components/PolicyBody'
+import MiniSelect from '../components/MiniSelect'
 
 const STEPS = [
   { id: 1, title: 'ข้อมูลส่วนตัว', subtitle: 'บอกเราเกี่ยวกับคุณ' },
@@ -102,26 +103,14 @@ const EMAIL_PATTERN = /^[\w.-]+@[\w.-]+\.\w+$/
           <div className="dp-popup">
             {/* Month / Year selects */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-              <select
-                className="dp-select"
-                value={viewMonth}
-                onChange={e => setViewMonth(Number(e.target.value))}
-                style={{ display: 'block' }}
-              >
-                {THAI_MONTHS.map((m, i) => (
-                  <option key={i} value={i}>{m}</option>
-                ))}
-              </select>
-              <select
-                className="dp-select"
-                value={viewYear}
-                onChange={e => setViewYear(Number(e.target.value))}
-                style={{ display: 'block' }}
-              >
-                {years.map(y => (
-                  <option key={y} value={y}>{y + 543}</option>
-                ))}
-              </select>
+              <MiniSelect
+                theme="dark" ariaLabel="เลือกเดือน" value={viewMonth} onChange={setViewMonth}
+                options={THAI_MONTHS.map((m, i) => ({ value: i, label: m }))}
+              />
+              <MiniSelect
+                theme="dark" ariaLabel="เลือกปี (พ.ศ.)" value={viewYear} onChange={setViewYear}
+                options={years.map(y => ({ value: y, label: String(y + 543) }))}
+              />
             </div>
 
             {/* Header nav */}
@@ -279,7 +268,9 @@ export default function SignUpPage() {
     })
 
     if (result.data && result.ok) {
-      try { sessionStorage.setItem(SIGNUP_SUCCESS_KEY, '1') } catch {}
+      // เก็บข้อความจาก backend ไว้ให้หน้า login แสดง
+      const msg = (result.data as { msg?: unknown }).msg
+      try { sessionStorage.setItem(SIGNUP_SUCCESS_KEY, typeof msg === 'string' && msg ? msg : '1') } catch {}
       router.push('/login')
       return
     }

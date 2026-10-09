@@ -119,15 +119,15 @@ export default function ArticleDetailPage() {
           {!loading && !error && lines.map((line, i) => {
             if (line.startsWith('[IMG:')) {
               const src = line.slice(5, -1)
-              return <img key={i} src={src.startsWith('http') ? fixBackendUrl(src) : `${apiBase()}${src}`} alt="" style={{ width: '100%', borderRadius: 14, margin: '16px 0', display: 'block' }} onError={e => (e.currentTarget.style.display = 'none')} />
+              return <img key={i} data-reveal src={src.startsWith('http') ? fixBackendUrl(src) : `${apiBase()}${src}`} alt="" style={{ width: '100%', borderRadius: 14, margin: '16px 0', display: 'block' }} onError={e => (e.currentTarget.style.display = 'none')} />
             }
             if (line.startsWith('**') && line.endsWith('**'))
-              return <strong key={i} style={{ display: 'block', color: '#c2185b', fontSize: 17, margin: '28px 0 10px', fontFamily: 'Mitr, sans-serif' }}>{line.slice(2, -2)}</strong>
+              return <strong key={i} data-reveal style={{ display: 'block', color: '#c2185b', fontSize: 17, margin: '28px 0 10px', fontFamily: 'Mitr, sans-serif' }}>{line.slice(2, -2)}</strong>
             if (line.startsWith('• '))
-              return <div key={i} style={{ display: 'flex', gap: 10, padding: '6px 0', fontSize: 15, color: '#3a2030', lineHeight: 1.75 }}>
+              return <div key={i} data-reveal style={{ display: 'flex', gap: 10, padding: '6px 0', fontSize: 15, color: '#3a2030', lineHeight: 1.75 }}>
                 <span style={{ color: '#f06292', fontWeight: 700, flexShrink: 0 }}>•</span>{line.slice(2)}
               </div>
-            return <p key={i} style={{ fontSize: 15.5, color: '#3a2030', lineHeight: 1.9, marginBottom: 18 }}>{line}</p>
+            return <p key={i} data-reveal style={{ fontSize: 15.5, color: '#3a2030', lineHeight: 1.9, marginBottom: 18 }}>{line}</p>
           })}
 
           {!loading && !error && lines.length === 0 && (
@@ -135,7 +135,7 @@ export default function ArticleDetailPage() {
           )}
 
           {!loading && links.length > 0 && (
-            <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid #f5e6ec' }}>
+            <div data-reveal style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid #f5e6ec' }}>
               <p style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 600, color: '#c2185b', marginBottom: 10, fontSize: 14 }}>แหล่งอ้างอิง</p>
               {links.map((l, i) => {
                 const text = typeof l === 'string' ? l : l.text

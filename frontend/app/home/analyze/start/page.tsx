@@ -10,8 +10,8 @@ import {
 import Navbar from '../../components/Navbar'
 import { useToast } from '../../../components/Toast'
 import RiskLegend from '../../../components/RiskLegend'
-import { getRiskLevel } from '../../../lib/riskLevels'
-import { apiBase } from '../../../lib/apiBase'
+import { NO_CLEAR_RISK, getRiskLevel } from '../../../lib/riskLevels'
+import { apiBase, backendUrl } from '../../../lib/apiBase'
 import { visuallyHidden } from '../../../lib/a11y'
 
 // ─────────────────────────────────────────────
@@ -58,64 +58,75 @@ interface RiskResult {
 
 
 // value ตรงกับ ALLOWED_VALUES ใน backend/routes/analysis.py
-const PAIN_OPTIONS = [
-  { value: 'none',   label: '😊 ปกติ / ปวดเล็กน้อย' },
-  { value: 'mild',   label: '😐 ปวดปานกลาง' },
-  { value: 'severe', label: '😣 ปวดรุนแรง' },
+const FLOW_OPTIONS = [            // q1
+  { value: 'low',    label: 'น้อย' },
+  { value: 'normal', label: 'ปกติ' },
+  { value: 'high',   label: 'มาก' },
 ]
-const DURATION_OPTIONS = [
-  { value: 'short',  label: '📅 น้อยกว่า 2 วัน' },
-  { value: 'normal', label: '📅 2–7 วัน' },
-  { value: 'long',   label: '📅 มากกว่า 7 วัน' },
+const DURATION_OPTIONS = [        // q2
+  { value: 'short',  label: 'น้อยกว่า 4.5 วัน' },
+  { value: 'normal', label: '4.5–8 วัน' },
+  { value: 'long',   label: 'มากกว่า 8 วัน' },
 ]
-const SIZE_OPTIONS = [
-  { value: 'small', label: '🪙 เล็กกว่าเหรียญสิบบาท' },
-  { value: 'large', label: '🩸 ใหญ่กว่าเหรียญสิบบาท' },
+const CYCLE_OPTIONS = [           // q3
+  { value: 'short',  label: 'น้อยกว่า 24 วัน' },
+  { value: 'normal', label: '24–38 วัน' },
+  { value: 'long',   label: 'มากกว่า 38 วัน' },
 ]
-const FLOW_OPTIONS = [
-  { value: 'low',    label: '💧 น้อยกว่าปกติ' },
-  { value: 'normal', label: '🩸 ปกติ' },
-  { value: 'high',   label: '🌊 มากกว่าปกติ' },
+const BLEEDING_OPTIONS = [        // q4
+  { value: 'spotting',   label: 'เลือดออกกะปริบกะปรอย' },
+  { value: 'postcoital', label: 'เลือดออกหลังมีเพศสัมพันธ์' },
+  { value: 'none',       label: 'ไม่มีในลักษณะข้างต้น' },
 ]
-const CYCLE_OPTIONS = [
-  { value: 'short',  label: '📆 ถี่กว่า 21 วัน' },
-  { value: 'normal', label: '📆 ทุก 21–35 วัน' },
-  { value: 'long',   label: '📆 ห่างกว่า 35 วัน' },
+const PAIN_OPTIONS = [            // q5
+  { value: 'none',   label: 'ไม่มีอาการปวด' },
+  { value: 'mild',   label: 'ปวดประจำเดือนเล็กน้อย' },
+  { value: 'severe', label: 'ปวดประจำเดือนรุนแรง' },
 ]
-const BLEEDING_OPTIONS = [
-  { value: 'none',       label: '✅ ไม่มีเลือดออกผิดปกติ' },
-  { value: 'spotting',   label: '🔸 เลือดออกกะปริดกะปรอย / นอกรอบเดือน' },
-  { value: 'postcoital', label: '🔹 เลือดออกหลังมีเพศสัมพันธ์' },
+const PELVIC_PAIN_OPTIONS = [     // q6
+  { value: 'none',   label: 'ไม่มีอาการปวด' },
+  { value: 'mild',   label: 'ปวดท้องน้อยเล็กน้อย' },
+  { value: 'severe', label: 'ปวดท้องน้อยรุนแรง' },
 ]
-const PELVIC_PAIN_OPTIONS = [
-  { value: 'none',   label: '😊 ไม่ปวด' },
-  { value: 'mild',   label: '😐 ปวดเล็กน้อย' },
-  { value: 'severe', label: '😣 ปวดรุนแรง' },
+const ASSOCIATED_SYMPTOM_OPTIONS = [  // q7
+  { value: 'palpitation', label: 'ใจสั่น / หัวใจเต้นเร็ว' },
+  { value: 'nausea',      label: 'คลื่นไส้ / อาเจียน' },
+  { value: 'fever',       label: 'มีไข้' },
+  { value: 'breast',      label: 'คัดเต้านม' },
+  { value: 'urine',       label: 'ปัสสาวะบ่อย' },
+  { value: 'bowel',       label: 'ท้องผูก / ท้องเสีย' },
+  { value: 'discharge',   label: 'ตกขาวผิดปกติ' },
 ]
-const ASSOCIATED_SYMPTOM_OPTIONS = [
-  { value: 'palpitation', label: '💓 ใจสั่น' },
-  { value: 'nausea',      label: '🤢 คลื่นไส้ / อาเจียน' },
-  { value: 'fever',       label: '🌡️ มีไข้' },
-  { value: 'breast',      label: '🤱 คัดตึง / เจ็บเต้านม' },
-  { value: 'urine',       label: '🚻 ปัสสาวะบ่อย / แสบขัด' },
-  { value: 'bowel',       label: '🚽 ท้องผูก / ขับถ่ายผิดปกติ' },
-  { value: 'discharge',   label: '💧 ตกขาวผิดปกติ' },
+const SEX_HISTORY_OPTIONS = [     // q8
+  { value: 'protected',   label: 'มีเพศสัมพันธ์ และป้องกันทุกครั้ง' },
+  { value: 'unprotected', label: 'มีเพศสัมพันธ์ และไม่ได้ป้องกันทุกครั้ง' },
+  { value: 'both',        label: 'มีเพศสัมพันธ์ ทั้งที่ป้องกันและไม่ได้ป้องกัน' },
+  { value: 'failure',     label: 'มีเพศสัมพันธ์ แต่การป้องกันเกิดความผิดพลาด เช่น ถุงยางแตก/หลุด' },
+  { value: 'no_sex',      label: 'ไม่เคยมีเพศสัมพันธ์' },
 ]
-const PREGNANCY_OPTIONS = [
-  { value: 'pregnant',     label: '🤰 มีความเสี่ยงตั้งครรภ์' },
-  { value: 'not_pregnant', label: '🙅 ไม่มีความเสี่ยงตั้งครรภ์' },
-  { value: 'unsure',       label: '🤔 ไม่แน่ใจ' },
+const PREGNANCY_OPTIONS = [       // q9
+  { value: 'pregnant',     label: 'ตั้งครรภ์' },
+  { value: 'not_pregnant', label: 'ไม่ตั้งครรภ์' },
+  { value: 'unsure',       label: 'ไม่แน่ใจ' },
 ]
-const SEX_HISTORY_OPTIONS = [
-  { value: 'no_sex',      label: '🚫 ไม่มีเพศสัมพันธ์' },
-  { value: 'protected',   label: '🛡️ มี และป้องกันทุกครั้ง' },
-  { value: 'unprotected', label: '⚠️ มี โดยไม่ได้ป้องกัน' },
-  { value: 'both',        label: '🔄 มีทั้งป้องกันและไม่ป้องกัน' },
-  { value: 'failure',     label: '❗ ป้องกันแต่การป้องกันล้มเหลว' },
+const SIZE_OPTIONS = [            // q10
+  { value: 'small', label: 'เล็กกว่าหรือเท่ากับเหรียญสิบ' },
+  { value: 'large', label: 'ใหญ่กว่าเหรียญสิบ' },
 ]
 
+// ข้อ 9 (การตรวจการตั้งครรภ์) แสดงเมื่อ
+// - ข้อ 8 ตอบแล้วและไม่ใช่ "ไม่เคยมีเพศสัมพันธ์" หรือ
+// - ข้อ 4 เลือก "เลือดออกหลังมีเพศสัมพันธ์"
+function needsPregnancyQuestion(f: SymptomForm) {
+  return (!!f.sex_history && f.sex_history !== 'no_sex') || f.bleeding === 'postcoital'
+}
+// ข้อ 9 ไม่ต้องตอบแล้ว → ล้างคำตอบที่เคยเลือกไว้
+function resetPregnancyIfHidden(f: SymptomForm): SymptomForm {
+  return needsPregnancyQuestion(f) ? f : { ...f, is_pregnant: '' }
+}
+
 // backend ตอบ A7 เมื่อกรอกครบแต่ไม่ตรงกับโรคใดในฐานข้อมูล → แสดงเป็นผลลัพธ์แทน error
-const NO_MATCH_LEVEL = 'ไม่พบโรค'
+const NO_MATCH_LEVEL = NO_CLEAR_RISK
 const NO_MATCH_DISEASE = 'ไม่พบโรคที่สอดคล้องกับอาการของท่านในฐานข้อมูลปัจจุบัน'
 const NO_MATCH_RECOMMENDATION =
   'ระบบไม่พบภาวะหรือโรคที่สอดคล้องกับข้อมูลอาการที่ท่านระบุในฐานข้อมูลปัจจุบัน ' +
@@ -308,7 +319,6 @@ export default function AnalyzePage() {
   const [imageValidated,    setImageValidated]    = useState(false)
   // ข้อความจาก backend ทั้งหมดแสดงผ่าน toast กลาง (components/Toast)
   const showToast = useToast()
-  const flashSuccess = useCallback((msg: string) => showToast(msg, 'success'), [showToast])
   const flashError = useCallback((msg: string) => showToast(msg, 'error'), [showToast])
 
   const [form, setForm] = useState<SymptomForm>(EMPTY_FORM)
@@ -350,9 +360,10 @@ export default function AnalyzePage() {
       if (data.status !== 'success') {
         // A5 = backend ตรวจแล้วไม่ใช่ภาพที่เกี่ยวกับเลือด/ลิ่มเลือด
         const err = data as unknown as { error_code?: string; msg?: string }
-        flashError(err.error_code === 'A5'
+        // ใช้ข้อความจาก backend ก่อน ถ้าไม่มีจึงใช้ข้อความสำรอง
+        flashError(err.msg || (err.error_code === 'A5'
           ? 'กรุณาแนบรูปภาพที่เกี่ยวกับลิ่มเลือด'
-          : err.msg ?? 'รูปภาพไม่ถูกต้อง กรุณาอัปโหลดรูปใหม่')
+          : 'รูปภาพไม่ถูกต้อง กรุณาอัปโหลดรูปใหม่'))
         // เอารูปเดิมออก และล้าง input เพื่อให้เลือกรูปใหม่ (หรือไฟล์เดิม) ได้ทันที
         reader.abort()
         if (fileRef.current) fileRef.current.value = ''
@@ -362,7 +373,7 @@ export default function AnalyzePage() {
         if (data.visual_path) {
           // โหลดภาพผล AI ให้เสร็จก่อนค่อยสลับ ถ้าโหลดไม่ได้ให้คงภาพตัวอย่างจากเครื่องไว้
           // (ไม่สลับไปที่ URL ตรง ๆ เพราะถ้าโหลดพลาดจะเหลือกรอบรูปเสีย)
-          const visualUrl = `${apiBase()}/${data.visual_path}`
+          const visualUrl = backendUrl(data.visual_path)
           const probe = new window.Image()
           probe.onload = () => {
             if (uploadSeq.current !== seq) return
@@ -371,16 +382,13 @@ export default function AnalyzePage() {
           }
           probe.src = visualUrl
         }
-        flashSuccess(hasConfidence(data)
-          ? `ผลภาพ: ${data.detect_label} (ความมั่นใจ ${confidenceText(data)})`
-          : `ผลภาพ: ${data.detect_label}`)
         if (data.ai_result !== 'clot') setForm(f => ({ ...f, size: '' }))
       }
     } catch {
       flashError('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้')
       setImage(null)
     } finally { setImageLoading(false) }
-  }, [flashError, flashSuccess, showToast])
+  }, [flashError, showToast])
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false)
@@ -391,8 +399,8 @@ export default function AnalyzePage() {
     if (imageLoading || !imageResult) return false
     if (!form.flow || !form.duration || !form.cycle || !form.bleeding ||
         !form.pain_level || !form.pelvic_pain || !form.sex_history) return false
-    // backend ต้องการ q9 เมื่อมีเพศสัมพันธ์ (q8 ≠ no_sex)
-    if (form.sex_history !== 'no_sex' && !form.is_pregnant) return false
+    // ข้อ 9 ต้องตอบเมื่อแสดงอยู่ (backend ต้องการ q9 เมื่อ q8 ≠ no_sex)
+    if (needsPregnancyQuestion(form) && !form.is_pregnant) return false
     if (imageResult?.ai_result === 'clot' && !form.size) return false
     return true
   })()
@@ -421,7 +429,7 @@ export default function AnalyzePage() {
       fd.append('q6', form.pelvic_pain)
       form.symptoms.forEach(s => fd.append('q7', s))
       fd.append('q8', form.sex_history)
-      if (form.sex_history !== 'no_sex' && form.is_pregnant) fd.append('q9', form.is_pregnant)
+      if (needsPregnancyQuestion(form) && form.is_pregnant) fd.append('q9', form.is_pregnant)
       if (imageResult?.ai_result === 'clot' && form.size) fd.append('q10', form.size)
       const res  = await fetch(`${apiBase()}/analysis/risk`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
@@ -442,7 +450,7 @@ export default function AnalyzePage() {
           Detect1:           detect1,
           Detect2:           detect2,
           Risk_Level:        NO_MATCH_LEVEL,
-          Potential_Disease: NO_MATCH_DISEASE,
+          Potential_Disease: typeof data.msg === 'string' && data.msg ? data.msg : NO_MATCH_DISEASE,
           Recommendation:    NO_MATCH_RECOMMENDATION,
           saved:             false,
         })
@@ -571,6 +579,9 @@ export default function AnalyzePage() {
         .img-preview { margin: 20px 32px; border-radius: 18px; overflow: hidden; position: relative; border: 2px solid #f5e6ec; }
         .img-preview img { width: 100%; max-height: 320px; object-fit: cover; display: block; }
         .img-preview-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(26,10,20,0.5), transparent 50%); display: flex; align-items: flex-end; padding: 16px; }
+        /* หน้าระบุอาการ: แสดงทั้งภาพ (ไม่ครอป) บนพื้นอ่อน */
+        .img-preview--symptoms { background: #faf7f5; }
+        .img-preview--symptoms img { max-height: 260px; object-fit: contain; }
         .img-preview-tag { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.9); backdrop-filter: blur(8px); padding: 5px 11px; border-radius: 9px; font-family: 'Mitr', sans-serif; font-size: 11.5px; color: #c2185b; }
         .img-remove-btn { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.5); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.18s; }
         .img-remove-btn:hover { background: rgba(194,24,91,0.8); }
@@ -830,6 +841,18 @@ export default function AnalyzePage() {
                   </div>
                 </div>
 
+                {/* ภาพที่อัปโหลด (เมื่อ AI ตรวจเสร็จจะเป็นภาพที่ AI ทำเครื่องหมายไว้) */}
+                {image && (
+                  <div className="img-preview img-preview--symptoms">
+                    <img src={image} alt="ภาพที่อัปโหลด" />
+                    <div className="img-preview-overlay">
+                      <div className="img-preview-tag">
+                        <ImageIcon size={12} color="#c2185b" /> ภาพที่อัปโหลด
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ height: 14 }} />
 
                 {!imageResult && (
@@ -842,64 +865,65 @@ export default function AnalyzePage() {
                   <div className="ai-result-badge">
                     <CheckCircle2 size={13} />
                     ผลภาพ: <strong>{imageResult.detect_label}</strong>
-                    {hasConfidence(imageResult) && <>&nbsp;(ความมั่นใจ {confidenceText(imageResult)})</>}
+                    {hasConfidence(imageResult) && <>&nbsp;(ความมั่นใจ AI {confidenceText(imageResult)})</>}
                   </div>
                 )}
 
                 <div className="symptom-form">
                   <div>
-                    <div className="sf-label"><Activity size={14} /> ปริมาณเลือดประจำเดือน</div>
+                    <div className="sf-label"><Activity size={14} /> ปริมาณประจำเดือน</div>
                     <RadioGroup name="flow" options={FLOW_OPTIONS} value={form.flow}
                       onChange={v => setForm(f => ({ ...f, flow: v }))} />
                   </div>
                   <div>
-                    <div className="sf-label"><Clock size={14} /> ความถี่ของรอบเดือน</div>
-                    <RadioGroup name="cycle" options={CYCLE_OPTIONS} value={form.cycle}
-                      onChange={v => setForm(f => ({ ...f, cycle: v }))} />
-                  </div>
-                  <div>
-                    <div className="sf-label"><Info size={14} /> ลักษณะเลือดออกผิดปกติ</div>
-                    <RadioGroup name="bleeding" options={BLEEDING_OPTIONS} value={form.bleeding}
-                      onChange={v => setForm(f => ({ ...f, bleeding: v }))} />
-                  </div>
-                  <div>
-                    <div className="sf-label"><Activity size={14} /> ปวดอุ้งเชิงกราน</div>
-                    <RadioGroup name="pelvic" options={PELVIC_PAIN_OPTIONS} value={form.pelvic_pain}
-                      onChange={v => setForm(f => ({ ...f, pelvic_pain: v }))} />
-                  </div>
-                  <div>
-                    <div className="sf-label"><Activity size={14} /> ระดับอาการปวด</div>
-                    <RadioGroup name="pain" options={PAIN_OPTIONS} value={form.pain_level}
-                      onChange={v => setForm(f => ({ ...f, pain_level: v }))} />
-                  </div>
-                  <div>
-                    <div className="sf-label"><Clock size={14} /> ระยะเวลาที่มีเลือดออก</div>
+                    <div className="sf-label"><Clock size={14} /> ระยะเวลาที่มีประจำเดือน</div>
                     <RadioGroup name="duration" options={DURATION_OPTIONS} value={form.duration}
                       onChange={v => setForm(f => ({ ...f, duration: v }))} />
                   </div>
                   <div>
-                    <div className="sf-label"><Shield size={14} /> ประวัติการมีเพศสัมพันธ์</div>
-                    <RadioGroup name="sex" options={SEX_HISTORY_OPTIONS} value={form.sex_history}
-                      onChange={v => setForm(f => ({ ...f, sex_history: v, is_pregnant: v === 'no_sex' ? '' : f.is_pregnant }))} />
+                    <div className="sf-label"><Clock size={14} /> ความถี่รอบเดือน</div>
+                    <RadioGroup name="cycle" options={CYCLE_OPTIONS} value={form.cycle}
+                      onChange={v => setForm(f => ({ ...f, cycle: v }))} />
                   </div>
-                  {/* แสดงเฉพาะเมื่อตอบข้อประวัติการมีเพศสัมพันธ์แล้ว และไม่ใช่ "ไม่มีเพศสัมพันธ์" */}
-                  {form.sex_history && form.sex_history !== 'no_sex' && (
+                  <div>
+                    <div className="sf-label"><Info size={14} /> ลักษณะเลือดที่ออกทางช่องคลอด</div>
+                    <RadioGroup name="bleeding" options={BLEEDING_OPTIONS} value={form.bleeding}
+                      onChange={v => setForm(f => resetPregnancyIfHidden({ ...f, bleeding: v }))} />
+                  </div>
+                  <div>
+                    <div className="sf-label"><Activity size={14} /> อาการปวดประจำเดือน</div>
+                    <RadioGroup name="pain" options={PAIN_OPTIONS} value={form.pain_level}
+                      onChange={v => setForm(f => ({ ...f, pain_level: v }))} />
+                  </div>
+                  <div>
+                    <div className="sf-label"><Activity size={14} /> อาการปวดท้องน้อย</div>
+                    <RadioGroup name="pelvic" options={PELVIC_PAIN_OPTIONS} value={form.pelvic_pain}
+                      onChange={v => setForm(f => ({ ...f, pelvic_pain: v }))} />
+                  </div>
+                  {/* อาการอื่น ๆ: เต็มความกว้าง ตัวเลือกเรียงเป็นตาราง */}
+                  <div className="sf-full">
+                    <div className="sf-label"><Sparkles size={14} /> อาการอื่น ๆ (ตอบได้หลายข้อ)</div>
+                    <CheckboxGroup options={ASSOCIATED_SYMPTOM_OPTIONS} values={form.symptoms}
+                      onChange={v => setForm(f => ({ ...f, symptoms: v }))} />
+                  </div>
+                  <div>
+                    <div className="sf-label"><Shield size={14} /> การมีเพศสัมพันธ์ล่าสุด</div>
+                    <RadioGroup name="sex" options={SEX_HISTORY_OPTIONS} value={form.sex_history}
+                      onChange={v => setForm(f => resetPregnancyIfHidden({ ...f, sex_history: v }))} />
+                  </div>
+                  {/* แสดงเมื่อข้อ 8 ไม่ใช่ "ไม่เคยมีเพศสัมพันธ์" หรือข้อ 4 เลือก "เลือดออกหลังมีเพศสัมพันธ์" */}
+                  {needsPregnancyQuestion(form) && (
                     <div>
-                      <div className="sf-label"><Baby size={14} /> มีความเป็นไปได้ว่าตั้งครรภ์?</div>
+                      <div className="sf-label"><Baby size={14} /> การตรวจการตั้งครรภ์</div>
                       <RadioGroup name="preg"
                         options={PREGNANCY_OPTIONS}
                         value={form.is_pregnant}
                         onChange={v => setForm(f => ({ ...f, is_pregnant: v }))} />
                     </div>
                   )}
-                  {/* อาการร่วม: เต็มความกว้าง ตัวเลือกเรียงเป็นตาราง */}
-                  <div className="sf-full">
-                    <div className="sf-label"><Sparkles size={14} /> อาการร่วม (เลือกได้หลายข้อ / ไม่มีให้ข้าม)</div>
-                    <CheckboxGroup options={ASSOCIATED_SYMPTOM_OPTIONS} values={form.symptoms}
-                      onChange={v => setForm(f => ({ ...f, symptoms: v }))} />
-                  </div>
+                  {/* แสดงเฉพาะเมื่อ AI พบลิ่มเลือดในภาพ */}
                   {imageResult?.ai_result === 'clot' && <div>
-                    <div className="sf-label"><Ruler size={14} /> ขนาดลิ่มเลือด</div>
+                    <div className="sf-label"><Ruler size={14} /> ขนาดของลิ่มเลือด</div>
                     <RadioGroup name="size" options={SIZE_OPTIONS} value={form.size}
                       onChange={v => setForm(f => ({ ...f, size: v }))} />
                   </div>}
