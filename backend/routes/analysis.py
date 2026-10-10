@@ -166,7 +166,7 @@ def validate_ai_findings(mask, conf, img, std_limit):
            
             if cls_id == 1 and std_val <= std_limit:
                     found_clot = True
-            elif cls_id == 2:
+            elif cls_id == 2 and std_val >std_limit:
                     found_tissue = True
 
     if found_clot and found_tissue:
@@ -707,7 +707,7 @@ def analyze_risk():
 
         if not results:
             risk_level = "ไม่พบความเสี่ยงที่ชัดเจน"
-            potential_disease = "ไม่พบโรคที่สอดคล้องกับอาการของท่านในฐานข้อมูลปัจจุบัน"
+            potential_disease = "ไม่พบโรคที่สอดคล้องกับอาการของท่าน"
             recommendation = (
                 "ระบบไม่พบภาวะหรือโรคที่สอดคล้องกับข้อมูลอาการที่ท่านระบุในฐานข้อมูลปัจจุบัน "
                 "เพื่อความถูกต้องและความปลอดภัยของท่าน แนะนำให้เข้ารับคำปรึกษาจากแพทย์ผู้เชี่ยวชาญด้านสูตินรีเวช "
