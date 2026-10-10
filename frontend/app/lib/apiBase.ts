@@ -26,3 +26,9 @@ export function fixBackendUrl(url: string): string {
   } catch {}
   return url
 }
+
+// path จาก backend ได้ทั้งแบบ relative ("uploads/x.png") และ URL เต็ม ("http://host:5000/uploads/x.png")
+export function backendUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return fixBackendUrl(path)
+  return `${apiBase()}/${path.replace(/^\//, '')}`
+}

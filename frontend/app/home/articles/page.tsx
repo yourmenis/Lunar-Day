@@ -180,6 +180,7 @@ export default function ArticlesPage() {
             {filtered.map((article, i) => (
               <div
                 key={article.ArticleID}
+                data-reveal
                 onClick={() => router.push(`/home/articles/${article.ArticleID}`)}
                 style={{
                   background: '#fff',

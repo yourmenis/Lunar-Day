@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { TrendingUp, BookOpen, ArrowRight, ChevronRight, Sparkles, Activity } from 'lucide-react'
+import { TrendingUp, BookOpen, ArrowRight, ChevronRight, Sparkles, Activity, Newspaper, Workflow } from 'lucide-react'
 import Navbar from './components/Navbar'
 import HeroCharacter from './components/HeroCharacter'
+import KnowledgeCarousel from './components/KnowledgeCarousel'
+import HowItWorks from './components/HowItWorks'
 import api from '../lib/api'
 import { useToast } from '../components/Toast'
 import { axiosErrorMessage } from '../lib/postJson'
@@ -253,6 +255,8 @@ export default function HomePage() {
           margin: 0 auto;
           width: 100%;
         }
+        /* ส่วนข่าวสารอยู่ติดกับส่วนบทความ: ไม่ต้องเว้นด้านล่างซ้อนกัน */
+        .section-news { padding-bottom: 0; }
         .section-header {
           display: flex;
           align-items: center;
@@ -516,6 +520,38 @@ export default function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* ── Lunar Day ทำงานอย่างไร (แผนภาพเคลื่อนไหว) ── */}
+        <div className="section section-news">
+          <div className="section-header">
+            <div>
+              <div className="section-title-wrap">
+                <div className="section-icon">
+                  <Workflow size={16} color="#c2185b" />
+                </div>
+                <h2 className="section-title">Lunar Day ทำงานอย่างไร</h2>
+              </div>
+              <p className="section-subtitle">จากภาพและอาการของคุณ สู่ผลวิเคราะห์ในไม่กี่ขั้นตอน</p>
+            </div>
+          </div>
+          <HowItWorks />
+        </div>
+
+        {/* ── ข่าวสารและความรู้ (สไลด์อินโฟกราฟิก) ── */}
+        <div className="section section-news">
+          <div className="section-header">
+            <div>
+              <div className="section-title-wrap">
+                <div className="section-icon">
+                  <Newspaper size={16} color="#c2185b" />
+                </div>
+                <h2 className="section-title">ข่าวสารและความรู้</h2>
+              </div>
+              <p className="section-subtitle">ความรู้เรื่องประจำเดือนที่ควรรู้ในรูปแบบอินโฟกราฟิก</p>
+            </div>
+          </div>
+          <KnowledgeCarousel />
+        </div>
 
         {/* ── Articles ── */}
         <div className="section">

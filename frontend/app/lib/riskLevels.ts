@@ -11,6 +11,8 @@ export type RiskLevel = {
   icon: string
 }
 
+export const NO_CLEAR_RISK = 'ไม่พบความเสี่ยงที่ชัดเจน'
+
 export const RISK_LEVELS: RiskLevel[] = [
   {
     key: 'ปกติ', label: 'ปกติ',
@@ -31,6 +33,12 @@ export const RISK_LEVELS: RiskLevel[] = [
     key: 'ฉุกเฉิน', label: 'ฉุกเฉิน',
     meaning: 'พบความผิดปกติชัดเจน มีความเสี่ยงต่อโรค ควรพบแพทย์โดยเร็ว',
     solid: '#ff1f1f', onSolid: '#3d0000', tint: '#ffe9e9', ink: '#c81414', icon: '🚨',
+  },
+  {
+    // ใช้เมื่อ backend ไม่พบโรคที่สอดคล้องกับอาการ (A7) — frontend กำหนดเอง เพราะ backend ไม่ได้ส่งระดับมา
+    key: NO_CLEAR_RISK, label: NO_CLEAR_RISK,
+    meaning: 'ข้อมูลอาการที่ระบุยังไม่เพียงพอต่อการประเมินระดับความเสี่ยงได้อย่างแน่ชัด แนะนำให้ปรึกษาแพทย์เพื่อรับการวินิจฉัยเพิ่มเติม',
+    solid: '#a3a3ad', onSolid: '#1f2128', tint: '#f3f4f6', ink: '#4b5060', icon: 'ℹ️',
   },
 ]
 

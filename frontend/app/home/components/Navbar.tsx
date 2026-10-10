@@ -9,6 +9,8 @@ import { avatarUrlFromFile, getCachedAvatar, getMemoryAvatar, setCachedAvatar } 
 import { clearProfileCache } from '../../lib/profileCache'
 import Image from 'next/image'
 import { clickable } from '../../lib/a11y'
+import { NAV_RESELECT_EVENT } from '../../lib/navEvents'
+import { InteractiveHoverButton } from '../../components/ui/interactive-hover-button'
 
 const NAV_LINKS = [
   { href: '/home/analyze',  label: 'วิเคราะห์ลิ่มเลือด', icon: Activity },
@@ -19,6 +21,8 @@ const NAV_LINKS = [
 // จำสถานะล็อกอินล่าสุดไว้ข้ามหน้า (เปลี่ยนหน้าแล้วปุ่มไม่กะพริบ)
 // ค่าเริ่มเป็น false เหมือนฝั่ง server จึงไม่เกิด hydration mismatch ตอนโหลดหน้าแรก
 let knownLoggedIn = false
+// ตรวจสถานะล็อกอินแล้วอย่างน้อยหนึ่งครั้ง (ก่อนตรวจ: ไม่แสดงทั้งรูปโปรไฟล์และปุ่มเข้าสู่ระบบ กันปุ่มกะพริบ)
+let authChecked = false
 
 export default function Navbar() {
   const router   = useRouter()
@@ -29,7 +33,8 @@ export default function Navbar() {
   const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [drawerOpen,      setDrawerOpen]      = useState(false)
   const [isLoggedIn,      setIsLoggedIn]      = useState(() => knownLoggedIn)
-  const markLoggedIn = (v: boolean) => { knownLoggedIn = v; setIsLoggedIn(v) }
+  const [authReady,       setAuthReady]       = useState(() => authChecked)
+  const markLoggedIn = (v: boolean) => { knownLoggedIn = v; authChecked = true; setIsLoggedIn(v); setAuthReady(true) }
   const showToast = useToast()
 
   // ล็อก scroll เมื่อ drawer เปิด
@@ -73,18 +78,28 @@ export default function Navbar() {
     setShowLogoutModal(false)
     setDrawerOpen(false)
     // แจ้ง backend ให้ blacklist token (ถ้าล้มเหลวก็ยังออกจากระบบฝั่งหน้าเว็บต่อ)
-    try { await api.post('/profile/logout') } catch {}
+    let msg = 'ออกจากระบบเรียบร้อยแล้ว'
+    try {
+      const res = await api.post('/profile/logout')
+      if (typeof res.data?.msg === 'string' && res.data.msg) msg = res.data.msg
+    } catch {}
     localStorage.removeItem('access_token')
     localStorage.removeItem('user')
     setCachedAvatar(null)
     clearProfileCache()
     markLoggedIn(false)
-    showToast('ออกจากระบบเรียบร้อยแล้ว')
+    showToast(msg)
     setTimeout(() => router.push('/login'), 1000)
   }
 
   const navigate = (href: string) => {
     setDrawerOpen(false)
+    if (pathname === href) {
+      // อยู่หน้านั้นอยู่แล้ว (เช่น กำลังดูประวัติในหน้าโปรไฟล์) → แจ้งหน้าให้กลับไปมุมมองหลัก
+      window.dispatchEvent(new CustomEvent(NAV_RESELECT_EVENT, { detail: href }))
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     router.push(href)
   }
 
@@ -141,6 +156,7 @@ export default function Navbar() {
 
         /* Right icons */
         .nav-right { display: flex; align-items: center; gap: 8px; }
+        .nav-auth-placeholder { width: 36px; height: 36px; }
         .nav-avatar {
           width: 36px; height: 36px; border-radius: 50%;
           background: linear-gradient(135deg, #f8bbd0, #f48fb1);
@@ -378,16 +394,22 @@ export default function Navbar() {
 
         {/* Right */}
         <div className="nav-right">
-          {/* Avatar (desktop + mobile) */}
-          <div className="nav-avatar" {...clickable(() => navigate('/home/profile'))} aria-label="โปรไฟล์ของฉัน">
-            {profileImage ? (
-              <img src={profileImage} alt="avatar"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={() => { setProfileImage(null); setCachedAvatar(null) }} />
-            ) : (
-              <User size={18} color="#c2185b" strokeWidth={1.5} />
-            )}
-          </div>
+          {/* ล็อกอินแล้ว: รูปโปรไฟล์ / ยังไม่ล็อกอิน: ปุ่มเข้าสู่ระบบ (desktop + mobile) */}
+          {isLoggedIn ? (
+            <div className="nav-avatar" {...clickable(() => navigate('/home/profile'))} aria-label="โปรไฟล์ของฉัน">
+              {profileImage ? (
+                <img src={profileImage} alt="avatar"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={() => { setProfileImage(null); setCachedAvatar(null) }} />
+              ) : (
+                <User size={18} color="#c2185b" strokeWidth={1.5} />
+              )}
+            </div>
+          ) : authReady ? (
+            <InteractiveHoverButton text="เข้าสู่ระบบ" onClick={() => navigate('/login')} />
+          ) : (
+            <div className="nav-auth-placeholder" aria-hidden="true" />
+          )}
 
           {/* Logout (desktop only) — แสดงเฉพาะตอนล็อกอินแล้ว */}
           {isLoggedIn && (
@@ -425,7 +447,7 @@ export default function Navbar() {
         </div>
 
         {/* User info */}
-        <div className="drawer-user" {...clickable(() => navigate('/home/profile'))} aria-label="โปรไฟล์ของฉัน">
+        <div className="drawer-user" {...clickable(() => navigate(isLoggedIn ? '/home/profile' : '/login'))} aria-label={isLoggedIn ? 'โปรไฟล์ของฉัน' : 'เข้าสู่ระบบ'}>
           <div className="drawer-user-avatar">
             {profileImage ? (
               <img src={profileImage} alt="avatar"
@@ -436,8 +458,8 @@ export default function Navbar() {
             )}
           </div>
           <div className="drawer-user-info">
-            <div className="drawer-user-name">โปรไฟล์ของฉัน</div>
-            <div className="drawer-user-sub">ดูและแก้ไขข้อมูล →</div>
+            <div className="drawer-user-name">{isLoggedIn ? 'โปรไฟล์ของฉัน' : 'เข้าสู่ระบบ'}</div>
+            <div className="drawer-user-sub">{isLoggedIn ? 'ดูและแก้ไขข้อมูล →' : 'เข้าสู่ระบบเพื่อใช้งานเต็มรูปแบบ →'}</div>
           </div>
         </div>
 

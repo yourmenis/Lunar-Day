@@ -11,6 +11,9 @@ import { setCachedAvatar } from '../lib/avatarCache'
 import { clearProfileCache } from '../lib/profileCache'
 import { PASSWORD_MAX, USERNAME_MAX } from '../lib/authRules'
 import { apiBase } from '../lib/apiBase'
+import { MAX_LOGIN_ATTEMPTS, NO_ATTEMPTS, clearAttempts, currentAttempts, loadAttempts, recordFailure, recordLocked, type AttemptRecord } from '../lib/loginAttempts'
+
+const lockTime = (ms: number) => new Date(ms).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
 
 export default function LoginPage() {
   const router = useRouter()
@@ -20,12 +23,19 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [stars, setStars] = useState<Array<React.CSSProperties>>([])
+  // จำนวนครั้งที่เข้าสู่ระบบไม่สำเร็จ (โหลดจาก localStorage หลัง mount)
+  const [attempts, setAttempts] = useState<AttemptRecord>(NO_ATTEMPTS)
+  const [now, setNow] = useState(0)
+  // แสดงข้อความ "กรุณาลองใหม่อีกครั้ง (x/3)" เฉพาะหลังกรอกผิดในหน้านี้ (เปิดหน้าใหม่ยังไม่แสดง)
+  const [showAttempt, setShowAttempt] = useState(false)
   const showToast = useToast()
 
   useEffect(() => {
     // ตั้งค่าในเฟรมถัดไป (ไม่ setState ตรง ๆ ใน effect) — ผลที่ผู้ใช้เห็นเหมือนเดิม
     requestAnimationFrame(() => {
       setMounted(true)
+      setAttempts(loadAttempts())
+      setNow(Date.now())
       setStars(
         Array.from({ length: 28 }).map(() => ({
           left: `${Math.random() * 100}%`,
@@ -40,9 +50,11 @@ export default function LoginPage() {
     })
     // มาจากหน้าสมัครสมาชิกที่สำเร็จแล้ว
     try {
-      if (sessionStorage.getItem(SIGNUP_SUCCESS_KEY)) {
+      const signupMsg = sessionStorage.getItem(SIGNUP_SUCCESS_KEY)
+      if (signupMsg) {
         sessionStorage.removeItem(SIGNUP_SUCCESS_KEY)
-        showToast('สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ', 'success')
+        // ใช้ข้อความจาก backend ถ้ามี (ค่า '1' = ไม่มีข้อความ)
+        showToast(signupMsg !== '1' ? signupMsg : 'สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ', 'success')
       }
     } catch {}
 
@@ -83,12 +95,24 @@ export default function LoginPage() {
       showToast(`รหัสผ่านต้องมีความยาวไม่เกิน ${PASSWORD_MAX} ตัวอักษร`, 'error')
       return
     }
+    // ผิดครบ 3 ครั้ง → ระงับการเข้าสู่ระบบจนพ้นเวลา
+    const start = Date.now()
+    const lock = currentAttempts(attempts, start).lockedUntil
+    setNow(start)
+    if (lock) {
+      setShowAttempt(true)
+      showToast(`เข้าสู่ระบบผิดครบ ${MAX_LOGIN_ATTEMPTS} ครั้ง กรุณาลองใหม่หลังเวลา ${lockTime(lock)} น.`, 'error')
+      return
+    }
     setLoading(true)
 
     const result = await postJson<{ access_token: string; user: unknown }>(
       '/auth/login', { username: name, password },
     )
+    const at = Date.now()
+    setNow(at)
     if (result.data && result.ok) {
+      setAttempts(clearAttempts())
       setCachedAvatar(null)
       clearProfileCache()
       localStorage.setItem('access_token', result.data.access_token)
@@ -96,9 +120,19 @@ export default function LoginPage() {
       router.replace('/home')
       return
     }
+    // ชื่อผู้ใช้ผิด / รหัสผ่านผิด / ผิดทั้งคู่ → backend ตอบ 401 เหมือนกัน นับเป็น 1 ครั้ง
+    if (result.status === 401) {
+      setAttempts(r => recordFailure(r, at))
+      setShowAttempt(true)
+    } else if (result.status === 403 && (result.data as { error_code?: string } | null)?.error_code === 'A11') {
+      setAttempts(r => recordLocked(r, at))
+      setShowAttempt(true)
+    }
     showToast(result.data ? (result.data.msg ?? 'เข้าสู่ระบบไม่สำเร็จ') : result.error, 'error')
     setLoading(false)
   }
+
+  const attempt = currentAttempts(attempts, now)
 
   return (
     <>
@@ -178,6 +212,10 @@ export default function LoginPage() {
             </div>
 
             <div className="forgot-row">
+              {/* จำนวนครั้งที่กรอกผิด — แสดงหลังกรอกผิดครั้งแรก (ครบ 3 ครั้ง ระงับ 30 นาที) */}
+              <span className="attempt-row" aria-live="polite">
+                {showAttempt && attempt.count > 0 && `กรุณาลองใหม่อีกครั้ง (${attempt.count}/${MAX_LOGIN_ATTEMPTS})`}
+              </span>
               <button type="button" className="forgot-btn" onClick={() => router.push('/forgot-password')}>ลืมรหัสผ่าน?</button>
             </div>
 
