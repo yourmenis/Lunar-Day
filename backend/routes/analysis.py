@@ -719,7 +719,7 @@ def analyze_risk():
 
         if not results:
             risk_level = "ไม่พบความเสี่ยงที่ชัดเจน"
-            potential_disease = "ไม่พบโรคที่สอดคล้องกับอาการของท่าน"
+            potential_disease = "ไม่พบโรคที่สอดคล้องกับอาการ"
             recommendation = (
                 "ระบบไม่พบภาวะหรือโรคที่สอดคล้องกับข้อมูลอาการที่ท่านระบุในฐานข้อมูลปัจจุบัน "
                 "เพื่อความถูกต้องและความปลอดภัยของท่าน แนะนำให้เข้ารับคำปรึกษาจากแพทย์ผู้เชี่ยวชาญด้านสูตินรีเวช "
@@ -844,10 +844,10 @@ def get_assessment_result(assessment_id):
 
     except mysql.connector.Error as err:
         logger.error(f"Database Error: {err}")
-        return jsonify({"status": "error", "msg": "ระบบไม่สามารถดึงข้อมูลประวัติได้"}), 500
+        return jsonify({"status": "error_code":"A11",, "msg": "ไม่สามารถดูผลวิเคราะห์ กรุณาลองใหม่อีกครั้ง"}), 500
     except Exception as e:
         logger.error(f"System Error: {e}")
-        return jsonify({"status": "error", "msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
+        return jsonify({"status": "error", "error_code":"A10","msg": "เกิดข้อผิดพลาดของระบบ กรุณาลองใหม่อีกครั้ง"}), 500
     finally:
         if cursor is not None:
             cursor.close()
