@@ -10,7 +10,7 @@ import segmentation_models_pytorch as smp
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import mysql.connector
 from config.database import get_db_connection
-
+from PIL import Image, ImageDraw, ImageFont
 
 # ==============================
 # INIT
@@ -142,6 +142,7 @@ def run_inference(img):
             avg_conf = np.mean(conf_np[background_pixels])
         else:
             avg_conf = np.mean(conf_np)
+    
 
     return mask_np, conf_np, float(avg_conf)
 
@@ -164,9 +165,10 @@ def validate_ai_findings(mask, conf, img, std_limit):
             cv2.drawContours(m_temp, [cnt], -1, 255, -1)
             std_val = np.std(img[m_temp > 0])
            
+           
             if cls_id == 1 and std_val <= std_limit:
                     found_clot = True
-            elif cls_id == 2 and std_val >std_limit:
+            elif cls_id == 2 :
                     found_tissue = True
 
     if found_clot and found_tissue:
@@ -562,12 +564,13 @@ def analyze_image():
 
         img_visual = img_resized.copy()
 
-        # กำหนดสี (OpenCV ใช้ BGR): ลิ่มเลือด(ม่วง), เนื้อเยื่อ(แดง)
         class_info = {
-            1: {"name": "Blood Clot", "color": (128, 0, 128)},  # ม่วง
-            2: {"name": "Tissue", "color": (255, 0, 0)},
+            1: {"name": "ลิ่มเลือด", "color": (128, 0, 128)},  # ม่วง
+            2: {"name": "เนื้อเยื่อ", "color": (255, 0, 0)},    # แดง
         }
-
+        
+        text_to_draw = []
+        
         for cls_id, info in class_info.items():
             m = ((mask == cls_id) & (conf > CONF_THRESHOLD)).astype(np.uint8)
             cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -589,20 +592,29 @@ def analyze_image():
 
                     if is_valid:
                         cv2.drawContours(img_visual, [c], -1, info["color"], 3)
-
-                        # ใส่ชื่อคลาสกำกับ
                         x, y, w, h = cv2.boundingRect(c)
-                        label_y = (y - 10) if cls_id == 2 else (y + h + 20)
-                        label_y = max(label_y, 15)
-                        cv2.putText(
-                            img_visual,
-                            info["name"],
-                            (x, label_y),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.7,
-                            info["color"],
-                            2,
-                        )
+                        label_y = (y - 30) if cls_id == 2 else (y + h + 10)
+                        label_y = max(label_y, 10)
+                        
+                        text_to_draw.append((x, label_y, info["name"], info["color"]))
+                        
+        if text_to_draw:
+            img_pil = Image.fromarray(img_visual)
+            draw = ImageDraw.Draw(img_pil)
+            
+            try:
+                BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                font_path = os.path.join(BASE_DIR, "static", "fonts", "2.3.2 THSarabunNew.ttf")
+                font = ImageFont.truetype(font_path, 36) 
+            except IOError:
+                logger.error(f"don't have {font_path} ")
+                font = ImageFont.load_default()
+
+            for (x, y, text, color) in text_to_draw:
+                draw.text((x, y), text, font=font, fill=color, stroke_width=1, stroke_fill=color)
+
+            # แปลงภาพกลับเพื่อไปเซฟด้วย OpenCV
+            img_visual = np.array(img_pil)
 
         # ตั้งชื่อไฟล์ใหม่สำหรับภาพที่วาดผลแล้ว
         res_filename = f"res_{filename}"
