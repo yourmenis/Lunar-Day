@@ -2,43 +2,38 @@
 .DS_Store
 Thumbs.db
 
-# --- Backend (Python/Flask) ---
-__pycache__/
-backend/__pycache__/
-backend/routes/__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-
-backend/venv/
-backend/.venv/
-backend/env/
-
 # --- Environment Variables ---
 .env
 backend/.env
 
+# --- Backend (Python/Flask) ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# --- Virtual Environments ---
+backend/venv/
+backend/.venv/
+backend/env/
+
 # --- Database ---
 *.sql
 
-# --- User Uploads ---
-backend/uploads/
-#backend/static/uploads/
-#backened/static/fonts
-# --- IDE & Misc ---
-.vscode/
-*.pth
-backend/*.pth"node_modules/" 
-"node_modules/" 
+# --- Frontend / Node ---
 node_modules/
 
+# --- IDE & Machine Learning Models ---
+.vscode/
+*.pth
 
-backend/hurl/
-bacjkend/hurl/*.hurl
+# --- User Uploads & Static Assets ---
+backend/uploads/
+# backend/static/uploads/
+
+backend/static/fonts/*.ttf
 
 # --- Test, Reports & Hurl ---
 backend/hurl/
 backend/report/
 backend/test/
-
-backend/static
