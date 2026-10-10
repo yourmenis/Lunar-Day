@@ -24,7 +24,7 @@ backend/.env
 # --- User Uploads ---
 backend/uploads/
 #backend/static/uploads/
-
+#backened/staticf/fonts
 # --- IDE & Misc ---
 .vscode/
 *.pth
