@@ -506,12 +506,23 @@ https://xxxxx.trycloudflare.com
 2. ลงชื่อเข้าใช้และเชื่อมต่อบัญชี GitHub
 3. เลือก Repository ของโปรเจกต์ Lunar Day
 4. กำหนด Root Directory เป็น `frontend`
-5. ตรวจสอบ Build Settings ให้ตรงกับการตั้งค่าของโปรเจกต์ Next.js
+5. ตรวจสอบ Framework Settings ให้ตรงกับการตั้งค่าของโปรเจกต์ Next.js
+<p align="center">
+  <a href="docs/images/vercel-config.png">
+    <img src="docs/images/vercel-config.png" width="100%" alt="Vercel Build and Deployment Setting">
+  </a>
+</p>
+
 6. ไปที่ **Environment Variables** และเพิ่มตัวแปรดังนี้
 
 | ตัวแปร | ค่า |
 |---|---|
 | `NEXT_PUBLIC_API_URL` | URL ของ Cloudflare Tunnel ที่ได้รับ |
+<p align="center">
+  <a href="docs/images/vercel-env.png">
+    <img src="docs/images/vercel-env.png" width="100%" alt="Vercel Environment Variables Settings">
+  </a>
+</p>
 
 7. กด Deploy เพื่อเริ่มต้นการเผยแพร่ระบบ
 8. เมื่อ Deploy สำเร็จ จะได้รับ URL สำหรับเข้าใช้งาน Frontend
